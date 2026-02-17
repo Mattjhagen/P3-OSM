@@ -53,6 +53,16 @@ export const validatedEnv = cleanEnv(process.env, {
   SMTP_PASS: str({ default: '', desc: 'SMTP password/token' }),
   SMTP_FROM: str({ default: 'admin@p3lending.space', desc: 'Sender email address for invitations' }),
   SMTP_SECURE: bool({ default: false, desc: 'Whether to use implicit TLS (typically true for port 465)' }),
+  NETLIFY_API_TOKEN: str({ default: '', desc: 'Netlify personal access token for admin API sync jobs' }),
+  NETLIFY_SITE_ID: str({ default: '', desc: 'Netlify site id used to locate waitlist forms/submissions' }),
+  NETLIFY_WAITLIST_FORM_ID: str({
+    default: '',
+    desc: 'Optional Netlify form id to sync (preferred when known).',
+  }),
+  NETLIFY_WAITLIST_FORM_NAME: str({
+    default: 'waitlist',
+    desc: 'Netlify form name fallback for waitlist sync when form id is not set',
+  }),
   STRIPE_SECRET_KEY: str({ default: '', desc: 'Stripe secret key for creating checkout sessions' }),
   STRIPE_WEBHOOK_SECRET: str({ default: '', desc: 'Stripe webhook signing secret' }),
   STRIPE_IDENTITY_ENABLED: bool({ default: true, desc: 'Enable Stripe Identity KYC/AML workflows' }),

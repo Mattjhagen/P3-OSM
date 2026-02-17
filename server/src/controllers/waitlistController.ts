@@ -77,4 +77,30 @@ export const WaitlistController = {
       });
     }
   },
+
+  syncFromNetlify: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const adminEmail = asString(req.body?.adminEmail || req.auth?.email);
+      const adminName = asString(req.body?.adminName);
+
+      const result = await WaitlistInviteService.syncFromNetlify(
+        adminEmail,
+        adminName
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      const status = resolveErrorStatus(error);
+      if (status >= 500) {
+        return next(error);
+      }
+      return res.status(status).json({
+        success: false,
+        error: resolveErrorMessage(error),
+      });
+    }
+  },
 };

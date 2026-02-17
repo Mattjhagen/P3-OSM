@@ -24,6 +24,36 @@ export interface BatchInviteResult {
   failures: Array<{ id: string; email: string; error: string }>;
 }
 
+export interface NetlifyWaitlistSyncResult {
+  source: 'netlify_forms';
+  siteId: string;
+  formId: string;
+  formName: string;
+  scanned: number;
+  inserted: number;
+  skipped: number;
+  syncedAt: string;
+}
+
+interface NetlifyForm {
+  id: string;
+  name?: string;
+}
+
+interface NetlifySubmission {
+  id: string;
+  created_at?: string;
+  email?: string;
+  data?: Record<string, unknown> | null;
+  body?: string;
+}
+
+interface WaitlistCandidate {
+  email: string;
+  name: string;
+  createdAt: string;
+}
+
 export class WaitlistInviteError extends Error {
   status: number;
 
@@ -35,11 +65,30 @@ export class WaitlistInviteError extends Error {
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
+const trimToString = (value: unknown) => String(value || '').trim();
+
+const NETLIFY_API_BASE_URL = 'https://api.netlify.com/api/v1';
+const MAX_NETLIFY_SYNC_PAGES = 50;
+const NETLIFY_PAGE_SIZE = 100;
 
 let transporter: nodemailer.Transporter | null = null;
 
 const isSmtpConfigured = () =>
   Boolean(config.smtp.host && config.smtp.user && config.smtp.pass);
+
+const isNetlifySyncConfigured = () =>
+  Boolean(config.netlify.apiToken && config.netlify.siteId);
+
+const chooseFirstNonEmpty = (
+  source: Record<string, unknown>,
+  keys: string[]
+): string => {
+  for (const key of keys) {
+    const value = trimToString(source[key]);
+    if (value) return value;
+  }
+  return '';
+};
 
 const getTransporter = () => {
   if (!isSmtpConfigured()) {
@@ -91,6 +140,244 @@ const assertAdminCanInvite = async (adminEmail: string) => {
   if (!data || data.length === 0) {
     throw new WaitlistInviteError(403, 'Admin user is not active in employee records.');
   }
+};
+
+const requestNetlifyJson = async <T>(path: string): Promise<T> => {
+  const token = trimToString(config.netlify.apiToken);
+
+  let response: Response;
+  try {
+    response = await fetch(`${NETLIFY_API_BASE_URL}${path}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown network error';
+    throw new WaitlistInviteError(502, `Failed to reach Netlify API: ${message}`);
+  }
+
+  const text = await response.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = { message: text };
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      trimToString((parsed as any)?.message) ||
+      trimToString((parsed as any)?.error) ||
+      `Netlify API request failed with status ${response.status}.`;
+    throw new WaitlistInviteError(502, message);
+  }
+
+  return parsed as T;
+};
+
+const resolveWaitlistForm = async (): Promise<{ id: string; name: string }> => {
+  const configuredFormId = trimToString(config.netlify.waitlistFormId);
+  const desiredName = (trimToString(config.netlify.waitlistFormName) || 'waitlist').toLowerCase();
+
+  if (configuredFormId) {
+    const form = await requestNetlifyJson<NetlifyForm>(
+      `/forms/${encodeURIComponent(configuredFormId)}`
+    );
+
+    return {
+      id: trimToString(form?.id) || configuredFormId,
+      name: trimToString(form?.name) || desiredName,
+    };
+  }
+
+  const forms = await requestNetlifyJson<NetlifyForm[]>(
+    `/sites/${encodeURIComponent(config.netlify.siteId)}/forms`
+  );
+
+  const match =
+    (forms || []).find((form) => trimToString(form?.name).toLowerCase() === desiredName) ||
+    (forms || []).find((form) => trimToString(form?.name).toLowerCase().includes('waitlist'));
+
+  if (!match?.id) {
+    throw new WaitlistInviteError(
+      404,
+      `Netlify waitlist form '${desiredName}' was not found for the configured site.`
+    );
+  }
+
+  return {
+    id: trimToString(match.id),
+    name: trimToString(match.name) || desiredName,
+  };
+};
+
+const parseBodyData = (body: string): Record<string, string> => {
+  if (!body) return {};
+
+  const params = new URLSearchParams(body);
+  const result: Record<string, string> = {};
+  for (const [key, value] of params.entries()) {
+    result[key] = value;
+  }
+
+  return result;
+};
+
+const extractWaitlistCandidate = (
+  submission: NetlifySubmission
+): WaitlistCandidate | null => {
+  const data = (submission.data && typeof submission.data === 'object'
+    ? submission.data
+    : {}) as Record<string, unknown>;
+  const bodyData = parseBodyData(trimToString(submission.body));
+
+  const email = normalizeEmail(
+    chooseFirstNonEmpty(data, ['email', 'Email', 'email_address', 'emailAddress']) ||
+      trimToString(submission.email) ||
+      chooseFirstNonEmpty(bodyData, ['email', 'Email'])
+  );
+
+  if (!email || !email.includes('@')) {
+    return null;
+  }
+
+  const fallbackName = email.split('@')[0];
+  const name = (
+    chooseFirstNonEmpty(data, ['name', 'Name', 'full_name', 'fullName']) ||
+    chooseFirstNonEmpty(bodyData, ['name', 'full_name', 'fullName']) ||
+    fallbackName
+  ).slice(0, 150);
+
+  const createdAtRaw = trimToString(submission.created_at);
+  const createdAt = createdAtRaw && !Number.isNaN(Date.parse(createdAtRaw))
+    ? createdAtRaw
+    : new Date().toISOString();
+
+  return { email, name, createdAt };
+};
+
+const loadNetlifyWaitlistSubmissions = async (
+  formId: string
+): Promise<NetlifySubmission[]> => {
+  const submissions: NetlifySubmission[] = [];
+
+  for (let page = 1; page <= MAX_NETLIFY_SYNC_PAGES; page += 1) {
+    const chunk = await requestNetlifyJson<NetlifySubmission[]>(
+      `/forms/${encodeURIComponent(formId)}/submissions?page=${page}&per_page=${NETLIFY_PAGE_SIZE}`
+    );
+
+    if (!Array.isArray(chunk) || chunk.length === 0) {
+      break;
+    }
+
+    submissions.push(...chunk);
+
+    if (chunk.length < NETLIFY_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  return submissions;
+};
+
+const chunk = <T>(items: T[], size: number): T[][] => {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
+};
+
+const getExistingWaitlistEmails = async (emails: string[]): Promise<Set<string>> => {
+  const normalizedUnique = Array.from(new Set(emails.map(normalizeEmail).filter(Boolean)));
+  const existing = new Set<string>();
+
+  for (const emailChunk of chunk(normalizedUnique, 250)) {
+    const { data, error } = await supabase
+      .from('waitlist')
+      .select('email')
+      .in('email', emailChunk);
+
+    if (error) {
+      throw new WaitlistInviteError(
+        500,
+        `Failed to compare existing waitlist entries: ${error.message}`
+      );
+    }
+
+    for (const row of data || []) {
+      const email = normalizeEmail(trimToString((row as any).email));
+      if (email) existing.add(email);
+    }
+  }
+
+  return existing;
+};
+
+const syncWaitlistFromNetlifyInternal = async (): Promise<NetlifyWaitlistSyncResult> => {
+  if (!isNetlifySyncConfigured()) {
+    throw new WaitlistInviteError(
+      503,
+      'Netlify waitlist sync is not configured. Set NETLIFY_API_TOKEN and NETLIFY_SITE_ID.'
+    );
+  }
+
+  const form = await resolveWaitlistForm();
+  const submissions = await loadNetlifyWaitlistSubmissions(form.id);
+
+  const candidates = submissions
+    .map(extractWaitlistCandidate)
+    .filter((candidate): candidate is WaitlistCandidate => Boolean(candidate));
+
+  const uniqueCandidates = new Map<string, WaitlistCandidate>();
+  for (const candidate of candidates) {
+    if (!uniqueCandidates.has(candidate.email)) {
+      uniqueCandidates.set(candidate.email, candidate);
+    }
+  }
+
+  const candidateList = Array.from(uniqueCandidates.values());
+  const existingEmails = await getExistingWaitlistEmails(
+    candidateList.map((candidate) => candidate.email)
+  );
+
+  const rowsToInsert = candidateList
+    .filter((candidate) => !existingEmails.has(candidate.email))
+    .map((candidate) => ({
+      name: candidate.name,
+      email: candidate.email,
+      status: 'PENDING',
+      created_at: candidate.createdAt,
+    }));
+
+  if (rowsToInsert.length > 0) {
+    const { error } = await supabase
+      .from('waitlist')
+      .upsert(rowsToInsert, { onConflict: 'email', ignoreDuplicates: true });
+
+    if (error) {
+      throw new WaitlistInviteError(
+        500,
+        `Failed to persist Netlify waitlist users in Supabase: ${error.message}`
+      );
+    }
+  }
+
+  return {
+    source: 'netlify_forms',
+    siteId: config.netlify.siteId,
+    formId: form.id,
+    formName: form.name,
+    scanned: candidateList.length,
+    inserted: rowsToInsert.length,
+    skipped: Math.max(0, candidateList.length - rowsToInsert.length),
+    syncedAt: new Date().toISOString(),
+  };
 };
 
 const getWaitlistEntry = async (waitlistId: string): Promise<WaitlistRow> => {
@@ -276,5 +563,32 @@ export const WaitlistInviteService = {
       failed: failures.length,
       failures,
     };
+  },
+
+  syncFromNetlify: async (
+    adminEmail: string,
+    adminName: string
+  ): Promise<NetlifyWaitlistSyncResult> => {
+    if (!adminEmail || !adminEmail.trim()) {
+      throw new WaitlistInviteError(400, 'adminEmail is required.');
+    }
+
+    await assertAdminCanInvite(adminEmail);
+
+    const result = await syncWaitlistFromNetlifyInternal();
+
+    logger.info(
+      {
+        adminEmail: normalizeEmail(adminEmail),
+        adminName: trimToString(adminName) || 'Unknown Admin',
+        synced: result.scanned,
+        inserted: result.inserted,
+        formId: result.formId,
+        formName: result.formName,
+      },
+      'Netlify waitlist sync completed'
+    );
+
+    return result;
   },
 };

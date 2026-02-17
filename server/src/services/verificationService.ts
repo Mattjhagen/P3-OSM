@@ -503,7 +503,7 @@ const maybeNotifyManualReview = async (payload: {
     subject,
     message,
     userId: payload.userId,
-    userEmail: payload.session.verified_outputs?.email || null,
+    userEmail: payload.session.verified_outputs?.email || undefined,
     metadata: {
       stripe_session_id: payload.session.id,
       stripe_status: payload.status,

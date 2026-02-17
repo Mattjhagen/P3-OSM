@@ -16,6 +16,12 @@ export const config = {
         from: validatedEnv.SMTP_FROM,
         secure: validatedEnv.SMTP_SECURE,
     },
+    netlify: {
+        apiToken: validatedEnv.NETLIFY_API_TOKEN,
+        siteId: validatedEnv.NETLIFY_SITE_ID,
+        waitlistFormId: validatedEnv.NETLIFY_WAITLIST_FORM_ID.trim(),
+        waitlistFormName: validatedEnv.NETLIFY_WAITLIST_FORM_NAME.trim() || 'waitlist',
+    },
     stripe: {
         secretKey: validatedEnv.STRIPE_SECRET_KEY,
         webhookSecret: validatedEnv.STRIPE_WEBHOOK_SECRET,

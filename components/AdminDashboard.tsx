@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Logo } from './Logo';
 import { Button } from './Button';
 import { UserProfile, EmployeeProfile, AdminRole, KYCTier, KYCStatus, Dispute, InternalTicket, WaitlistEntry } from '../types';
-import { PersistenceService } from '../services/persistence';
+import { NetlifyWaitlistSyncResult, PersistenceService } from '../services/persistence';
 import { SecurityService } from '../services/security';
 import { DocumentService } from '../services/documentService';
 import { ScoreGauge } from './ScoreGauge';
@@ -43,6 +43,9 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [internalTickets, setInternalTickets] = useState<InternalTicket[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
+  const [isWaitlistSyncing, setIsWaitlistSyncing] = useState(false);
+  const [waitlistSyncSummary, setWaitlistSyncSummary] = useState<NetlifyWaitlistSyncResult | null>(null);
+  const [waitlistSyncError, setWaitlistSyncError] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   
   // New State for Chat Blinking
@@ -142,6 +145,32 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     }
   }, [selectedUserLogFilter]);
 
+  const refreshWaitlist = useCallback(
+    async (syncWithNetlify: boolean): Promise<WaitlistEntry[]> => {
+      if (syncWithNetlify) {
+        setIsWaitlistSyncing(true);
+        setWaitlistSyncError('');
+        try {
+          const syncSummary = await PersistenceService.syncWaitlistFromNetlify(
+            currentAdmin.email,
+            currentAdmin.name
+          );
+          setWaitlistSyncSummary(syncSummary);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown sync error.';
+          setWaitlistSyncError(message);
+        } finally {
+          setIsWaitlistSyncing(false);
+        }
+      }
+
+      const entries = await PersistenceService.getWaitlist();
+      setWaitlist(entries || []);
+      return entries || [];
+    },
+    [currentAdmin.email, currentAdmin.name]
+  );
+
   useEffect(() => {
     // Load data
     const loadData = async () => {
@@ -158,8 +187,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
         const d = await PersistenceService.getAllDisputes();
         setDisputes(d || []);
 
-        const w = await PersistenceService.getWaitlist();
-        setWaitlist(w || []);
+        const w = await refreshWaitlist(true);
 
         setIsKpiLoading(true);
         const snapshot = await AdminKpiService.getSnapshot(u || [], w || []);
@@ -185,7 +213,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
         window.Tawk_API.showWidget();
       }
     };
-  }, [loadOpsSnapshot, refreshClientLogs, loadRemoteUserLogs]);
+  }, [loadOpsSnapshot, refreshClientLogs, loadRemoteUserLogs, refreshWaitlist]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -348,7 +376,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
       try {
         await PersistenceService.inviteWaitlistBatch(batchSize);
         // Refresh list
-        const updated = await PersistenceService.getWaitlist();
+        const updated = await refreshWaitlist(false);
         setWaitlist(updated);
         alert(`Successfully rolled out access to ${batchSize} users.`);
       } catch (e) {
@@ -357,6 +385,10 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
         setIsRollingOut(false);
       }
     }
+  };
+
+  const handleWaitlistNetlifySync = async () => {
+    await refreshWaitlist(true);
   };
 
   // Internal Ticket Actions
@@ -1443,8 +1475,23 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
                   <div>
                     <h3 className="text-xl font-bold text-white">Waitlist Queue</h3>
                     <p className="text-xs text-zinc-500">Oldest sign-ups are at the top.</p>
+                    {waitlistSyncSummary && (
+                      <p className="text-xs text-[#00e599] mt-1">
+                        Netlify sync complete ({new Date(waitlistSyncSummary.syncedAt).toLocaleTimeString()}): scanned{' '}
+                        {waitlistSyncSummary.scanned}, inserted {waitlistSyncSummary.inserted}, skipped{' '}
+                        {waitlistSyncSummary.skipped}.
+                      </p>
+                    )}
+                    {waitlistSyncError && (
+                      <p className="text-xs text-red-400 mt-1">
+                        Netlify sync failed: {waitlistSyncError}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-3 bg-zinc-900 p-2 rounded-lg border border-zinc-800">
+                    <Button size="sm" variant="secondary" onClick={handleWaitlistNetlifySync} isLoading={isWaitlistSyncing}>
+                      Sync Netlify
+                    </Button>
                     <span className="text-xs text-zinc-500 font-bold uppercase ml-2">Batch Rollout:</span>
                     <input 
                       type="number" 

@@ -1,6 +1,8 @@
 import { UserProfile, LoanRequest, LoanOffer, EmployeeProfile, ReferralData, InternalTicket, ChatMessage, Dispute, KYCTier, KYCStatus, WaitlistEntry } from '../types';
 import { supabase } from '../supabaseClient';
 import { AdminNotificationClient } from './adminNotificationClient';
+import { frontendEnv } from './env';
+import { RuntimeConfigService } from './runtimeConfigService';
 
 // INITIAL TEMPLATE REMAINING FOR FALLBACK
 const INITIAL_USER_TEMPLATE: UserProfile = {
@@ -26,6 +28,13 @@ const INITIAL_USER_TEMPLATE: UserProfile = {
 };
 
 const BASE_WAITLIST_COUNT = 4291;
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+const normalizeBackendBaseUrl = (value: string) =>
+  trimTrailingSlash(value).replace(/\/api$/i, '');
+const getBackendBaseUrl = () =>
+  normalizeBackendBaseUrl(
+    RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
+  );
 const truncate = (value: string, max = 400) => (value.length > max ? `${value.slice(0, max - 3)}...` : value);
 
 const toMillis = (value: unknown): number => {
@@ -64,6 +73,64 @@ const toChatMessage = (row: any): ChatMessage | null => {
     threadId,
   };
 };
+
+const markUserWaitlistOnboarded = async (payload: {
+  email?: string | null;
+  name?: string | null;
+}) => {
+  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+  if (!normalizedEmail || !normalizedEmail.includes('@')) return;
+
+  const displayName =
+    String(payload.name || '').trim() || normalizedEmail.split('@')[0] || 'User';
+
+  const { data: waitlistData, error: waitlistError } = await supabase
+    .from('waitlist')
+    .select('id,status')
+    .eq('email', normalizedEmail)
+    .limit(1)
+    .maybeSingle();
+
+  if (waitlistError && String((waitlistError as any).code || '') !== 'PGRST116') {
+    console.warn('Unable to read waitlist row for onboarding sync', waitlistError);
+    return;
+  }
+
+  if (waitlistData?.id) {
+    if (waitlistData.status !== 'ONBOARDED') {
+      await PersistenceService.updateWaitlistStatus(waitlistData.id, 'ONBOARDED');
+    }
+    return;
+  }
+
+  const { error: insertError } = await supabase.from('waitlist').insert({
+    name: displayName,
+    email: normalizedEmail,
+    status: 'ONBOARDED',
+    created_at: new Date().toISOString(),
+  });
+
+  if (insertError) {
+    const normalizedMessage = String((insertError as any)?.message || '').toLowerCase();
+    if (
+      !normalizedMessage.includes('duplicate key') &&
+      !normalizedMessage.includes('unique constraint')
+    ) {
+      console.warn('Unable to seed waitlist row for authenticated Netlify user', insertError);
+    }
+  }
+};
+
+export interface NetlifyWaitlistSyncResult {
+  source: 'netlify_forms';
+  siteId: string;
+  formId: string;
+  formName: string;
+  scanned: number;
+  inserted: number;
+  skipped: number;
+  syncedAt: string;
+}
 
 // NOTE: All methods are now ASYNC because they hit the database.
 export const PersistenceService = {
@@ -156,6 +223,55 @@ export const PersistenceService = {
       .in('id', idsToUpdate);
   },
 
+  syncWaitlistFromNetlify: async (
+    adminEmail: string,
+    adminName: string
+  ): Promise<NetlifyWaitlistSyncResult> => {
+    const normalizedEmail = String(adminEmail || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('Admin email is required to sync Netlify waitlist.');
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('Authenticated admin session is required for Netlify waitlist sync.');
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/waitlist/sync-netlify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          adminEmail: normalizedEmail,
+          adminName: String(adminName || '').trim(),
+        }),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown network error';
+      throw new Error(`Unable to reach backend for waitlist sync: ${message}`);
+    }
+
+    let body: any = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+
+    if (!response.ok || !body?.success) {
+      throw new Error(body?.error || 'Failed to sync Netlify waitlist.');
+    }
+
+    return body.data as NetlifyWaitlistSyncResult;
+  },
+
   // --- User Profile ---
   
   loadUser: async (netlifyUser: any, pendingReferralCode?: string | null): Promise<UserProfile> => {
@@ -171,6 +287,10 @@ export const PersistenceService = {
 
       if (data) {
         // User exists, return parsed data
+        await markUserWaitlistOnboarded({
+          email: netlifyUser.email,
+          name: data?.data?.name || netlifyUser.user_metadata?.full_name || netlifyUser.email,
+        });
         return { ...data.data, id: data.id, email: data.email }; // Flatten jsonb
       } else {
         // 2. Create New User
@@ -195,13 +315,10 @@ export const PersistenceService = {
           data: newUser 
         });
 
-        // If they were on waitlist, update status to ONBOARDED
-        try {
-          const { data: waitlistData } = await supabase.from('waitlist').select('*').eq('email', netlifyUser.email).single();
-          if (waitlistData) {
-            await PersistenceService.updateWaitlistStatus(waitlistData.id, 'ONBOARDED');
-          }
-        } catch (ignore) {}
+        await markUserWaitlistOnboarded({
+          email: netlifyUser.email,
+          name: newUser.name,
+        });
 
         return newUser;
       }
