@@ -53,7 +53,7 @@ export const Marketplace: React.FC<Props> = ({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12">
       {/* Active Requests Column */}
-      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 flex flex-col h-[650px] shadow-sm overflow-hidden">
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 flex flex-col min-h-[420px] md:h-[650px] shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-800 bg-zinc-900/50">
           <h3 className="font-bold text-white flex items-center gap-3">
             <span className="w-2 h-2 rounded-full bg-[#00e599]"></span>
@@ -182,7 +182,7 @@ export const Marketplace: React.FC<Props> = ({
       </div>
 
       {/* Matches/Offers Column */}
-      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 flex flex-col h-[650px] shadow-sm overflow-hidden">
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 flex flex-col min-h-[420px] md:h-[650px] shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
           <h3 className="font-bold text-white flex items-center gap-3">
             <span className={`w-2.5 h-2.5 rounded-full ${selectedRequest ? 'bg-blue-500' : 'bg-[#00e599]'}`}></span>
@@ -251,7 +251,7 @@ export const Marketplace: React.FC<Props> = ({
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-3 gap-4 mb-4 bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
                         <div className="text-center border-r border-zinc-800">
                           <p className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">APR</p>
                           <p className="text-white font-mono text-sm">{offer.interestRate}%</p>

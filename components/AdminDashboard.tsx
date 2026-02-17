@@ -36,6 +36,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   const [activeTab, setActiveTab] = useState<
     'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE'
   >('OVERVIEW');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
@@ -185,6 +186,10 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
     }, 15000);
     return () => clearInterval(interval);
   }, [activeTab, loadRemoteUserLogs]);
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [activeTab]);
 
   useEffect(() => {
     if (users.length === 0 && waitlist.length === 0) return;
@@ -425,6 +430,13 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
     return 'text-blue-400 border-blue-500/40 bg-blue-900/20';
   };
 
+  const handleTabChange = (
+    tab: 'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE'
+  ) => {
+    setActiveTab(tab);
+    setIsSidebarOpen(false);
+  };
+
   const clearClientLogs = () => {
     ClientLogService.clearLogs();
     refreshClientLogs();
@@ -587,7 +599,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   }, [remoteUserLogs, userLogSearchTerm]);
 
   return (
-    <div className="flex h-screen bg-[#050505] text-zinc-200 font-sans overflow-hidden">
+    <div className="relative flex min-h-screen md:h-screen bg-[#050505] text-zinc-200 font-sans overflow-hidden">
       {/* Internal Chat Widget - Always mounted but hidden if closed */}
       <AdminChatWidget 
         currentUser={currentAdmin} 
@@ -596,8 +608,16 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
         onUnreadChange={setHasUnreadMessages}
       />
 
+      {isSidebarOpen && (
+        <button
+          aria-label="Close admin navigation menu"
+          className="fixed inset-0 z-[55] bg-black/60 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Admin Sidebar */}
-      <aside className="w-64 bg-[#0a0a0a] border-r border-zinc-900 flex flex-col z-50">
+      <aside className={`fixed inset-y-0 left-0 z-[60] w-72 max-w-[86vw] bg-[#0a0a0a] border-r border-zinc-900 flex flex-col transform transition-transform duration-300 md:static md:z-50 md:translate-x-0 md:w-64 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6">
           <div className="flex items-center gap-2 mb-1">
             <Logo showText={false} isAdmin={true} />
@@ -610,13 +630,13 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
         
         <nav className="flex-1 px-4 space-y-2 mt-4">
           <button 
-            onClick={() => setActiveTab('OVERVIEW')}
+            onClick={() => handleTabChange('OVERVIEW')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'OVERVIEW' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
             <span>📊</span> Overview
           </button>
           <button
-            onClick={() => setActiveTab('OPERATIONS')}
+            onClick={() => handleTabChange('OPERATIONS')}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === 'OPERATIONS' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
             <div className="flex items-center gap-3">
@@ -629,7 +649,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
             )}
           </button>
           <button 
-            onClick={() => setActiveTab('WAITLIST')}
+            onClick={() => handleTabChange('WAITLIST')}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === 'WAITLIST' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
              <div className="flex items-center gap-3">
@@ -638,14 +658,14 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
             {waitlist.filter(w => w.status === 'PENDING').length > 0 && <span className="bg-[#00e599] text-black text-xs font-bold px-1.5 rounded-full">{waitlist.filter(w => w.status === 'PENDING').length}</span>}
           </button>
           <button 
-            onClick={() => setActiveTab('USERS')}
+            onClick={() => handleTabChange('USERS')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'USERS' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
             <span>👥</span> User Management
           </button>
           
           <button 
-            onClick={() => setActiveTab('KYC')}
+            onClick={() => handleTabChange('KYC')}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === 'KYC' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
             <div className="flex items-center gap-3">
@@ -655,7 +675,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
           </button>
 
           <button 
-            onClick={() => setActiveTab('DISPUTES')}
+            onClick={() => handleTabChange('DISPUTES')}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === 'DISPUTES' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
              <div className="flex items-center gap-3">
@@ -665,7 +685,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
           </button>
 
           <button 
-            onClick={() => setActiveTab('KNOWLEDGE')}
+            onClick={() => handleTabChange('KNOWLEDGE')}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === 'KNOWLEDGE' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
              <div className="flex items-center gap-3">
@@ -676,7 +696,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
 
           {currentAdmin.role === 'ADMIN' && (
             <button 
-              onClick={() => setActiveTab('TEAM')}
+              onClick={() => handleTabChange('TEAM')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'TEAM' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
             >
               <span>🛡️</span> Team & Roles
@@ -701,12 +721,20 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="min-w-0 flex-1 flex flex-col overflow-hidden relative">
         <div className="absolute inset-0 bg-grid-pattern opacity-5 pointer-events-none"></div>
 
         {/* Top Bar */}
-        <header className="h-16 border-b border-zinc-900 flex items-center justify-between px-8 bg-[#050505]">
-          <h1 className="text-lg font-bold text-white">
+        <header className="min-h-14 md:h-16 border-b border-zinc-900 flex items-center justify-between px-4 md:px-8 py-2 bg-[#050505]">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              aria-label="Open admin navigation menu"
+              className="md:hidden w-9 h-9 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              ☰
+            </button>
+            <h1 className="text-sm sm:text-base md:text-lg font-bold text-white truncate">
             {activeTab === 'OVERVIEW' && 'Platform Overview'}
             {activeTab === 'OPERATIONS' && 'Operations & Integrations'}
             {activeTab === 'WAITLIST' && 'Beta Waitlist Management'}
@@ -715,8 +743,9 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
             {activeTab === 'DISPUTES' && 'Arbitration Center'}
             {activeTab === 'KNOWLEDGE' && 'Employee Knowledge Base'}
             {activeTab === 'TEAM' && 'Employee Onboarding'}
-          </h1>
-          <div className="flex items-center gap-4">
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
              <button 
                onClick={() => setIsChatOpen(!isChatOpen)}
                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all 
@@ -732,11 +761,11 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                    {/* Blink Badge */}
                    <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-[#050505] transition-colors ${hasUnreadMessages ? 'bg-orange-500 animate-bounce' : 'bg-[#00e599]'}`}></span>
                 </div>
-                <span className="text-xs font-bold">
+                <span className="text-xs font-bold hidden sm:inline">
                   {hasUnreadMessages ? 'New Message' : 'Team Chat'}
                 </span>
              </button>
-             <div className="text-xs text-zinc-500 font-mono">
+             <div className="hidden lg:block text-xs text-zinc-500 font-mono">
                System Status:{' '}
                <span className={hasCriticalOpsAlerts ? 'text-red-500' : 'text-[#00e599]'}>
                  {hasCriticalOpsAlerts ? 'ATTENTION REQUIRED' : 'OPERATIONAL'}
@@ -746,7 +775,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 custom-scrollbar">
           
           {/* OVERVIEW TAB */}
           {activeTab === 'OVERVIEW' && (
@@ -761,7 +790,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                         : `${opsAlerts.length} alert(s) require review.`}
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => setActiveTab('OPERATIONS')}>
+                  <Button size="sm" variant="outline" onClick={() => handleTabChange('OPERATIONS')}>
                     Open Operations
                   </Button>
                 </div>
@@ -778,11 +807,11 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
               </div>
 
               {/* TOP ACTIONS */}
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                  <div className="text-xs text-zinc-500">
                    {isKpiLoading ? 'Refreshing KPI telemetry...' : 'KPI telemetry auto-refreshes every 15s.'}
                  </div>
-                 <Button onClick={() => DocumentService.generatePitchDeck()} size="sm" variant="outline">
+                 <Button onClick={() => DocumentService.generatePitchDeck()} size="sm" variant="outline" className="w-full sm:w-auto">
                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                    Download Investor Pitch Deck (PDF)
                  </Button>
@@ -835,7 +864,8 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
                   <h3 className="text-white font-bold mb-4">Live Network Graph</h3>
-                  <div className="relative h-72 rounded-xl bg-black/40 border border-zinc-800 overflow-hidden">
+                  <div className="h-72 rounded-xl bg-black/40 border border-zinc-800 overflow-x-auto overflow-y-hidden">
+                    <div className="relative h-full min-w-[600px]">
                     <svg className="absolute inset-0 w-full h-full" viewBox="0 0 600 280">
                       <line x1="300" y1="140" x2="110" y2="70" stroke="#3f3f46" strokeWidth="1.5" />
                       <line x1="300" y1="140" x2="490" y2="70" stroke="#3f3f46" strokeWidth="1.5" />
@@ -867,6 +897,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                     <div className="absolute top-[194px] left-[440px] text-center">
                       <div className="text-[10px] text-zinc-500">Active 24h</div>
                       <div className="text-sm font-bold text-purple-300">{kpiSnapshot?.activeUsers24h || 0}</div>
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -919,7 +950,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
 
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3">
                   <h3 className="text-white font-bold">Attribution Counters</h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="rounded-lg border border-zinc-800 bg-black/40 p-3">
                       <div className="text-[10px] uppercase text-zinc-500">Referral</div>
                       <div className="text-xl font-bold text-[#00e599]">{kpiSnapshot?.networkMetrics.referralVisits24h || 0}</div>
@@ -1068,7 +1099,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                   </div>
                 </div>
 
-                <div className="max-h-72 overflow-y-auto rounded-lg border border-zinc-800 bg-black/40">
+                <div className="max-h-72 overflow-y-auto overflow-x-auto rounded-lg border border-zinc-800 bg-black/40">
                   {clientLogs.length === 0 ? (
                     <div className="p-4 text-xs text-zinc-500">No logs captured yet.</div>
                   ) : (
@@ -1131,7 +1162,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                     className="w-full bg-black border border-zinc-700 rounded px-3 py-2 text-xs text-zinc-200 focus:border-[#00e599] outline-none"
                   />
 
-                  <div className="max-h-72 overflow-y-auto rounded-lg border border-zinc-800 bg-black/40">
+                  <div className="max-h-72 overflow-y-auto overflow-x-auto rounded-lg border border-zinc-800 bg-black/40">
                     {filteredRemoteUserLogs.length === 0 ? (
                       <div className="p-4 text-xs text-zinc-500">
                         {isRemoteUserLogsLoading ? 'Loading user logs...' : 'No persistent user logs found for this filter.'}
@@ -1306,12 +1337,12 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
 
           {activeTab === 'WAITLIST' && (
             <div className="animate-fade-in">
-               <div className="flex justify-between items-center mb-6">
+               <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
                   <div>
                     <h3 className="text-xl font-bold text-white">Waitlist Queue</h3>
                     <p className="text-xs text-zinc-500">Oldest sign-ups are at the top.</p>
                   </div>
-                  <div className="flex items-center gap-3 bg-zinc-900 p-2 rounded-lg border border-zinc-800">
+                  <div className="flex flex-wrap items-center gap-3 bg-zinc-900 p-2 rounded-lg border border-zinc-800">
                     <span className="text-xs text-zinc-500 font-bold uppercase ml-2">Batch Rollout:</span>
                     <input 
                       type="number" 
@@ -1328,6 +1359,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                </div>
 
                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-zinc-400">
                    <thead className="bg-black text-white text-xs uppercase tracking-wider">
                      <tr><th className="p-4">Queue #</th><th className="p-4">Date</th><th className="p-4">Name</th><th className="p-4">Email</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr>
@@ -1361,14 +1393,15 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                      )}
                    </tbody>
                 </table>
+                </div>
               </div>
             </div>
           )}
 
           {(activeTab === 'USERS' || activeTab === 'KYC') && (
-             <div className="flex h-full gap-6 animate-fade-in">
+             <div className="flex flex-col lg:flex-row h-full gap-6 animate-fade-in">
                 {/* User List */}
-                <div className="w-1/3 flex flex-col bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                <div className="w-full lg:w-1/3 max-h-[360px] lg:max-h-none flex flex-col bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
                    <div className="p-4 border-b border-zinc-800">
                      <input 
                        type="text" 
@@ -1399,11 +1432,11 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                    </div>
                 </div>
                 {/* User Details */}
-                <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl p-6 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 min-h-[420px] bg-zinc-900 border border-zinc-800 rounded-xl p-4 sm:p-6 overflow-y-auto custom-scrollbar">
                    {selectedUser ? (
                      <div className="space-y-8 animate-fade-in">
-                       <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-6">
+                       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                              <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center border-4 border-zinc-800 relative">
                                 <div className="w-20 h-20">
                                    <ScoreGauge score={selectedUser.reputationScore} />
@@ -1418,7 +1451,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                                </div>
                              </div>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                              {(currentAdmin.role === 'RISK_OFFICER' || currentAdmin.role === 'ADMIN') && (
                                <Button 
                                  size="sm" 
@@ -1469,7 +1502,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                   {disputes.length === 0 ? (
                     <div className="text-zinc-500 text-center py-10">No active disputes.</div>
                   ) : disputes.map(dispute => (
-                     <div key={dispute.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl flex justify-between items-start">
+                     <div key={dispute.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl flex flex-col md:flex-row md:justify-between md:items-start gap-4">
                         <div>
                            <div className="flex items-center gap-3 mb-2">
                               <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${dispute.status === 'OPEN' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>{dispute.status}</span>
@@ -1492,8 +1525,8 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
           )}
 
           {activeTab === 'KNOWLEDGE' && (
-            <div className="grid grid-cols-12 gap-6 h-full animate-fade-in">
-              <div className="col-span-4 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col">
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full animate-fade-in">
+              <div className="xl:col-span-4 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col">
                  <div className="p-4 border-b border-zinc-800 bg-black/20">
                    <h3 className="font-bold text-white text-sm uppercase tracking-wide">SOPs</h3>
                  </div>
@@ -1501,10 +1534,10 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                     <p>Standard Operating Procedures are available here.</p>
                  </div>
               </div>
-              <div className="col-span-8 flex flex-col gap-6">
+              <div className="xl:col-span-8 flex flex-col gap-6">
                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
                     <h3 className="font-bold text-white mb-4">Create Ticket</h3>
-                    <form onSubmit={handleCreateTicket} className="flex gap-4">
+                    <form onSubmit={handleCreateTicket} className="flex flex-col sm:flex-row gap-4">
                        <input 
                          required
                          type="text" 
@@ -1518,7 +1551,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                  </div>
                  <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden p-4 space-y-2">
                     {internalTickets.map(ticket => (
-                       <div key={ticket.id} className="bg-black/40 border border-zinc-800 p-3 rounded flex justify-between">
+                       <div key={ticket.id} className="bg-black/40 border border-zinc-800 p-3 rounded flex flex-col sm:flex-row sm:justify-between gap-3">
                           <div>
                              <div className="text-white font-bold">{ticket.subject}</div>
                              <div className="text-xs text-zinc-500">{ticket.status}</div>
@@ -1533,13 +1566,13 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
 
           {activeTab === 'TEAM' && currentAdmin.role === 'ADMIN' && (
             <div className="space-y-6 animate-fade-in">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                  <h2 className="text-xl font-bold text-white">Employee Management</h2>
                  <Button onClick={() => setShowAddEmployee(true)}>+ Onboard Employee</Button>
               </div>
               {showAddEmployee && (
                 <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
-                   <form onSubmit={handleAddEmployee} className="flex gap-4">
+                   <form onSubmit={handleAddEmployee} className="flex flex-col md:flex-row gap-4">
                       <input 
                         type="text" 
                         placeholder="Name" 
@@ -1559,6 +1592,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                 </div>
               )}
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-zinc-400">
                    <thead className="bg-black text-white">
                      <tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Action</th></tr>
@@ -1573,6 +1607,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                      ))}
                    </tbody>
                 </table>
+                </div>
               </div>
             </div>
           )}

@@ -19,15 +19,15 @@ const SLIDES = [
     render: () => (
       <div className="flex flex-col items-center justify-center h-full text-center space-y-8 animate-fade-in">
         <div className="transform scale-150 mb-8"><Logo /></div>
-        <h1 className="text-6xl md:text-8xl font-bold tracking-tighter leading-none">
+        <h1 className="text-4xl sm:text-5xl md:text-8xl font-bold tracking-tighter leading-none">
           Credit based on <br/>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00e599] to-emerald-600">Character</span>.
         </h1>
-        <p className="text-2xl text-zinc-400 font-light tracking-wide max-w-2xl">
+        <p className="text-base sm:text-lg md:text-2xl text-zinc-400 font-light tracking-wide max-w-2xl">
           The first decentralized lending protocol powered by <br/> Social Underwriting & AI.
         </p>
         <div className="pt-12 text-sm text-zinc-600 font-mono uppercase tracking-widest animate-pulse">
-          Press Right Arrow →
+          Swipe or tap arrows →
         </div>
       </div>
     )
@@ -35,7 +35,7 @@ const SLIDES = [
   {
     id: 'problem',
     render: () => (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center h-full px-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center h-full px-4 sm:px-6 md:px-12">
         <div className="space-y-6">
           <div className="text-[#00e599] font-mono text-xl uppercase tracking-widest">The Problem</div>
           <h2 className="text-5xl font-bold text-white leading-tight">FICO is Broken.</h2>
@@ -61,7 +61,7 @@ const SLIDES = [
   {
     id: 'solution',
     render: () => (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center h-full px-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center h-full px-4 sm:px-6 md:px-12">
         <div className="order-2 md:order-1 relative">
            <div className="absolute inset-0 bg-[#00e599]/10 blur-[100px] rounded-full"></div>
            <div className="glass-panel p-8 rounded-3xl border border-[#00e599]/30 relative z-10">
@@ -93,7 +93,7 @@ const SLIDES = [
           <p className="text-xl text-zinc-400 leading-relaxed">
             P3 reintroduces the "village" to finance. We use AI to quantify social capital, on-chain history, and character.
           </p>
-          <div className="grid grid-cols-2 gap-6 pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
              <div>
                <h4 className="text-white font-bold text-lg">Behavioral</h4>
                <p className="text-sm text-zinc-500">We value repayment consistency over total net worth.</p>
@@ -110,7 +110,7 @@ const SLIDES = [
   {
     id: 'tech',
     render: () => (
-      <div className="flex flex-col items-center justify-center h-full px-12 text-center">
+      <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6 md:px-12 text-center">
         <div className="text-[#00e599] font-mono text-xl uppercase tracking-widest mb-6">The Technology</div>
         <h2 className="text-5xl font-bold text-white mb-12">Powered by Gemini AI & Ethereum</h2>
         
@@ -137,13 +137,13 @@ const SLIDES = [
   {
     id: 'product',
     render: () => (
-      <div className="h-full px-12 flex flex-col justify-center">
+      <div className="h-full px-4 sm:px-6 md:px-12 flex flex-col justify-center">
         <div className="flex items-center gap-4 mb-8">
            <div className="text-[#00e599] font-mono text-xl uppercase tracking-widest">The Product</div>
            <div className="h-px bg-zinc-800 flex-1"></div>
         </div>
-        <div className="grid grid-cols-12 gap-8">
-           <div className="col-span-4 space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+           <div className="lg:col-span-4 space-y-8">
               <h2 className="text-4xl font-bold text-white">A Complete Financial Ecosystem.</h2>
               <ul className="space-y-6">
                  <li className="bg-zinc-900 p-4 rounded-xl border-l-4 border-[#00e599]">
@@ -160,10 +160,10 @@ const SLIDES = [
                  </li>
               </ul>
            </div>
-           <div className="col-span-8 relative">
+           <div className="lg:col-span-8 relative">
               <div className="absolute inset-0 bg-[#00e599]/20 blur-3xl rounded-full opacity-20"></div>
               <img src="https://images.unsplash.com/photo-1642104704074-907c0698cbd9?q=80&w=2832&auto=format&fit=crop" className="rounded-2xl border border-zinc-700 shadow-2xl opacity-50 grayscale hover:grayscale-0 transition-all duration-700" alt="Dashboard Preview" />
-              <div className="absolute bottom-[-20px] left-[-20px] bg-[#050505] p-6 rounded-2xl border border-zinc-800 shadow-xl">
+              <div className="absolute bottom-2 left-2 md:bottom-[-20px] md:left-[-20px] bg-[#050505] p-4 md:p-6 rounded-2xl border border-zinc-800 shadow-xl">
                  <ScoreGauge score={88} />
               </div>
            </div>
@@ -174,7 +174,7 @@ const SLIDES = [
   {
     id: 'market',
     render: () => (
-      <div className="flex flex-col items-center justify-center h-full px-12 text-center">
+      <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6 md:px-12 text-center">
         <div className="text-[#00e599] font-mono text-xl uppercase tracking-widest mb-6">Market Opportunity</div>
         <h2 className="text-5xl font-bold text-white mb-16">The "Under-Collateralized" Gap</h2>
         
@@ -203,7 +203,7 @@ const SLIDES = [
   {
     id: 'business',
     render: () => (
-      <div className="grid grid-cols-2 gap-12 items-center h-full px-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center h-full px-4 sm:px-6 md:px-12">
         <div className="space-y-8">
            <div className="text-[#00e599] font-mono text-xl uppercase tracking-widest">Business Model</div>
            <h2 className="text-5xl font-bold text-white">Protocol Revenue.</h2>
@@ -246,7 +246,7 @@ const SLIDES = [
       <div className="flex flex-col items-center justify-center h-full text-center space-y-8 animate-fade-in relative">
         <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none"></div>
         <div className="text-[#00e599] font-mono text-xl uppercase tracking-widest">The Ask</div>
-        <h1 className="text-7xl font-bold text-white tracking-tight">Seed Round</h1>
+        <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold text-white tracking-tight">Seed Round</h1>
         <div className="text-5xl font-bold text-white border-b-4 border-[#00e599] pb-2">$1.5M</div>
         <div className="flex gap-8 text-zinc-400 text-lg mt-8">
            <span>18 Months Runway</span>
@@ -305,7 +305,7 @@ export const PitchDeck: React.FC<Props> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-[#050505] z-[9999] flex flex-col">
-      <div className="absolute top-6 left-6 flex flex-wrap items-center gap-3 z-50">
+      <div className="absolute top-3 sm:top-6 left-3 sm:left-6 flex flex-wrap items-center gap-2 sm:gap-3 z-50">
         <a
           href={CALENDLY_MEETING_URL}
           target="_blank"
@@ -325,7 +325,7 @@ export const PitchDeck: React.FC<Props> = ({ onClose }) => {
       </div>
 
       {/* Controls */}
-      <div className="absolute top-6 right-6 flex items-center gap-4 z-50">
+      <div className="absolute top-3 sm:top-6 right-3 sm:right-6 flex items-center gap-3 sm:gap-4 z-50">
          <div className="text-zinc-500 font-mono text-sm">
            {currentSlide + 1} / {SLIDES.length}
          </div>
@@ -335,7 +335,7 @@ export const PitchDeck: React.FC<Props> = ({ onClose }) => {
       </div>
 
       {/* Slide Content */}
-      <div className="flex-1 w-full max-w-7xl mx-auto py-12 relative">
+      <div className="flex-1 w-full max-w-7xl mx-auto pt-16 sm:pt-20 md:pt-12 pb-24 md:pb-20 px-3 sm:px-4 relative overflow-y-auto custom-scrollbar">
          {SLIDES[currentSlide].render()}
       </div>
 
@@ -348,7 +348,7 @@ export const PitchDeck: React.FC<Props> = ({ onClose }) => {
       </div>
 
       {/* Navigation Hints */}
-      <div className="fixed bottom-6 right-6 flex gap-2">
+      <div className="fixed bottom-4 sm:bottom-6 left-4 right-4 sm:left-auto sm:right-6 flex justify-end gap-2">
          <Button size="sm" variant="secondary" onClick={() => setCurrentSlide(prev => Math.max(prev - 1, 0))} disabled={currentSlide === 0}>←</Button>
          <Button size="sm" variant="primary" onClick={() => setCurrentSlide(prev => Math.min(prev + 1, SLIDES.length - 1))} disabled={currentSlide === SLIDES.length - 1}>→</Button>
       </div>

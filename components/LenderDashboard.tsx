@@ -167,7 +167,7 @@ export const LenderDashboard: React.FC<Props> = ({ user, myOffers, communityRequ
                    {aiAdvice && <div className="text-[10px] text-[#00e599] italic p-2 bg-[#00e599]/10 rounded border border-[#00e599]/20">{aiAdvice}</div>}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                      <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Max Amount ($)</label>
                      <input type="number" value={maxAmount} onChange={(e) => setMaxAmount(Number(e.target.value))} className="w-full bg-black border border-zinc-800 rounded-lg p-2.5 text-white focus:border-[#00e599] outline-none font-mono" />
@@ -225,7 +225,7 @@ export const LenderDashboard: React.FC<Props> = ({ user, myOffers, communityRequ
 
         {/* RIGHT COL: AI Matches */}
         <div className="lg:col-span-8">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl h-[600px] flex flex-col relative overflow-hidden">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl min-h-[420px] md:h-[600px] flex flex-col relative overflow-hidden">
              <div className="absolute inset-0 bg-grid-pattern opacity-5 pointer-events-none"></div>
              
              <div className="p-6 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-md flex justify-between items-center z-10">

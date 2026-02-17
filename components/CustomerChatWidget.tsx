@@ -31,9 +31,9 @@ export const CustomerChatWidget: React.FC<{ user: UserProfile }> = ({ user }) =>
   const isWaitingForAgent = lastMessage && lastMessage.senderId === user.id;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 flex flex-col items-end pointer-events-none">
       {isOpen && (
-        <div className="pointer-events-auto bg-[#0a0a0a] border border-orange-500/30 rounded-2xl w-80 h-96 shadow-2xl mb-4 flex flex-col overflow-hidden animate-fade-in">
+        <div className="pointer-events-auto bg-[#0a0a0a] border border-orange-500/30 rounded-2xl w-[calc(100vw-2rem)] max-w-80 h-[70vh] sm:h-96 shadow-2xl mb-3 sm:mb-4 flex flex-col overflow-hidden animate-fade-in">
            <div className="bg-gradient-to-r from-orange-600 to-orange-500 p-4">
               <div className="flex justify-between items-center">
                 <h3 className="font-bold text-white text-sm">P3 Support</h3>

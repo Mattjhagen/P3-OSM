@@ -153,17 +153,17 @@ export const DemoTutorial: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     const progress = ((currentStep + 1) / tutorialSteps.length) * 100;
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden border border-emerald-500/20">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-4">
+            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[96vh] sm:max-h-[90vh] overflow-hidden border border-emerald-500/20">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 relative">
+                <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-4 sm:p-6 relative">
                     <button
                         onClick={handleSkip}
                         className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
                     >
                         <X className="w-6 h-6" />
                     </button>
-                    <h2 className="text-2xl font-bold text-white mb-2">P3 Lending Protocol Tutorial</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold text-white mb-2 pr-8">P3 Lending Protocol Tutorial</h2>
                     <div className="flex items-center gap-2 text-white/90 text-sm">
                         <span>Step {currentStep + 1} of {tutorialSteps.length}</span>
                         <div className="flex-1 bg-white/20 rounded-full h-2 ml-4">
@@ -176,9 +176,9 @@ export const DemoTutorial: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                 </div>
 
                 {/* Content */}
-                <div className="p-8 overflow-y-auto max-h-[calc(90vh-200px)]">
-                    <h3 className="text-2xl font-bold text-white mb-4">{step.title}</h3>
-                    <p className="text-gray-300 text-lg mb-6 leading-relaxed">{step.description}</p>
+                <div className="p-4 sm:p-8 overflow-y-auto max-h-[calc(96vh-220px)] sm:max-h-[calc(90vh-200px)]">
+                    <h3 className="text-xl sm:text-2xl font-bold text-white mb-4">{step.title}</h3>
+                    <p className="text-gray-300 text-base sm:text-lg mb-6 leading-relaxed">{step.description}</p>
 
                     {step.action && (
                         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 mb-6">
@@ -204,17 +204,18 @@ export const DemoTutorial: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                 </div>
 
                 {/* Footer */}
-                <div className="bg-gray-800/50 p-6 border-t border-gray-700 flex items-center justify-between">
+                <div className="bg-gray-800/50 p-4 sm:p-6 border-t border-gray-700 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <button
                         onClick={handlePrev}
                         disabled={currentStep === 0}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors"
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors"
                     >
                         <ChevronLeft className="w-5 h-5" />
                         Previous
                     </button>
 
-                    <div className="flex gap-2">
+                    <div className="w-full sm:w-auto overflow-x-auto">
+                      <div className="flex gap-2 justify-center min-w-max mx-auto">
                         {tutorialSteps.map((_, index) => (
                             <button
                                 key={index}
@@ -227,12 +228,13 @@ export const DemoTutorial: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                                     }`}
                             />
                         ))}
+                      </div>
                     </div>
 
                     {currentStep === tutorialSteps.length - 1 ? (
                         <button
                             onClick={handleComplete}
-                            className="flex items-center gap-2 px-6 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold hover:from-emerald-500 hover:to-teal-500 transition-all"
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold hover:from-emerald-500 hover:to-teal-500 transition-all"
                         >
                             Get Started
                             <Check className="w-5 h-5" />
@@ -240,7 +242,7 @@ export const DemoTutorial: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                     ) : (
                         <button
                             onClick={handleNext}
-                            className="flex items-center gap-2 px-6 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold hover:from-emerald-500 hover:to-teal-500 transition-all"
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold hover:from-emerald-500 hover:to-teal-500 transition-all"
                         >
                             Next
                             <ChevronRight className="w-5 h-5" />

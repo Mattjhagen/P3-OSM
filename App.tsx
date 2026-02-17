@@ -64,6 +64,7 @@ const App: React.FC = () => {
   
   const [charities, setCharities] = useState<Charity[]>(MOCK_CHARITIES);
   const [activeView, setActiveView] = useState<AppView>('borrow');
+  const [isUserNavOpen, setIsUserNavOpen] = useState(false);
   
   // Data State
   const [myRequests, setMyRequests] = useState<LoanRequest[]>([]);
@@ -242,6 +243,10 @@ const App: React.FC = () => {
     }
   }, [user?.id]);
 
+  useEffect(() => {
+    setIsUserNavOpen(false);
+  }, [activeView]);
+
   const handleLogout = () => {
     setIsAuthenticated(false);
     setShowLanding(true);
@@ -400,7 +405,7 @@ const App: React.FC = () => {
     PersistenceService.saveUser(updatedUser);
   };
 
-  if (!appReady) return <div className="h-screen bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
+  if (!appReady) return <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
 
   // Handle Pitch Deck Mode
   if (showPitchDeck) return <PitchDeck onClose={() => setShowPitchDeck(false)} />;
@@ -427,7 +432,7 @@ const App: React.FC = () => {
   // User is authenticated but data is loading
   if (isAuthenticated && !user && !adminUser) {
     return (
-      <div className="h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="min-h-[100dvh] bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
          <div className="absolute inset-0 bg-grid-pattern pointer-events-none opacity-20"></div>
          <div className="z-10 text-center space-y-8 animate-fade-in">
            {isVerifyingEmail ? (
@@ -443,7 +448,7 @@ const App: React.FC = () => {
   // Not authenticated and not loading (Login Screen)
   if (!isAuthenticated && !user && !adminUser) {
     return (
-      <div className="h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="min-h-[100dvh] bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
          <div className="absolute inset-0 bg-grid-pattern pointer-events-none opacity-20"></div>
          <div className="absolute top-6 left-6 z-20"><Button variant="ghost" size="sm" onClick={() => setShowLanding(true)}>← Back to Home</Button></div>
          <div className="z-10 text-center space-y-8 animate-fade-in">
@@ -481,11 +486,24 @@ const App: React.FC = () => {
 
   if (user) {
     const NavItem = ({ view, label, icon }: { view: AppView, label: string, icon: React.ReactNode }) => (
-      <button onClick={() => setActiveView(view)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${activeView === view ? 'bg-[#00e599]/10 text-[#00e599] border-l-2 border-[#00e599]' : 'text-zinc-500 hover:text-white hover:bg-zinc-900'}`}>{icon}<span className="font-medium text-sm">{label}</span></button>
+      <button
+        onClick={() => {
+          setActiveView(view);
+          setIsUserNavOpen(false);
+        }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+          activeView === view
+            ? 'bg-[#00e599]/10 text-[#00e599] border-l-2 border-[#00e599]'
+            : 'text-zinc-500 hover:text-white hover:bg-zinc-900'
+        }`}
+      >
+        {icon}
+        <span className="font-medium text-sm">{label}</span>
+      </button>
     );
 
     return (
-      <div className="flex h-screen bg-[#050505] text-zinc-200 font-sans selection:bg-[#00e599] selection:text-black overflow-hidden relative">
+      <div className="relative flex min-h-screen md:h-screen bg-[#050505] text-zinc-200 font-sans selection:bg-[#00e599] selection:text-black overflow-hidden">
         <CustomerChatWidget user={user} />
         {showSnow && <SnowEffect />}
         {showKYCModal && <KYCVerificationModal currentTier={user.kycTier} onClose={() => setShowKYCModal(false)} onUpgradeComplete={handleKYCUpgrade} />}
@@ -494,7 +512,15 @@ const App: React.FC = () => {
         <LegalModal type={activeLegalDoc} onClose={() => setActiveLegalDoc(null)} />
         <ReferralModal isOpen={showReferralModal} onClose={() => setShowReferralModal(false)} referralCode={user.id} onOpenTerms={() => setActiveLegalDoc('REFERRAL_TERMS' as LegalDocType)} />
 
-        <aside className="w-64 bg-[#0a0a0a] border-r border-zinc-900 flex flex-col z-50">
+        {isUserNavOpen && (
+          <button
+            aria-label="Close navigation menu"
+            className="fixed inset-0 z-[60] bg-black/60 md:hidden"
+            onClick={() => setIsUserNavOpen(false)}
+          />
+        )}
+
+        <aside className={`fixed inset-y-0 left-0 z-[70] w-72 max-w-[86vw] bg-[#0a0a0a] border-r border-zinc-900 flex flex-col transform transition-transform duration-300 md:static md:z-50 md:translate-x-0 md:w-64 ${isUserNavOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="p-6"><Logo /></div>
           <nav className="flex-1 px-4 space-y-2 mt-4">
             <NavItem view="borrow" label="Borrowing" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>} />
@@ -514,22 +540,45 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col relative overflow-hidden z-10">
+        <main className="min-w-0 flex-1 flex flex-col relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-grid-pattern pointer-events-none -z-10"></div>
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black pointer-events-none -z-10"></div>
 
-          <header className="h-16 border-b border-zinc-800/50 backdrop-blur-sm flex items-center justify-between px-8 z-10 bg-[#050505]/80">
-             <div className="flex items-center gap-4"><h1 className="text-xl font-bold text-white tracking-tight">{VIEW_TITLES[activeView]}</h1></div>
-             <div className="flex items-center gap-4">
+          <header className="min-h-14 md:h-16 border-b border-zinc-800/50 backdrop-blur-sm flex items-center justify-between px-4 md:px-8 py-2 z-10 bg-[#050505]/80">
+             <div className="flex items-center gap-3 min-w-0">
+               <button
+                 aria-label="Open navigation menu"
+                 className="md:hidden w-9 h-9 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white"
+                 onClick={() => setIsUserNavOpen(true)}
+               >
+                 ☰
+               </button>
+               <h1 className="text-base md:text-xl font-bold text-white tracking-tight truncate">{VIEW_TITLES[activeView]}</h1>
+             </div>
+             <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
                 <a href="https://www.facebook.com/profile.php?id=61573009392683" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full flex items-center justify-center border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-500 transition-all" title="Visit our Facebook Page">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 </a>
                 <button onClick={requestNotificationPermission} className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all ${notificationsEnabled ? 'bg-[#00e599]/10 text-[#00e599] border-[#00e599]/50' : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-white'}`} title={notificationsEnabled ? 'Notifications On' : 'Enable Notifications'}>
                   {notificationsEnabled ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path><circle cx="19" cy="5" r="2" fill="#ef4444" stroke="none" /></svg>}
                 </button>
-                <Button size="sm" variant="secondary" onClick={handleRiskAnalysis} className="border border-zinc-700"><span className="mr-1">🛡️</span> Risk Profile</Button>
+                <Button size="sm" variant="secondary" onClick={handleRiskAnalysis} className="border border-zinc-700 hidden sm:inline-flex"><span className="mr-1">🛡️</span> Risk Profile</Button>
+                <Button size="sm" variant="secondary" onClick={handleRiskAnalysis} className="border border-zinc-700 sm:hidden px-3">🛡️</Button>
                 {wallet.isConnected ? (
-                  <div className="flex items-center gap-3 bg-zinc-900/80 pl-4 pr-1 py-1 rounded-full border border-zinc-800"><div className="text-right"><div className="text-[10px] text-zinc-500 font-mono leading-none">{wallet.balance} ETH</div><div className="text-xs font-bold text-white font-mono leading-none mt-1">{shortenAddress(wallet.address || '')}</div></div><div className="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 border border-zinc-600 flex items-center justify-center"><div className="w-2 h-2 rounded-full bg-[#00e599]"></div></div></div>
+                  <>
+                    <div className="hidden sm:flex items-center gap-3 bg-zinc-900/80 pl-4 pr-1 py-1 rounded-full border border-zinc-800">
+                      <div className="text-right">
+                        <div className="text-[10px] text-zinc-500 font-mono leading-none">{wallet.balance} ETH</div>
+                        <div className="text-xs font-bold text-white font-mono leading-none mt-1">{shortenAddress(wallet.address || '')}</div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 border border-zinc-600 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-[#00e599]"></div>
+                      </div>
+                    </div>
+                    <div className="sm:hidden w-9 h-9 rounded-full border border-zinc-700 bg-zinc-900 flex items-center justify-center" title={shortenAddress(wallet.address || '')}>
+                      <div className="w-2 h-2 rounded-full bg-[#00e599]"></div>
+                    </div>
+                  </>
                 ) : (
                   <Button variant="primary" size="sm" onClick={() => setShowWalletModal(true)}>Connect Wallet</Button>
                 )}
@@ -539,14 +588,14 @@ const App: React.FC = () => {
           <NewsTicker />
 
           <div className="flex-1 overflow-y-auto relative z-0 custom-scrollbar flex flex-col">
-             <div className={activeView === 'trade' ? 'h-full' : 'flex-1 p-8'}>
+             <div className={activeView === 'trade' ? 'h-full' : 'flex-1 p-4 sm:p-6 md:p-8'}>
                {activeView === 'borrow' && (
                  <div className="max-w-6xl mx-auto animate-fade-in space-y-8">
                     <UserProfileCard user={user} onUpdate={handleProfileUpdate} onVerifyClick={() => setShowKYCModal(true)} onAnalyzeRisk={handleRiskAnalysis} onEditClick={() => setActiveView('profile')} isAnalyzing={isAnalyzing} />
                     {user.isFrozen && <div className="bg-red-900/20 border border-red-500/50 rounded-xl p-4 flex items-center gap-4 animate-pulse"><span className="text-3xl">❄️</span><div><h3 className="text-red-400 font-bold">Account Frozen</h3><p className="text-sm text-red-300/80">Your account has been locked by a Risk Officer. Please contact support.</p></div></div>}
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
                        <div className="md:col-span-5">
-                          <div className="glass-panel rounded-2xl p-6 sticky top-4">
+                          <div className="glass-panel rounded-2xl p-6 md:sticky md:top-4">
                             <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white">New Request</h3>{user.kycTier === KYCTier.TIER_0 && <span className="text-[10px] bg-red-500/10 text-red-400 px-2 py-1 rounded border border-red-500/20">KYC Required</span>}</div>
                             <form onSubmit={handleCreateRequest} className="space-y-5">
                                <fieldset disabled={user.isFrozen}>

@@ -56,7 +56,7 @@ export const AdminChatWidget: React.FC<{
   // We use CSS transform instead of returning null to keep the hook/subscription alive
   return (
     <div 
-      className={`fixed right-0 top-0 bottom-0 w-96 bg-[#0a0a0a] border-l border-zinc-800 shadow-2xl z-[60] flex flex-col transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      className={`fixed right-0 top-0 bottom-0 w-full sm:w-96 max-w-full bg-[#0a0a0a] border-l border-zinc-800 shadow-2xl z-[60] flex flex-col transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
     >
        <div className="h-16 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-900/50 backdrop-blur-md">
           <div className="flex items-center gap-2">

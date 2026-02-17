@@ -108,19 +108,19 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
   const chartColor = isPositive ? '#00e599' : '#ef4444';
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
+    <div className="flex flex-col md:flex-row min-h-[calc(100dvh-56px)] md:min-h-[calc(100vh-64px)] overflow-hidden">
       
       {/* LEFT: Main Chart Area */}
       <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar border-r border-zinc-900 bg-[#050505]">
-        <div className="p-8 pb-0">
+        <div className="p-4 sm:p-6 md:p-8 pb-0">
           <div className="flex justify-between items-end mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-2">
                 {selectedAsset.name}
                 <span className="text-sm bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-mono">{selectedAsset.symbol}</span>
               </h1>
               <div className="flex items-baseline gap-4 mt-1">
-                <span className={`text-4xl font-bold font-mono tracking-tight ${isPositive ? 'text-[#00e599]' : 'text-red-500'} transition-colors duration-500`}>
+                <span className={`text-3xl sm:text-4xl font-bold font-mono tracking-tight ${isPositive ? 'text-[#00e599]' : 'text-red-500'} transition-colors duration-500`}>
                   ${selectedAsset.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <span className={`text-sm font-medium flex items-center ${isPositive ? 'text-[#00e599]' : 'text-red-500'}`}>
@@ -137,7 +137,7 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
           </div>
 
           {/* CHART */}
-          <div className="h-[400px] w-full relative group cursor-crosshair bg-[#050505]">
+          <div className="h-[280px] sm:h-[400px] w-full relative group cursor-crosshair bg-[#050505]">
             {isLoadingChart && (
               <div className="absolute inset-0 flex items-center justify-center z-10 bg-black/20 backdrop-blur-sm">
                 <div className="w-8 h-8 border-2 border-[#00e599] border-t-transparent rounded-full animate-spin"></div>
@@ -183,21 +183,23 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
           </div>
 
           {/* Time Range Selector */}
-          <div className="flex gap-1 border-b border-zinc-900 pb-4 mt-4">
-            {TIME_RANGES.map(range => (
-              <button
-                key={range}
-                onClick={() => setTimeRange(range)}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${timeRange === range ? 'text-white bg-zinc-800' : 'text-zinc-500 hover:text-white'}`}
-              >
-                {range}
-              </button>
-            ))}
+          <div className="border-b border-zinc-900 pb-4 mt-4 overflow-x-auto">
+            <div className="flex gap-1 min-w-max">
+              {TIME_RANGES.map(range => (
+                <button
+                  key={range}
+                  onClick={() => setTimeRange(range)}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${timeRange === range ? 'text-white bg-zinc-800' : 'text-zinc-500 hover:text-white'}`}
+                >
+                  {range}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Buying Power & About */}
-        <div className="p-8 space-y-8">
+        <div className="p-4 sm:p-6 md:p-8 space-y-8">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
              <div className="bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
                <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-4">Your Position</h3>

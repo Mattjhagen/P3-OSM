@@ -40,9 +40,9 @@ const LiveToasts = () => {
 
   return (
     <div 
-      className={`fixed top-24 right-6 z-40 transition-all duration-500 ease-in-out transform ${visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
+      className={`fixed top-20 sm:top-24 right-3 sm:right-6 left-3 sm:left-auto z-40 transition-all duration-500 ease-in-out transform ${visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
     >
-      <div className="bg-[#050505]/90 backdrop-blur-md border border-zinc-800 p-4 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center gap-4 w-72">
+      <div className="bg-[#050505]/90 backdrop-blur-md border border-zinc-800 p-4 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center gap-4 w-full sm:w-72">
         <div className="w-10 h-10 rounded-full bg-[#00e599]/20 flex items-center justify-center text-lg">
           {current.icon}
         </div>
@@ -345,20 +345,20 @@ export const LandingPage: React.FC<Props> = ({ onLaunch, onDevAdminLogin, onOpen
       <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-[#00e599]/5 rounded-full blur-[120px] pointer-events-none fixed"></div>
       
       {/* Navbar */}
-      <nav className="relative z-50 flex items-center justify-between px-6 py-6 max-w-7xl mx-auto w-full">
+      <nav className="relative z-50 flex items-center justify-between px-4 sm:px-6 py-6 max-w-7xl mx-auto w-full">
         <Logo />
         <div className="flex items-center gap-4">
-          <button onClick={() => setShowWaitlist(true)} className="hidden md:block bg-[#00e599] text-black px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#00cc88] transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]">
+          <button onClick={() => setShowWaitlist(true)} className="bg-[#00e599] text-black px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-bold hover:bg-[#00cc88] transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]">
             Join Waitlist
           </button>
-          <button onClick={onLaunch} className="text-sm font-medium text-zinc-500 hover:text-white transition-colors">
+          <button onClick={onLaunch} className="text-xs sm:text-sm font-medium text-zinc-500 hover:text-white transition-colors">
             Member Login
           </button>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-24 pb-40 px-6 text-center">
+      <section className="relative z-10 pt-20 sm:pt-24 pb-24 sm:pb-40 px-4 sm:px-6 text-center">
         <div className="max-w-5xl mx-auto space-y-10 animate-fade-in">
           
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800 text-[#00e599] text-[10px] font-bold uppercase tracking-widest">
@@ -366,24 +366,24 @@ export const LandingPage: React.FC<Props> = ({ onLaunch, onDevAdminLogin, onOpen
             Early Access Beta
           </div>
 
-          <h1 className="text-6xl md:text-8xl font-bold tracking-tighter leading-[0.95]">
+          <h1 className="text-4xl sm:text-6xl md:text-8xl font-bold tracking-tighter leading-[0.95]">
             Credit based on<br/>
             <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#00e599] to-emerald-700">Character</span>, not History.
           </h1>
           
-          <p className="text-xl md:text-2xl text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl md:text-2xl text-zinc-400 max-w-2xl mx-auto leading-relaxed">
             P3 is the first decentralized lending protocol powered by AI reputation scoring and social underwriting. Stop relying on FICO. Start building trust.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
-            <Button size="lg" onClick={() => setShowWaitlist(true)} className="h-14 px-10 text-lg shadow-[0_0_30px_rgba(0,229,153,0.3)] hover:scale-105 transition-transform">
+            <Button size="lg" onClick={() => setShowWaitlist(true)} className="h-12 sm:h-14 px-8 sm:px-10 text-base sm:text-lg shadow-[0_0_30px_rgba(0,229,153,0.3)] hover:scale-105 transition-transform">
               Get Early Access
             </Button>
             <Button 
               size="lg" 
               variant="secondary" 
               onClick={() => onOpenLegal('MANIFESTO')} 
-              className="h-14 px-10 text-lg border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900"
+              className="h-12 sm:h-14 px-8 sm:px-10 text-base sm:text-lg border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900"
             >
               Read Manifesto
             </Button>
