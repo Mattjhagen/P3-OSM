@@ -138,6 +138,7 @@ export const PersistenceService = {
         const newUser: UserProfile = {
           ...INITIAL_USER_TEMPLATE,
           id: netlifyUser.id,
+          email: netlifyUser.email || '',
           name: netlifyUser.user_metadata?.full_name || netlifyUser.email.split('@')[0],
           avatarUrl: netlifyUser.user_metadata?.avatar_url || undefined,
         };
@@ -181,7 +182,13 @@ export const PersistenceService = {
 
   getAllUsers: async (): Promise<UserProfile[]> => {
     const { data } = await supabase.from('users').select('*');
-    return data ? data.map((r: any) => r.data) : [];
+    return data
+      ? data.map((r: any) => ({
+          ...(r.data || {}),
+          id: r.id || r.data?.id,
+          email: r.email || r.data?.email || '',
+        }))
+      : [];
   },
 
   registerReferral: async (referrerId: string, newUserId: string) => {

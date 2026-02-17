@@ -17,6 +17,7 @@ import {
 import { RuntimeConfigKey, RuntimeConfigService } from '../services/runtimeConfigService';
 import { ClientLogEntry, ClientLogService } from '../services/clientLogService';
 import { OpsAIAnalysis, OpsAIFixService } from '../services/opsAIFixService';
+import { AdminKpiService, AdminKpiSnapshot } from '../services/adminKpiService';
 
 // Extend window definition for Tawk.to
 declare global {
@@ -75,6 +76,8 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   const [externalLogText, setExternalLogText] = useState('');
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<OpsAIAnalysis | null>(null);
+  const [kpiSnapshot, setKpiSnapshot] = useState<AdminKpiSnapshot | null>(null);
+  const [isKpiLoading, setIsKpiLoading] = useState(false);
 
   const loadOpsSnapshot = useCallback(async () => {
     setIsOpsLoading(true);
@@ -111,8 +114,14 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
 
         const w = await PersistenceService.getWaitlist();
         setWaitlist(w || []);
+
+        setIsKpiLoading(true);
+        const snapshot = await AdminKpiService.getSnapshot(u || [], w || []);
+        setKpiSnapshot(snapshot);
       } catch (err) {
         console.error("Admin dashboard failed to load data", err);
+      } finally {
+        setIsKpiLoading(false);
       }
     };
     loadData();
@@ -137,6 +146,21 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
     }, 3000);
     return () => clearInterval(interval);
   }, [refreshClientLogs]);
+
+  useEffect(() => {
+    if (users.length === 0 && waitlist.length === 0) return;
+    const refreshKpis = async () => {
+      try {
+        const snapshot = await AdminKpiService.getSnapshot(users, waitlist);
+        setKpiSnapshot(snapshot);
+      } catch (error) {
+        console.error('KPI refresh failed', error);
+      }
+    };
+
+    const interval = setInterval(refreshKpis, 15000);
+    return () => clearInterval(interval);
+  }, [users, waitlist]);
 
   useEffect(() => {
     if (!opsSnapshot) return;
@@ -248,8 +272,13 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
 
   const handleInviteWaitlist = async (id: string) => {
     await PersistenceService.updateWaitlistStatus(id, 'INVITED');
-    // Simulation:
-    alert("Invitation email sent (simulated). User marked as INVITED.");
+    const inviteUrl = `${window.location.origin}/?waitlist_invite=${encodeURIComponent(id)}`;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      alert(`Invitation sent (simulated). User marked INVITED.\nInvite URL copied:\n${inviteUrl}`);
+    } catch {
+      alert(`Invitation sent (simulated). User marked INVITED.\nInvite URL:\n${inviteUrl}`);
+    }
     setWaitlist(prev => prev.map(w => w.id === id ? { ...w, status: 'INVITED' } : w));
   };
 
@@ -458,6 +487,11 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   const opsAlerts = opsSnapshot?.alerts || [];
   const criticalOpsAlerts = opsAlerts.filter((item) => item.severity === 'critical');
   const hasCriticalOpsAlerts = criticalOpsAlerts.length > 0;
+  const topSources = kpiSnapshot?.sourceBreakdown || [];
+  const topGeo = kpiSnapshot?.geoHeatmap || [];
+  const liveContacts = kpiSnapshot?.liveContacts || [];
+  const maxSourceCount = Math.max(1, ...topSources.map((item) => item.count));
+  const maxGeoCount = Math.max(1, ...topGeo.map((item) => item.count));
 
   return (
     <div className="flex h-screen bg-[#050505] text-zinc-200 font-sans overflow-hidden">
@@ -651,29 +685,214 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
               </div>
 
               {/* TOP ACTIONS */}
-              <div className="flex justify-end">
+              <div className="flex justify-between items-center">
+                 <div className="text-xs text-zinc-500">
+                   {isKpiLoading ? 'Refreshing KPI telemetry...' : 'KPI telemetry auto-refreshes every 15s.'}
+                 </div>
                  <Button onClick={() => DocumentService.generatePitchDeck()} size="sm" variant="outline">
                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                    Download Investor Pitch Deck (PDF)
                  </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
-                  <div className="text-zinc-500 text-xs uppercase font-bold tracking-wider mb-2">Total Users</div>
-                  <div className="text-3xl font-bold text-white">{safeUsers.length}</div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                <h3 className="text-white font-bold mb-2">Performance Heads-Up</h3>
+                {!kpiSnapshot ? (
+                  <div className="text-sm text-zinc-500">Collecting live performance telemetry...</div>
+                ) : (
+                  <div className="space-y-2">
+                    {kpiSnapshot.headsUp.map((item, index) => (
+                      <div key={`${index}-${item}`} className="text-sm text-zinc-300">
+                        {index + 1}. {item}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Live Users</div>
+                  <div className="text-2xl font-bold text-[#00e599]">{kpiSnapshot?.liveUsers || 0}</div>
                 </div>
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
-                  <div className="text-zinc-500 text-xs uppercase font-bold tracking-wider mb-2">Verified (Tier 2+)</div>
-                  <div className="text-3xl font-bold text-[#00e599]">{safeUsers.filter(u => u.kycTier === KYCTier.TIER_2 || u.kycTier === KYCTier.TIER_3).length}</div>
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Active (24h)</div>
+                  <div className="text-2xl font-bold text-blue-400">{kpiSnapshot?.activeUsers24h || 0}</div>
                 </div>
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
-                  <div className="text-zinc-500 text-xs uppercase font-bold tracking-wider mb-2">Waitlist</div>
-                  <div className="text-3xl font-bold text-blue-400">{waitlist.filter(w => w.status === 'PENDING').length}</div>
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Money In System</div>
+                  <div className="text-2xl font-bold text-white">
+                    ${(kpiSnapshot?.moneyInSystemUsd || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </div>
                 </div>
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
-                   <div className="text-zinc-500 text-xs uppercase font-bold tracking-wider mb-2">Platform Risk Score</div>
-                   <div className="text-3xl font-bold text-amber-500">LOW</div>
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Verified</div>
+                  <div className="text-2xl font-bold text-emerald-400">{kpiSnapshot?.verifiedUsers || 0}</div>
+                </div>
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Unverified</div>
+                  <div className="text-2xl font-bold text-amber-400">{kpiSnapshot?.unverifiedUsers || 0}</div>
+                </div>
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Waitlist Pending</div>
+                  <div className="text-2xl font-bold text-purple-400">{kpiSnapshot?.waitlistPending || 0}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                  <h3 className="text-white font-bold mb-4">Live Network Graph</h3>
+                  <div className="relative h-72 rounded-xl bg-black/40 border border-zinc-800 overflow-hidden">
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 600 280">
+                      <line x1="300" y1="140" x2="110" y2="70" stroke="#3f3f46" strokeWidth="1.5" />
+                      <line x1="300" y1="140" x2="490" y2="70" stroke="#3f3f46" strokeWidth="1.5" />
+                      <line x1="300" y1="140" x2="110" y2="210" stroke="#3f3f46" strokeWidth="1.5" />
+                      <line x1="300" y1="140" x2="490" y2="210" stroke="#3f3f46" strokeWidth="1.5" />
+
+                      <circle cx="300" cy="140" r="40" fill="#00e59922" stroke="#00e599" strokeWidth="2" />
+                      <circle cx="110" cy="70" r="28" fill="#2563eb22" stroke="#60a5fa" strokeWidth="2" />
+                      <circle cx="490" cy="70" r="28" fill="#10b98122" stroke="#34d399" strokeWidth="2" />
+                      <circle cx="110" cy="210" r="28" fill="#f59e0b22" stroke="#fbbf24" strokeWidth="2" />
+                      <circle cx="490" cy="210" r="28" fill="#a855f722" stroke="#c084fc" strokeWidth="2" />
+                    </svg>
+                    <div className="absolute top-[122px] left-[262px] text-center">
+                      <div className="text-[11px] text-zinc-400">Live Users</div>
+                      <div className="text-xl font-bold text-[#00e599]">{kpiSnapshot?.liveUsers || 0}</div>
+                    </div>
+                    <div className="absolute top-[54px] left-[80px] text-center">
+                      <div className="text-[10px] text-zinc-500">Guests</div>
+                      <div className="text-sm font-bold text-blue-300">{kpiSnapshot?.networkMetrics.liveGuests || 0}</div>
+                    </div>
+                    <div className="absolute top-[54px] left-[455px] text-center">
+                      <div className="text-[10px] text-zinc-500">Verified</div>
+                      <div className="text-sm font-bold text-emerald-300">{kpiSnapshot?.networkMetrics.liveVerified || 0}</div>
+                    </div>
+                    <div className="absolute top-[194px] left-[70px] text-center">
+                      <div className="text-[10px] text-zinc-500">Unverified</div>
+                      <div className="text-sm font-bold text-amber-300">{kpiSnapshot?.networkMetrics.liveUnverified || 0}</div>
+                    </div>
+                    <div className="absolute top-[194px] left-[440px] text-center">
+                      <div className="text-[10px] text-zinc-500">Active 24h</div>
+                      <div className="text-sm font-bold text-purple-300">{kpiSnapshot?.activeUsers24h || 0}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+                  <h3 className="text-white font-bold">Traffic Source Breakdown (24h)</h3>
+                  {topSources.length === 0 ? (
+                    <div className="text-sm text-zinc-500">No attribution traffic yet.</div>
+                  ) : (
+                    topSources.map((item) => (
+                      <div key={item.source} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-zinc-400">{item.source}</span>
+                          <span className="text-zinc-200 font-bold">{item.count}</span>
+                        </div>
+                        <div className="h-2 rounded bg-zinc-800 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-[#00e599] to-emerald-500"
+                            style={{ width: `${Math.max(5, (item.count / maxSourceCount) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+                  <h3 className="text-white font-bold">Access Heatmap By Country (24h)</h3>
+                  {topGeo.length === 0 ? (
+                    <div className="text-sm text-zinc-500">No geo telemetry yet.</div>
+                  ) : (
+                    topGeo.map((item) => (
+                      <div key={item.country} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-zinc-400">{item.country}</span>
+                          <span className="text-zinc-200 font-bold">{item.count}</span>
+                        </div>
+                        <div className="h-2 rounded bg-zinc-800 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-blue-500 to-cyan-400"
+                            style={{ width: `${Math.max(5, (item.count / maxGeoCount) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3">
+                  <h3 className="text-white font-bold">Attribution Counters</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-lg border border-zinc-800 bg-black/40 p-3">
+                      <div className="text-[10px] uppercase text-zinc-500">Referral</div>
+                      <div className="text-xl font-bold text-[#00e599]">{kpiSnapshot?.networkMetrics.referralVisits24h || 0}</div>
+                    </div>
+                    <div className="rounded-lg border border-zinc-800 bg-black/40 p-3">
+                      <div className="text-[10px] uppercase text-zinc-500">Invite Link</div>
+                      <div className="text-xl font-bold text-blue-400">{kpiSnapshot?.networkMetrics.inviteVisits24h || 0}</div>
+                    </div>
+                    <div className="rounded-lg border border-zinc-800 bg-black/40 p-3">
+                      <div className="text-[10px] uppercase text-zinc-500">Waitlist Invite</div>
+                      <div className="text-xl font-bold text-purple-400">{kpiSnapshot?.networkMetrics.waitlistVisits24h || 0}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-bold">Live User Contact Feed</h3>
+                  <span className="text-xs text-zinc-500">{liveContacts.length} live contacts</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm text-zinc-400">
+                    <thead className="bg-black text-zinc-500 text-xs uppercase tracking-wider">
+                      <tr>
+                        <th className="p-3">Email</th>
+                        <th className="p-3">User ID</th>
+                        <th className="p-3">Verification</th>
+                        <th className="p-3">Source</th>
+                        <th className="p-3">Location</th>
+                        <th className="p-3">Last Seen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {liveContacts.length === 0 ? (
+                        <tr>
+                          <td className="p-4 text-zinc-500" colSpan={6}>
+                            No live contact telemetry currently available.
+                          </td>
+                        </tr>
+                      ) : (
+                        liveContacts.map((contact) => (
+                          <tr key={`${contact.email}-${contact.lastSeen}`} className="border-t border-zinc-800">
+                            <td className="p-3 text-zinc-200">{contact.email}</td>
+                            <td className="p-3 text-zinc-500 font-mono text-xs">{contact.userId}</td>
+                            <td className="p-3">
+                              <span
+                                className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                                  contact.verification === 'VERIFIED'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : contact.verification === 'UNVERIFIED'
+                                    ? 'bg-amber-500/20 text-amber-400'
+                                    : 'bg-zinc-800 text-zinc-400'
+                                }`}
+                              >
+                                {contact.verification}
+                              </span>
+                            </td>
+                            <td className="p-3 text-zinc-300">{contact.source}</td>
+                            <td className="p-3 text-zinc-300">{contact.location}</td>
+                            <td className="p-3 text-zinc-500">{new Date(contact.lastSeen).toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

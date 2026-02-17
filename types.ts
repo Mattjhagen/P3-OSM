@@ -41,6 +41,7 @@ export interface ReferralData {
 export interface UserProfile {
   id: string;
   name: string;
+  email?: string;
   avatarUrl?: string; // New field for Profile Pic
   income: number;
   balance: number; // Platform balance

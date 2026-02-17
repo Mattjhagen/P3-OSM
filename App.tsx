@@ -29,6 +29,7 @@ import { KnowledgeBase } from './components/KnowledgeBase';
 import { CustomerChatWidget } from './components/CustomerChatWidget';
 import { TradingDashboard } from './components/TradingDashboard'; 
 import { PitchDeck } from './components/PitchDeck';
+import { AnalyticsService } from './services/analyticsService';
 
 type AppView = 'borrow' | 'lend' | 'trade' | 'mentorship' | 'profile' | 'knowledge_base';
 
@@ -144,6 +145,7 @@ const App: React.FC = () => {
     const pendingRef = localStorage.getItem('p3_pending_ref');
     const p3User = await PersistenceService.loadUser(netlifyUser, pendingRef);
     setUser(p3User);
+    await AnalyticsService.identifyAuthenticatedUser({ userId: p3User.id, email });
     
     localStorage.removeItem('p3_pending_ref');
     
@@ -172,6 +174,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       setAppReady(true);
+      await AnalyticsService.startSessionTracking();
       
       // Initialize Netlify Auth
       AuthService.init();
@@ -220,6 +223,14 @@ const App: React.FC = () => {
       const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
       window.history.replaceState({}, document.title, nextUrl);
     }
+    const handleBeforeUnload = () => {
+      AnalyticsService.flushAndStop();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      AnalyticsService.flushAndStop();
+    };
   }, []); 
 
   // Polling Effect (Runs when User changes)
@@ -240,6 +251,7 @@ const App: React.FC = () => {
     setMyOffers([]);
     setShowAdminLogin(false);
     setPendingAdminEmail('');
+    AnalyticsService.recordLogout();
     AuthService.logout();
   };
 
