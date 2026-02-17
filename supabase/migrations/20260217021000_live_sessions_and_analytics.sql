@@ -1,6 +1,7 @@
 -- Live session tracking + attribution analytics for admin operational KPIs
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS public.live_sessions (
     session_id TEXT PRIMARY KEY,
@@ -31,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_live_sessions_email ON public.live_sessions(email
 CREATE INDEX IF NOT EXISTS idx_live_sessions_user_id ON public.live_sessions(user_id);
 
 CREATE TABLE IF NOT EXISTS public.analytics_events (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id TEXT,
     user_id TEXT,
     email TEXT,
@@ -49,4 +50,3 @@ CREATE INDEX IF NOT EXISTS idx_analytics_events_event_name ON public.analytics_e
 -- Frontend writes to these tables with anon key in this beta architecture.
 ALTER TABLE public.live_sessions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics_events DISABLE ROW LEVEL SECURITY;
-
