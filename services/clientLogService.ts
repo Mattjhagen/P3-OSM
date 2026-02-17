@@ -10,11 +10,25 @@ export interface ClientLogEntry {
   timestamp: number;
 }
 
+export interface ClientLogActorContext {
+  sessionId?: string;
+  userId?: string;
+  email?: string;
+}
+
+export interface RemoteClientLogEntry extends ClientLogEntry {
+  sessionId?: string;
+  userId?: string;
+  email?: string;
+}
+
 const STORAGE_KEY = 'p3_client_logs_v1';
 const MAX_LOG_ENTRIES = 400;
 
 let installed = false;
 let captureMuted = false;
+let actorContext: ClientLogActorContext = {};
+let remoteSink: ((entry: RemoteClientLogEntry) => void | Promise<void>) | null = null;
 
 const getStorage = (): Storage | null => {
   if (typeof window === 'undefined') return null;
@@ -62,12 +76,27 @@ const appendLog = (entry: Omit<ClientLogEntry, 'id' | 'timestamp'>) => {
   if (captureMuted) return;
 
   const logs = readLogs();
-  logs.push({
+  const nextEntry: ClientLogEntry = {
     id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     timestamp: Date.now(),
     ...entry,
-  });
+  };
+  logs.push(nextEntry);
   writeLogs(logs);
+
+  if (!remoteSink) return;
+  if (nextEntry.level !== 'warn' && nextEntry.level !== 'error') return;
+
+  const remoteEntry: RemoteClientLogEntry = {
+    ...nextEntry,
+    sessionId: actorContext.sessionId || undefined,
+    userId: actorContext.userId || undefined,
+    email: actorContext.email || undefined,
+  };
+
+  Promise.resolve(remoteSink(remoteEntry)).catch(() => {
+    // Ignore remote sink errors to avoid cascading failures in log capture.
+  });
 };
 
 export const ClientLogService = {
@@ -132,6 +161,25 @@ export const ClientLogService = {
     writeLogs([]);
   },
 
+  updateActorContext: (context: ClientLogActorContext) => {
+    actorContext = {
+      ...actorContext,
+      ...context,
+    };
+  },
+
+  clearActorIdentity: () => {
+    actorContext = {
+      ...actorContext,
+      userId: '',
+      email: '',
+    };
+  },
+
+  setRemoteSink: (sink: ((entry: RemoteClientLogEntry) => void | Promise<void>) | null) => {
+    remoteSink = sink;
+  },
+
   withMutedCapture: async <T>(fn: () => Promise<T>): Promise<T> => {
     captureMuted = true;
     try {
@@ -141,4 +189,3 @@ export const ClientLogService = {
     }
   },
 };
-

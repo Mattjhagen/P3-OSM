@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Logo } from './Logo';
 import { Button } from './Button';
 import { UserProfile, EmployeeProfile, AdminRole, KYCTier, KYCStatus, Dispute, InternalTicket, WaitlistEntry } from '../types';
@@ -18,6 +18,7 @@ import { RuntimeConfigKey, RuntimeConfigService } from '../services/runtimeConfi
 import { ClientLogEntry, ClientLogService } from '../services/clientLogService';
 import { OpsAIAnalysis, OpsAIFixService } from '../services/opsAIFixService';
 import { AdminKpiService, AdminKpiSnapshot } from '../services/adminKpiService';
+import { AdminUserLogEntry, AdminUserLogService } from '../services/adminUserLogService';
 
 // Extend window definition for Tawk.to
 declare global {
@@ -76,6 +77,10 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   const [externalLogText, setExternalLogText] = useState('');
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<OpsAIAnalysis | null>(null);
+  const [remoteUserLogs, setRemoteUserLogs] = useState<AdminUserLogEntry[]>([]);
+  const [isRemoteUserLogsLoading, setIsRemoteUserLogsLoading] = useState(false);
+  const [selectedUserLogFilter, setSelectedUserLogFilter] = useState('ALL');
+  const [userLogSearchTerm, setUserLogSearchTerm] = useState('');
   const [kpiSnapshot, setKpiSnapshot] = useState<AdminKpiSnapshot | null>(null);
   const [isKpiLoading, setIsKpiLoading] = useState(false);
 
@@ -95,6 +100,30 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   const refreshClientLogs = useCallback(() => {
     setClientLogs(ClientLogService.getLogs(250));
   }, []);
+
+  const loadRemoteUserLogs = useCallback(async () => {
+    setIsRemoteUserLogsLoading(true);
+    try {
+      let userId = '';
+      let email = '';
+      if (selectedUserLogFilter.startsWith('user:')) {
+        userId = selectedUserLogFilter.slice(5);
+      } else if (selectedUserLogFilter.startsWith('email:')) {
+        email = selectedUserLogFilter.slice(6);
+      }
+      const logs = await AdminUserLogService.getUserLogs({
+        userId,
+        email,
+        limit: 400,
+      });
+      setRemoteUserLogs(logs);
+    } catch (error) {
+      console.error('Failed to load remote user logs', error);
+      setOpsMessage('Failed to refresh per-user logs.');
+    } finally {
+      setIsRemoteUserLogsLoading(false);
+    }
+  }, [selectedUserLogFilter]);
 
   useEffect(() => {
     // Load data
@@ -127,6 +156,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
     loadData();
     loadOpsSnapshot();
     refreshClientLogs();
+    loadRemoteUserLogs();
 
     // Hide Tawk.to when in Admin Mode
     if (window.Tawk_API && window.Tawk_API.hideWidget) {
@@ -138,7 +168,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
         window.Tawk_API.showWidget();
       }
     };
-  }, [loadOpsSnapshot, refreshClientLogs]);
+  }, [loadOpsSnapshot, refreshClientLogs, loadRemoteUserLogs]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -146,6 +176,15 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
     }, 3000);
     return () => clearInterval(interval);
   }, [refreshClientLogs]);
+
+  useEffect(() => {
+    if (activeTab !== 'OPERATIONS') return;
+    loadRemoteUserLogs();
+    const interval = setInterval(() => {
+      loadRemoteUserLogs();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [activeTab, loadRemoteUserLogs]);
 
   useEffect(() => {
     if (users.length === 0 && waitlist.length === 0) return;
@@ -492,6 +531,60 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   const liveContacts = kpiSnapshot?.liveContacts || [];
   const maxSourceCount = Math.max(1, ...topSources.map((item) => item.count));
   const maxGeoCount = Math.max(1, ...topGeo.map((item) => item.count));
+  const userLogFilterOptions = useMemo(() => {
+    const options = new Map<string, { value: string; label: string }>();
+
+    safeUsers.forEach((user) => {
+      const userId = (user.id || '').trim();
+      const name = (user.name || 'User').trim() || 'User';
+      const email = (user.email || '').trim().toLowerCase();
+      if (!userId) return;
+      options.set(`user:${userId}`, {
+        value: `user:${userId}`,
+        label: `${name}${email ? ` (${email})` : ''}`,
+      });
+      if (email && !options.has(`email:${email}`)) {
+        options.set(`email:${email}`, {
+          value: `email:${email}`,
+          label: `Email: ${email}`,
+        });
+      }
+    });
+
+    liveContacts.forEach((contact) => {
+      const email = (contact.email || '').trim().toLowerCase();
+      if (!email) return;
+      if (!options.has(`email:${email}`)) {
+        options.set(`email:${email}`, {
+          value: `email:${email}`,
+          label: `Email: ${email}`,
+        });
+      }
+    });
+
+    return Array.from(options.values())
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .slice(0, 500);
+  }, [safeUsers, liveContacts]);
+
+  const filteredRemoteUserLogs = useMemo(() => {
+    const query = userLogSearchTerm.trim().toLowerCase();
+    if (!query) return remoteUserLogs;
+
+    return remoteUserLogs.filter((log) => {
+      const haystack = [
+        log.email,
+        log.userId,
+        log.sessionId,
+        log.source,
+        log.message,
+        log.context,
+      ]
+        .map((item) => (item || '').toLowerCase())
+        .join(' ');
+      return haystack.includes(query);
+    });
+  }, [remoteUserLogs, userLogSearchTerm]);
 
   return (
     <div className="flex h-screen bg-[#050505] text-zinc-200 font-sans overflow-hidden">
@@ -1002,6 +1095,82 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                       </tbody>
                     </table>
                   )}
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-zinc-800 bg-black/20 p-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                    <div>
+                      <h5 className="text-sm font-bold text-white">User Log Explorer</h5>
+                      <p className="text-xs text-zinc-500">
+                        Persistent per-user warning/error logs from live sessions.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={selectedUserLogFilter}
+                        onChange={(e) => setSelectedUserLogFilter(e.target.value)}
+                        className="bg-black border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:border-[#00e599] outline-none"
+                      >
+                        <option value="ALL">All Users</option>
+                        {userLogFilterOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Button size="sm" variant="outline" onClick={loadRemoteUserLogs} isLoading={isRemoteUserLogsLoading}>
+                        Refresh User Logs
+                      </Button>
+                    </div>
+                  </div>
+
+                  <input
+                    value={userLogSearchTerm}
+                    onChange={(e) => setUserLogSearchTerm(e.target.value)}
+                    placeholder="Search logs by email, user id, session id, source, or message"
+                    className="w-full bg-black border border-zinc-700 rounded px-3 py-2 text-xs text-zinc-200 focus:border-[#00e599] outline-none"
+                  />
+
+                  <div className="max-h-72 overflow-y-auto rounded-lg border border-zinc-800 bg-black/40">
+                    {filteredRemoteUserLogs.length === 0 ? (
+                      <div className="p-4 text-xs text-zinc-500">
+                        {isRemoteUserLogsLoading ? 'Loading user logs...' : 'No persistent user logs found for this filter.'}
+                      </div>
+                    ) : (
+                      <table className="w-full text-left text-xs text-zinc-400">
+                        <thead className="sticky top-0 bg-black text-zinc-500 uppercase tracking-wide">
+                          <tr>
+                            <th className="px-3 py-2">Time</th>
+                            <th className="px-3 py-2">User</th>
+                            <th className="px-3 py-2">Level</th>
+                            <th className="px-3 py-2">Source</th>
+                            <th className="px-3 py-2">Message</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRemoteUserLogs.slice(0, 250).map((log) => (
+                            <tr key={log.id} className="border-t border-zinc-900 align-top">
+                              <td className="px-3 py-2 text-zinc-500 whitespace-nowrap">
+                                {new Date(log.timestamp).toLocaleString()}
+                              </td>
+                              <td className="px-3 py-2 text-zinc-300">
+                                <div className="font-mono text-[11px]">{log.email || 'guest'}</div>
+                                <div className="text-[10px] text-zinc-600">{log.userId || 'anonymous'} · {log.sessionId || 'no-session'}</div>
+                              </td>
+                              <td className={`px-3 py-2 font-bold ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-amber-400' : 'text-blue-400'}`}>
+                                {log.level.toUpperCase()}
+                              </td>
+                              <td className="px-3 py-2 text-zinc-500">{log.source}</td>
+                              <td className="px-3 py-2 text-zinc-300 break-all">
+                                <div>{log.message}</div>
+                                {log.context && <div className="text-zinc-500 mt-1">{log.context}</div>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">

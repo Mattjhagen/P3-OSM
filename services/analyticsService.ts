@@ -54,6 +54,15 @@ const getStorage = (): Storage | null => {
 
 const sanitize = (value: string | null | undefined) => (value || '').trim();
 
+const syncClientLogContext = () => {
+  if (!sessionState) return;
+  ClientLogService.updateActorContext({
+    sessionId: sessionState.sessionId,
+    userId: sessionState.userId,
+    email: sessionState.email,
+  });
+};
+
 const createSessionId = () =>
   `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -196,6 +205,7 @@ const upsertSession = async (patch: Partial<SessionState> = {}) => {
 
   const nextState = { ...sessionState, ...patch };
   sessionState = nextState;
+  syncClientLogContext();
 
   const payload = {
     session_id: nextState.sessionId,
@@ -302,6 +312,18 @@ export const AnalyticsService = {
       userId: '',
       email: '',
     };
+    syncClientLogContext();
+    ClientLogService.setRemoteSink((entry) =>
+      insertEvent('client_log', entry.level, {
+        source: entry.source,
+        message: entry.message,
+        context: entry.context || '',
+        level: entry.level,
+        sessionId: entry.sessionId || sessionState?.sessionId || '',
+        userId: entry.userId || sessionState?.userId || '',
+        email: entry.email || sessionState?.email || '',
+      })
+    );
 
     await upsertSession();
     await insertEvent('session', 'visit', {
@@ -332,6 +354,7 @@ export const AnalyticsService = {
     if (!sessionState) return;
     await insertEvent('auth', 'logout', {});
     await upsertSession({ userId: '', email: '' });
+    ClientLogService.clearActorIdentity();
   },
 
   recordEvent: async (
@@ -354,5 +377,6 @@ export const AnalyticsService = {
         console.warn('AnalyticsService session stop update failed', error.message);
       }
     });
+    ClientLogService.setRemoteSink(null);
   },
 };
