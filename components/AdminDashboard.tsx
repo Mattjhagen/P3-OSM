@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Logo } from './Logo';
 import { Button } from './Button';
 import { UserProfile, EmployeeProfile, AdminRole, KYCTier, KYCStatus, Dispute, InternalTicket, WaitlistEntry } from '../types';
@@ -8,6 +8,15 @@ import { SecurityService } from '../services/security';
 import { DocumentService } from '../services/documentService';
 import { ScoreGauge } from './ScoreGauge';
 import { AdminChatWidget } from './AdminChatWidget';
+import {
+  AdminIntegrationStatus,
+  AdminOpsAlert,
+  AdminOpsSnapshot,
+  AdminOpsService,
+} from '../services/adminOpsService';
+import { RuntimeConfigKey, RuntimeConfigService } from '../services/runtimeConfigService';
+import { ClientLogEntry, ClientLogService } from '../services/clientLogService';
+import { OpsAIAnalysis, OpsAIFixService } from '../services/opsAIFixService';
 
 // Extend window definition for Tawk.to
 declare global {
@@ -22,7 +31,9 @@ interface Props {
 }
 
 export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<
+    'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE'
+  >('OVERVIEW');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
@@ -48,6 +59,40 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   // Ticket Creation State
   const [newTicket, setNewTicket] = useState({ subject: '', description: '', priority: 'LOW' as 'LOW' | 'MEDIUM' | 'HIGH' });
 
+  // Operations + Integrations State
+  const [opsSnapshot, setOpsSnapshot] = useState<AdminOpsSnapshot | null>(null);
+  const [isOpsLoading, setIsOpsLoading] = useState(false);
+  const [opsMessage, setOpsMessage] = useState('');
+  const [opsDrafts, setOpsDrafts] = useState<Partial<Record<RuntimeConfigKey, string>>>({
+    GEMINI_API_KEY: '',
+    COINGECKO_API_KEY: '',
+    STRIPE_DONATE_URL: '',
+    BACKEND_URL: '',
+    OPENAI_API_KEY: '',
+    OPENAI_MODEL: 'gpt-5-codex',
+  });
+  const [clientLogs, setClientLogs] = useState<ClientLogEntry[]>([]);
+  const [externalLogText, setExternalLogText] = useState('');
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<OpsAIAnalysis | null>(null);
+
+  const loadOpsSnapshot = useCallback(async () => {
+    setIsOpsLoading(true);
+    try {
+      const snapshot = await AdminOpsService.getOperationalSnapshot();
+      setOpsSnapshot(snapshot);
+    } catch (error) {
+      console.error('Failed to load operations snapshot', error);
+      setOpsMessage('Could not refresh operations status. Check console logs.');
+    } finally {
+      setIsOpsLoading(false);
+    }
+  }, []);
+
+  const refreshClientLogs = useCallback(() => {
+    setClientLogs(ClientLogService.getLogs(250));
+  }, []);
+
   useEffect(() => {
     // Load data
     const loadData = async () => {
@@ -71,6 +116,8 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
       }
     };
     loadData();
+    loadOpsSnapshot();
+    refreshClientLogs();
 
     // Hide Tawk.to when in Admin Mode
     if (window.Tawk_API && window.Tawk_API.hideWidget) {
@@ -82,7 +129,28 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
         window.Tawk_API.showWidget();
       }
     };
-  }, []);
+  }, [loadOpsSnapshot, refreshClientLogs]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshClientLogs();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [refreshClientLogs]);
+
+  useEffect(() => {
+    if (!opsSnapshot) return;
+    setOpsDrafts((prev) => {
+      const next = { ...prev };
+      for (const integration of opsSnapshot.integrations) {
+        if (integration.isSecret) continue;
+        if (!next[integration.key]) {
+          next[integration.key] = integration.effectiveValue;
+        }
+      }
+      return next;
+    });
+  }, [opsSnapshot]);
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,6 +293,159 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
     setInternalTickets(updated);
   };
 
+  const handleOpsDraftChange = (key: RuntimeConfigKey, value: string) => {
+    setOpsDrafts((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveIntegration = async (integration: AdminIntegrationStatus) => {
+    const nextValue = (opsDrafts[integration.key] || '').trim();
+    if (!nextValue) {
+      setOpsMessage(`Please enter a value for ${integration.label}.`);
+      return;
+    }
+
+    RuntimeConfigService.setConfigValue(integration.key, nextValue, currentAdmin.email);
+    setOpsMessage(`${integration.label} saved in runtime config.`);
+    await loadOpsSnapshot();
+  };
+
+  const handleRotateIntegration = async (integration: AdminIntegrationStatus) => {
+    const nextValue = (opsDrafts[integration.key] || '').trim();
+    if (!nextValue) {
+      setOpsMessage(`Enter a new value before rotating ${integration.label}.`);
+      return;
+    }
+
+    RuntimeConfigService.rotateConfigValue(integration.key, nextValue, currentAdmin.email);
+    setOpsMessage(`${integration.label} rotated successfully.`);
+    await loadOpsSnapshot();
+  };
+
+  const handleResetToEnvironment = async (integration: AdminIntegrationStatus) => {
+    RuntimeConfigService.clearConfigValue(integration.key);
+    setOpsMessage(`${integration.label} reset to environment/default source.`);
+    await loadOpsSnapshot();
+  };
+
+  const handleCreateAlertTicket = async (alertItem: AdminOpsAlert) => {
+    const ticket: InternalTicket = {
+      id: `tick_ops_${Date.now()}`,
+      authorId: currentAdmin.id,
+      authorName: currentAdmin.name,
+      subject: `[OPS] ${alertItem.title}`,
+      description: `${alertItem.detail}\n\nAction: ${alertItem.action}`,
+      priority: alertItem.severity === 'critical' ? 'HIGH' : 'MEDIUM',
+      status: 'OPEN',
+      createdAt: Date.now(),
+    };
+
+    const updated = await PersistenceService.addInternalTicket(ticket);
+    setInternalTickets(updated);
+    setOpsMessage(`Ticket created for alert: ${alertItem.title}`);
+  };
+
+  const getAlertClasses = (severity: AdminOpsAlert['severity']) => {
+    if (severity === 'critical') return 'border-red-500/40 bg-red-900/20 text-red-300';
+    if (severity === 'warning') return 'border-amber-500/40 bg-amber-900/20 text-amber-300';
+    return 'border-blue-500/40 bg-blue-900/20 text-blue-300';
+  };
+
+  const getIntegrationStatusClasses = (integration: AdminIntegrationStatus) => {
+    if (integration.source === 'missing') return 'text-red-400 border-red-500/40 bg-red-900/20';
+    if (integration.source === 'fallback') return 'text-amber-400 border-amber-500/40 bg-amber-900/20';
+    if (integration.source === 'runtime') return 'text-[#00e599] border-[#00e599]/40 bg-[#00e599]/10';
+    return 'text-blue-400 border-blue-500/40 bg-blue-900/20';
+  };
+
+  const clearClientLogs = () => {
+    ClientLogService.clearLogs();
+    refreshClientLogs();
+    setOpsMessage('Client logs cleared.');
+  };
+
+  const analyzeLogsWithAI = async () => {
+    setIsAiAnalyzing(true);
+    setOpsMessage('');
+    setAiAnalysis(null);
+    const currentAlerts = opsSnapshot?.alerts || [];
+
+    try {
+      const analysis = await OpsAIFixService.analyze({
+        logs: clientLogs.slice(0, 120),
+        externalLogText: externalLogText.trim(),
+        activeAlerts: currentAlerts.map((item) => ({
+          title: item.title,
+          detail: item.detail,
+          severity: item.severity,
+        })),
+        integrationSummary: (opsSnapshot?.integrations || []).map((item) => ({
+          key: item.key,
+          status: item.statusText,
+          source: item.source,
+        })),
+      });
+      setAiAnalysis(analysis);
+      setOpsMessage('AI analysis completed.');
+    } catch (error) {
+      console.error('AI analysis failed', error);
+      setOpsMessage(`AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsAiAnalyzing(false);
+    }
+  };
+
+  const applyAiFixes = async () => {
+    if (!aiAnalysis || aiAnalysis.actions.length === 0) {
+      setOpsMessage('No AI actions are available to apply.');
+      return;
+    }
+
+    let applied = 0;
+    const manualSteps: string[] = [];
+
+    for (const action of aiAnalysis.actions) {
+      if (action.type === 'update_runtime_config') {
+        if (action.mode === 'rotate') {
+          RuntimeConfigService.rotateConfigValue(action.key, action.value, currentAdmin.email);
+        } else {
+          RuntimeConfigService.setConfigValue(action.key, action.value, currentAdmin.email);
+        }
+        applied += 1;
+        continue;
+      }
+
+      if (action.type === 'create_ticket') {
+        const ticket: InternalTicket = {
+          id: `tick_ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          authorId: currentAdmin.id,
+          authorName: currentAdmin.name,
+          subject: action.title,
+          description: action.description,
+          priority: action.priority,
+          status: 'OPEN',
+          createdAt: Date.now(),
+        };
+        const updated = await PersistenceService.addInternalTicket(ticket);
+        setInternalTickets(updated);
+        applied += 1;
+        continue;
+      }
+
+      if (action.type === 'manual_step') {
+        manualSteps.push(`${action.instruction} (${action.reason})`);
+      }
+    }
+
+    await loadOpsSnapshot();
+    refreshClientLogs();
+
+    const summary =
+      manualSteps.length > 0
+        ? `Applied ${applied} action(s). Manual follow-up: ${manualSteps.join(' | ')}`
+        : `Applied ${applied} AI action(s).`;
+    setOpsMessage(summary);
+  };
+
   const safeUsers = users || []; // Safety fallback
   const filteredUsers = safeUsers.filter(u => 
     u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -234,6 +455,9 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
   const pendingKYCUsers = safeUsers.filter(u => u.kycStatus === KYCStatus.PENDING);
   const openDisputes = disputes.filter(d => d.status === 'OPEN');
   const openTickets = internalTickets.filter(t => t.status === 'OPEN');
+  const opsAlerts = opsSnapshot?.alerts || [];
+  const criticalOpsAlerts = opsAlerts.filter((item) => item.severity === 'critical');
+  const hasCriticalOpsAlerts = criticalOpsAlerts.length > 0;
 
   return (
     <div className="flex h-screen bg-[#050505] text-zinc-200 font-sans overflow-hidden">
@@ -263,6 +487,19 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'OVERVIEW' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
             <span>📊</span> Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('OPERATIONS')}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === 'OPERATIONS' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+          >
+            <div className="flex items-center gap-3">
+              <span>🚨</span> Operations
+            </div>
+            {opsAlerts.length > 0 && (
+              <span className={`${criticalOpsAlerts.length > 0 ? 'bg-red-500 text-white' : 'bg-amber-500 text-black'} text-xs font-bold px-1.5 rounded-full`}>
+                {opsAlerts.length}
+              </span>
+            )}
           </button>
           <button 
             onClick={() => setActiveTab('WAITLIST')}
@@ -344,6 +581,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
         <header className="h-16 border-b border-zinc-900 flex items-center justify-between px-8 bg-[#050505]">
           <h1 className="text-lg font-bold text-white">
             {activeTab === 'OVERVIEW' && 'Platform Overview'}
+            {activeTab === 'OPERATIONS' && 'Operations & Integrations'}
             {activeTab === 'WAITLIST' && 'Beta Waitlist Management'}
             {activeTab === 'USERS' && 'Customer Support'}
             {activeTab === 'KYC' && 'KYC Compliance Queue'}
@@ -372,7 +610,11 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                 </span>
              </button>
              <div className="text-xs text-zinc-500 font-mono">
-               System Status: <span className="text-[#00e599]">OPERATIONAL</span> • <span className="text-red-500">ADMIN MODE</span>
+               System Status:{' '}
+               <span className={hasCriticalOpsAlerts ? 'text-red-500' : 'text-[#00e599]'}>
+                 {hasCriticalOpsAlerts ? 'ATTENTION REQUIRED' : 'OPERATIONAL'}
+               </span>{' '}
+               • <span className="text-red-500">ADMIN MODE</span>
              </div>
           </div>
         </header>
@@ -382,6 +624,32 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
           {/* OVERVIEW TAB */}
           {activeTab === 'OVERVIEW' && (
             <div className="space-y-6 animate-fade-in">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-white font-bold">Operational Alerts</h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      {opsAlerts.length === 0
+                        ? 'No active operational alerts.'
+                        : `${opsAlerts.length} alert(s) require review.`}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setActiveTab('OPERATIONS')}>
+                    Open Operations
+                  </Button>
+                </div>
+                {opsAlerts.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {opsAlerts.slice(0, 3).map((alertItem) => (
+                      <div key={alertItem.id} className={`rounded-lg border px-3 py-2 text-xs ${getAlertClasses(alertItem.severity)}`}>
+                        <div className="font-bold">{alertItem.title}</div>
+                        <div className="opacity-90">{alertItem.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* TOP ACTIONS */}
               <div className="flex justify-end">
                  <Button onClick={() => DocumentService.generatePitchDeck()} size="sm" variant="outline">
@@ -407,6 +675,243 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
                    <div className="text-zinc-500 text-xs uppercase font-bold tracking-wider mb-2">Platform Risk Score</div>
                    <div className="text-3xl font-bold text-amber-500">LOW</div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'OPERATIONS' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Operational Attention Center</h3>
+                  <p className="text-xs text-zinc-500">
+                    Review alerts, add missing keys, and rotate runtime credentials without redeploying.
+                  </p>
+                  {opsSnapshot?.generatedAt && (
+                    <p className="text-[10px] text-zinc-600 mt-1">
+                      Last refresh: {new Date(opsSnapshot.generatedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => loadOpsSnapshot()} isLoading={isOpsLoading}>
+                    Refresh Status
+                  </Button>
+                </div>
+              </div>
+
+              {opsMessage && (
+                <div className="rounded-lg border border-blue-500/40 bg-blue-900/20 px-4 py-3 text-sm text-blue-300">
+                  {opsMessage}
+                </div>
+              )}
+
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-white font-bold">Active Alerts</h4>
+                  <span className="text-xs text-zinc-500">{opsAlerts.length} total</span>
+                </div>
+                {opsAlerts.length === 0 ? (
+                  <div className="text-sm text-zinc-500">No operational alerts detected.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {opsAlerts.map((alertItem) => (
+                      <div key={alertItem.id} className={`rounded-lg border p-4 ${getAlertClasses(alertItem.severity)}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-bold">{alertItem.title}</div>
+                            <div className="text-xs mt-1">{alertItem.detail}</div>
+                            <div className="text-xs mt-1 opacity-90">Action: {alertItem.action}</div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-[10px]"
+                            onClick={() => handleCreateAlertTicket(alertItem)}
+                          >
+                            Create Ticket
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-white font-bold">Operations Logs</h4>
+                    <p className="text-xs text-zinc-500">
+                      Recent client-side errors/warnings. Paste Render/Netlify logs below for AI analysis.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={refreshClientLogs}>
+                      Refresh Logs
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={clearClientLogs}>
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto rounded-lg border border-zinc-800 bg-black/40">
+                  {clientLogs.length === 0 ? (
+                    <div className="p-4 text-xs text-zinc-500">No logs captured yet.</div>
+                  ) : (
+                    <table className="w-full text-left text-xs text-zinc-400">
+                      <thead className="sticky top-0 bg-black text-zinc-500 uppercase tracking-wide">
+                        <tr>
+                          <th className="px-3 py-2">Time</th>
+                          <th className="px-3 py-2">Level</th>
+                          <th className="px-3 py-2">Source</th>
+                          <th className="px-3 py-2">Message</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {clientLogs.slice(0, 80).map((log) => (
+                          <tr key={log.id} className="border-t border-zinc-900">
+                            <td className="px-3 py-2 text-zinc-500">{new Date(log.timestamp).toLocaleTimeString()}</td>
+                            <td className={`px-3 py-2 font-bold ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-amber-400' : 'text-blue-400'}`}>
+                              {log.level.toUpperCase()}
+                            </td>
+                            <td className="px-3 py-2 text-zinc-500">{log.source}</td>
+                            <td className="px-3 py-2 text-zinc-300 break-all">{log.message}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-wide text-zinc-500 font-bold">
+                    External Deployment Logs (Optional)
+                  </label>
+                  <textarea
+                    value={externalLogText}
+                    onChange={(e) => setExternalLogText(e.target.value)}
+                    placeholder="Paste Render/Netlify/Supabase logs here for deeper AI diagnosis."
+                    className="w-full min-h-[120px] bg-black border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:border-[#00e599] outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" onClick={analyzeLogsWithAI} isLoading={isAiAnalyzing}>
+                    Analyze Logs with GPT Codex
+                  </Button>
+                  {aiAnalysis && (
+                    <Button size="sm" variant="secondary" onClick={applyAiFixes}>
+                      Apply Suggested Fixes
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {aiAnalysis && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+                  <div>
+                    <h4 className="text-white font-bold">AI Incident Analysis</h4>
+                    <p className="text-xs text-zinc-500">Confidence: {(aiAnalysis.confidence * 100).toFixed(0)}%</p>
+                  </div>
+
+                  <div className="rounded-lg border border-zinc-800 bg-black/30 p-3 text-sm text-zinc-300">
+                    <div className="text-xs text-zinc-500 uppercase tracking-wide mb-1">Summary</div>
+                    <div>{aiAnalysis.summary}</div>
+                  </div>
+
+                  <div className="rounded-lg border border-zinc-800 bg-black/30 p-3 text-sm text-zinc-300">
+                    <div className="text-xs text-zinc-500 uppercase tracking-wide mb-1">Probable Root Cause</div>
+                    <div>{aiAnalysis.probableRootCause}</div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-zinc-800 bg-black/30 p-3">
+                      <div className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Recommendations</div>
+                      <ul className="space-y-1 text-sm text-zinc-300">
+                        {aiAnalysis.recommendations.length === 0 ? (
+                          <li>No recommendations returned.</li>
+                        ) : (
+                          aiAnalysis.recommendations.map((item, index) => (
+                            <li key={`${index}-${item}`}>{index + 1}. {item}</li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                    <div className="rounded-lg border border-zinc-800 bg-black/30 p-3">
+                      <div className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Planned Actions</div>
+                      <ul className="space-y-1 text-sm text-zinc-300">
+                        {aiAnalysis.actions.length === 0 ? (
+                          <li>No auto-actions available.</li>
+                        ) : (
+                          aiAnalysis.actions.map((action, index) => (
+                            <li key={`action-${index}`}>
+                              {index + 1}. {action.type === 'update_runtime_config'
+                                ? `${action.mode.toUpperCase()} ${action.key}: ${action.reason}`
+                                : action.type === 'create_ticket'
+                                ? `Create ticket: ${action.title}`
+                                : `${action.instruction}`}
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {(opsSnapshot?.integrations || []).map((integration) => (
+                  <div key={integration.key} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-white font-bold">{integration.label}</h4>
+                        <p className="text-xs text-zinc-500 mt-1">{integration.description}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded border ${getIntegrationStatusClasses(integration)}`}>
+                        {integration.statusText}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-zinc-500 space-y-1">
+                      <div>Current: <span className="text-zinc-300">{integration.displayValue}</span></div>
+                      <div>Source: <span className="text-zinc-300 uppercase">{integration.source}</span></div>
+                      {integration.runtimeEntry && (
+                        <div>
+                          Runtime Updated: <span className="text-zinc-300">{new Date(integration.runtimeEntry.updatedAt).toLocaleString()}</span>
+                          {' '}by <span className="text-zinc-300">{integration.runtimeEntry.updatedBy}</span>
+                          {' '}({integration.runtimeEntry.rotationCount} rotations)
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] uppercase tracking-wide text-zinc-500 font-bold">
+                        {integration.isSecret ? 'Add Or Rotate Secret' : 'Update Value'}
+                      </label>
+                      <input
+                        type={integration.inputType}
+                        value={opsDrafts[integration.key] || ''}
+                        onChange={(e) => handleOpsDraftChange(integration.key, e.target.value)}
+                        placeholder={integration.isSecret ? `Enter ${integration.label}` : integration.effectiveValue}
+                        className="w-full bg-black border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-[#00e599] outline-none"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" onClick={() => handleSaveIntegration(integration)}>
+                        Save
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => handleRotateIntegration(integration)}>
+                        Rotate
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleResetToEnvironment(integration)}>
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

@@ -2,10 +2,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { UserProfile, LoanRequest, LoanOffer, MatchResult, RiskReport } from "../types";
 import { frontendEnv } from "./env";
+import { RuntimeConfigService } from "./runtimeConfigService";
 
 // Helper to safely get the API Key without crashing the app on load
 const getAI = () => {
-  const apiKey = frontendEnv.VITE_API_KEY || '';
+  const apiKey = RuntimeConfigService.getEffectiveValue('GEMINI_API_KEY', frontendEnv.VITE_API_KEY || '');
 
   // Explicit check for the string "undefined" which can happen during build replacement
   if (!apiKey || apiKey === 'undefined' || apiKey === '') {

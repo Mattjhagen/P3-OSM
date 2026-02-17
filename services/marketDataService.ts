@@ -1,11 +1,12 @@
 
 // CoinGecko Public API
 import { frontendEnv } from './env';
+import { RuntimeConfigService } from './runtimeConfigService';
 
 const API_BASE = 'https://api.coingecko.com/api/v3';
 
-// Safely retrieve API Key
-const API_KEY = frontendEnv.VITE_COINGECKO_API_KEY || '';
+const getApiKey = () =>
+  RuntimeConfigService.getEffectiveValue('COINGECKO_API_KEY', frontendEnv.VITE_COINGECKO_API_KEY || '');
 
 export const ASSET_IDS = {
   'BTC': 'bitcoin',
@@ -29,7 +30,8 @@ export const MarketDataService = {
   // Fetch current price, 24h change, and market cap
   getPrices: async (ids: string[]): Promise<MarketData | null> => {
     try {
-      const apiKeyParam = API_KEY ? `&x_cg_demo_api_key=${API_KEY}` : '';
+      const apiKey = getApiKey();
+      const apiKeyParam = apiKey ? `&x_cg_demo_api_key=${apiKey}` : '';
       const response = await fetch(
         `${API_BASE}/simple/price?ids=${ids.join(',')}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true${apiKeyParam}`,
         { method: 'GET', headers: { 'Accept': 'application/json' } }
@@ -46,6 +48,7 @@ export const MarketDataService = {
   // Fetch historical chart data
   getChartHistory: async (coinId: string, days: string): Promise<any[]> => {
     try {
+      const apiKey = getApiKey();
       // Map UI ranges to API params
       // CoinGecko 'days': 1 = 24h, 7 = 7d, etc.
       let apiDays = '1';
@@ -54,7 +57,7 @@ export const MarketDataService = {
       if (days === '1Y') apiDays = '365';
       if (days === 'ALL') apiDays = 'max';
 
-      const apiKeyParam = API_KEY ? `&x_cg_demo_api_key=${API_KEY}` : '';
+      const apiKeyParam = apiKey ? `&x_cg_demo_api_key=${apiKey}` : '';
       const response = await fetch(
         `${API_BASE}/coins/${coinId}/market_chart?vs_currency=usd&days=${apiDays}${apiKeyParam}`,
         { method: 'GET', headers: { 'Accept': 'application/json' } }

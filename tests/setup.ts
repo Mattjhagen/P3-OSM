@@ -5,3 +5,5 @@ process.env.VITE_BACKEND_URL = process.env.VITE_BACKEND_URL || 'http://localhost
 process.env.VITE_API_KEY = process.env.VITE_API_KEY || '';
 process.env.VITE_GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID || '';
 process.env.VITE_COINGECKO_API_KEY = process.env.VITE_COINGECKO_API_KEY || '';
+process.env.VITE_OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY || '';
+process.env.VITE_OPENAI_MODEL = process.env.VITE_OPENAI_MODEL || 'gpt-5-codex';

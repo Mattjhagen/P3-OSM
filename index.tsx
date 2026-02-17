@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
+import { ClientLogService } from './services/clientLogService';
 
 // --- CRITICAL POLYFILLS FOR VITE/BROWSER COMPATIBILITY ---
 if (typeof window !== 'undefined') {
@@ -32,6 +33,8 @@ if (typeof window !== 'undefined') {
   }
 }
 // ---------------------------------------------------------
+
+ClientLogService.installGlobalCapture();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -47,6 +47,8 @@ const MOCK_CHARITIES: Charity[] = [
   { id: 'c3', name: 'MediCare', mission: 'Medical Supplies', totalRaised: 2100, color: 'bg-red-500' },
 ];
 
+const FIRST_VISIT_PITCH_DECK_KEY = 'p3_has_seen_pitch_deck';
+
 const App: React.FC = () => {
   const [appReady, setAppReady] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
@@ -196,14 +198,27 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const refCode = params.get('ref');
     const deckMode = params.get('deck');
+    const hasSeenPitchDeck = localStorage.getItem(FIRST_VISIT_PITCH_DECK_KEY) === 'true';
 
     if (refCode) {
       localStorage.setItem('p3_pending_ref', refCode);
-      window.history.replaceState({}, document.title, window.location.pathname);
+      params.delete('ref');
     }
-    
+
     if (deckMode === 'true') {
       setShowPitchDeck(true);
+      localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
+      params.delete('deck');
+    } else if (!hasSeenPitchDeck) {
+      // First-time visitors are shown the investor deck before entering the app.
+      setShowPitchDeck(true);
+      localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
+    }
+
+    if (refCode || deckMode) {
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
+      window.history.replaceState({}, document.title, nextUrl);
     }
   }, []); 
 

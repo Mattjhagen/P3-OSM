@@ -3,10 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { Logo } from './Logo';
 import { Button } from './Button';
 import { ScoreGauge } from './ScoreGauge';
+import { RuntimeConfigService } from '../services/runtimeConfigService';
 
 interface Props {
   onClose: () => void;
 }
+
+const CALENDLY_MEETING_URL = 'https://calendly.com/admin-p3lending/new-meeting';
+const STRIPE_DONATE_FALLBACK =
+  (import.meta as any).env?.VITE_STRIPE_DONATE_URL || 'https://stripe.com/payments/checkout';
 
 const SLIDES = [
   {
@@ -253,6 +258,24 @@ const SLIDES = [
         <div className="pt-12">
            <p className="text-white font-bold mb-2">Contact</p>
            <a href="mailto:founders@p3lending.space" className="text-2xl text-[#00e599] hover:underline">founders@p3lending.space</a>
+           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+             <a
+               href={CALENDLY_MEETING_URL}
+               target="_blank"
+               rel="noopener noreferrer"
+               className="inline-flex items-center rounded-lg bg-[#00e599] px-5 py-2 text-sm font-bold text-black transition-all hover:bg-[#00cc88]"
+             >
+               Schedule a Meeting
+             </a>
+             <a
+               href={STRIPE_DONATE_FALLBACK}
+               target="_blank"
+               rel="noopener noreferrer"
+               className="inline-flex items-center rounded-lg border border-zinc-600 bg-zinc-900 px-5 py-2 text-sm font-bold text-white transition-all hover:border-zinc-400 hover:text-[#00e599]"
+             >
+               Donate Now via Stripe
+             </a>
+           </div>
         </div>
       </div>
     )
@@ -261,6 +284,10 @@ const SLIDES = [
 
 export const PitchDeck: React.FC<Props> = ({ onClose }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const stripeDonateUrl = RuntimeConfigService.getEffectiveValue(
+    'STRIPE_DONATE_URL',
+    STRIPE_DONATE_FALLBACK
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -278,12 +305,31 @@ export const PitchDeck: React.FC<Props> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-[#050505] z-[9999] flex flex-col">
+      <div className="absolute top-6 left-6 flex flex-wrap items-center gap-3 z-50">
+        <a
+          href={CALENDLY_MEETING_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center rounded-lg border border-[#00e599]/50 bg-[#00e599]/10 px-3 py-2 text-xs font-bold text-[#00e599] hover:bg-[#00e599]/20"
+        >
+          Book Calendly Call
+        </a>
+        <a
+          href={stripeDonateUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center rounded-lg border border-zinc-700 bg-zinc-900/90 px-3 py-2 text-xs font-bold text-zinc-100 hover:border-zinc-500 hover:text-[#00e599]"
+        >
+          Donate via Stripe
+        </a>
+      </div>
+
       {/* Controls */}
       <div className="absolute top-6 right-6 flex items-center gap-4 z-50">
          <div className="text-zinc-500 font-mono text-sm">
            {currentSlide + 1} / {SLIDES.length}
          </div>
-         <button onClick={onClose} className="text-white hover:text-red-500 transition-colors">
+         <button onClick={onClose} className="text-white hover:text-red-500 transition-colors" aria-label="Close pitch deck">
            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
          </button>
       </div>

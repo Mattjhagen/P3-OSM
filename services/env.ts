@@ -12,6 +12,8 @@ const frontendEnvSchema = z.object({
   VITE_API_KEY: z.string().optional().default(''),
   VITE_GOOGLE_CLIENT_ID: z.string().optional().default(''),
   VITE_COINGECKO_API_KEY: z.string().optional().default(''),
+  VITE_OPENAI_API_KEY: z.string().optional().default(''),
+  VITE_OPENAI_MODEL: z.string().optional().default('gpt-5-codex'),
 });
 
 const rawEnv = {

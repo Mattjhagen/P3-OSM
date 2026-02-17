@@ -4,6 +4,7 @@ import { SiweMessage } from 'siwe';
 import { WalletState, WalletProvider } from '../types';
 import CoinbaseWalletSDK from '@coinbase/wallet-sdk';
 import { frontendEnv } from './env';
+import { RuntimeConfigService } from './runtimeConfigService';
 
 // Declare global ethereum property on window
 declare global {
@@ -12,12 +13,15 @@ declare global {
   }
 }
 
-const BACKEND_URL = frontendEnv.VITE_BACKEND_URL;
+const getBackendUrl = () =>
+  RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL);
 
 export const authenticateWithBackend = async (signer: any, address: string, chainId: number) => {
   try {
+    const backendUrl = getBackendUrl();
+
     // 1. Get Nonce from Backend
-    const nonceRes = await fetch(`${BACKEND_URL}/api/nonce`);
+    const nonceRes = await fetch(`${backendUrl}/api/nonce`);
     const nonce = await nonceRes.text();
 
     // 2. Create SIWE Message
@@ -37,7 +41,7 @@ export const authenticateWithBackend = async (signer: any, address: string, chai
     const signature = await signer.signMessage(preparedMessage);
 
     // 4. Send to Backend for Verification
-    const verifyRes = await fetch(`${BACKEND_URL}/api/verify`, {
+    const verifyRes = await fetch(`${backendUrl}/api/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: preparedMessage, signature }),
