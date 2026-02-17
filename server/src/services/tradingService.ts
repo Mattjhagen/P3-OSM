@@ -7,15 +7,23 @@ import { UserDataService } from './userDataService';
 
 const roundUsd = (value: number) => Math.round(value * 100) / 100;
 const roundQty = (value: number) => Math.round(value * 1e8) / 1e8;
+const roundRate = (value: number) => Math.round(value * 1e8) / 1e8;
 
 export interface TradeOrderPreview {
   symbol: string;
   side: 'BUY' | 'SELL';
+  fiatCurrency: string;
+  requestedAmountLocal: number;
+  grossAmountLocal: number;
+  feeLocal: number;
+  netAmountLocal: number;
   grossAmountUsd: number;
   feeUsd: number;
   netAmountUsd: number;
   estimatedQuantity: number;
+  priceLocal: number;
   priceUsd: number;
+  localToUsdRate: number;
   providerEnabled: boolean;
   provider: string;
   feePolicy: {
@@ -29,6 +37,8 @@ export interface ExecuteTradePayload {
   symbol: string;
   side: 'BUY' | 'SELL';
   amountUsd: number;
+  amountFiat?: number;
+  fiatCurrency?: string;
   sellDisclosureSignature?: string;
   settlementAccount?: string;
 }
@@ -39,10 +49,15 @@ export interface ExecuteTradeResult {
   balanceUsd: number;
   symbol: string;
   side: 'BUY' | 'SELL';
+  fiatCurrency: string;
+  grossAmountLocal: number;
+  feeLocal: number;
+  netAmountLocal: number;
   feeUsd: number;
   grossAmountUsd: number;
   netAmountUsd: number;
   quantity: number;
+  priceLocal: number;
   priceUsd: number;
   provider: string;
 }
@@ -55,7 +70,12 @@ export const TradingService = {
   async previewOrder(payload: ExecuteTradePayload): Promise<TradeOrderPreview> {
     const symbol = normalizeSymbol(payload.symbol);
     const side = payload.side;
-    const grossAmountUsd = Number(payload.amountUsd || 0);
+    const fiatCurrency = String(payload.fiatCurrency || 'USD').trim().toUpperCase();
+    const requestedAmountLocal = Number(
+      Number.isFinite(payload.amountFiat as number) && Number(payload.amountFiat) > 0
+        ? payload.amountFiat
+        : payload.amountUsd
+    );
 
     if (!payload.userId || !payload.userId.trim()) {
       throw new Error('userId is required.');
@@ -65,11 +85,16 @@ export const TradingService = {
       throw new Error('side must be BUY or SELL.');
     }
 
-    if (!Number.isFinite(grossAmountUsd) || grossAmountUsd <= 0) {
-      throw new Error('amountUsd must be a positive number.');
+    if (!Number.isFinite(requestedAmountLocal) || requestedAmountLocal <= 0) {
+      throw new Error('amountFiat (or amountUsd) must be a positive number.');
     }
 
-    const quote = await MarketPriceService.getSpotPrice(symbol);
+    const quote = await MarketPriceService.getSpotPrice(symbol, fiatCurrency);
+    const localToUsdRate =
+      Number.isFinite(quote.localToUsdRate) && quote.localToUsdRate > 0
+        ? quote.localToUsdRate
+        : quote.usd / quote.localPrice;
+    const grossAmountUsd = roundUsd(requestedAmountLocal * localToUsdRate);
     const fee = FeePolicyService.calculate(side === 'BUY' ? 'buy_crypto' : 'sell_crypto', grossAmountUsd);
 
     if (fee.netAmountUsd <= 0) {
@@ -84,11 +109,18 @@ export const TradingService = {
     return {
       symbol,
       side,
+      fiatCurrency,
+      requestedAmountLocal: roundUsd(requestedAmountLocal),
+      grossAmountLocal: roundUsd(fee.grossAmountUsd / localToUsdRate),
+      feeLocal: roundUsd(fee.feeTotalUsd / localToUsdRate),
+      netAmountLocal: roundUsd(fee.netAmountUsd / localToUsdRate),
       grossAmountUsd: fee.grossAmountUsd,
       feeUsd: fee.feeTotalUsd,
       netAmountUsd: fee.netAmountUsd,
       estimatedQuantity,
+      priceLocal: quote.localPrice,
       priceUsd: quote.usd,
+      localToUsdRate: roundRate(localToUsdRate),
       providerEnabled: config.trading.providerEnabled,
       provider: getProviderName(),
       feePolicy: {
@@ -126,6 +158,13 @@ export const TradingService = {
         failureReason: 'Trade provider is disabled in configuration.',
         metadata: {
           reason: 'TRADING_PROVIDER_DISABLED',
+          fiat_currency: preview.fiatCurrency,
+          gross_amount_local: preview.grossAmountLocal,
+          fee_local: preview.feeLocal,
+          net_amount_local: preview.netAmountLocal,
+          requested_amount_local: preview.requestedAmountLocal,
+          price_local: preview.priceLocal,
+          local_to_usd_rate: preview.localToUsdRate,
         },
       });
 
@@ -198,6 +237,13 @@ export const TradingService = {
       metadata: {
         sell_disclosure_signature: payload.sellDisclosureSignature || null,
         settlement_account: settlementAccount,
+        fiat_currency: preview.fiatCurrency,
+        gross_amount_local: preview.grossAmountLocal,
+        fee_local: preview.feeLocal,
+        net_amount_local: preview.netAmountLocal,
+        requested_amount_local: preview.requestedAmountLocal,
+        price_local: preview.priceLocal,
+        local_to_usd_rate: preview.localToUsdRate,
       },
     });
 
@@ -208,12 +254,20 @@ export const TradingService = {
       feeUsd: preview.feeUsd,
       netAmountUsd: preview.netAmountUsd,
       status: 'completed',
+      currency: preview.fiatCurrency,
       provider: getProviderName(),
       referenceId: orderId || undefined,
       metadata: {
         symbol: preview.symbol,
         quantity: preview.estimatedQuantity,
         price_usd: preview.priceUsd,
+        price_local: preview.priceLocal,
+        fiat_currency: preview.fiatCurrency,
+        gross_amount_local: preview.grossAmountLocal,
+        fee_local: preview.feeLocal,
+        net_amount_local: preview.netAmountLocal,
+        requested_amount_local: preview.requestedAmountLocal,
+        local_to_usd_rate: preview.localToUsdRate,
         sell_disclosure_signature: payload.sellDisclosureSignature || null,
         settlement_account: settlementAccount,
       },
@@ -230,6 +284,7 @@ export const TradingService = {
         provider: 'stripe',
         symbol: preview.symbol,
         settlement_account: settlementAccount,
+        fiat_currency: preview.fiatCurrency,
       },
     });
 
@@ -239,10 +294,15 @@ export const TradingService = {
       balanceUsd: roundUsd(Number(updatedProfile.balance || 0)),
       symbol: preview.symbol,
       side: preview.side,
+      fiatCurrency: preview.fiatCurrency,
+      grossAmountLocal: preview.grossAmountLocal,
+      feeLocal: preview.feeLocal,
+      netAmountLocal: preview.netAmountLocal,
       feeUsd: preview.feeUsd,
       grossAmountUsd: preview.grossAmountUsd,
       netAmountUsd: preview.netAmountUsd,
       quantity: preview.estimatedQuantity,
+      priceLocal: preview.priceLocal,
       priceUsd: preview.priceUsd,
       provider: getProviderName(),
     };

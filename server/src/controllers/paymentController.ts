@@ -4,6 +4,7 @@ import { config } from '../config/config';
 import logger from '../utils/logger';
 import { supabase } from '../config/supabase';
 import { AccountRecoveryService } from '../services/accountRecoveryService';
+import { ComplianceService } from '../services/complianceService';
 
 const DEFAULT_FRONTEND_URL = 'https://p3lending.space';
 const DONATION_AUDIT_ACTION = 'STRIPE_DONATION_COMPLETED';
@@ -140,6 +141,8 @@ export const PaymentController = {
                     .status(400)
                     .json({ success: false, error: 'Amount exceeds max allowed deposit.' });
             }
+
+            await ComplianceService.requireFeatureApproval(userId, 'ADD_FUNDS');
 
             const session = await stripe.checkout.sessions.create({
                 payment_method_types: ['card'],

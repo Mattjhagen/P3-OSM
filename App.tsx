@@ -33,6 +33,7 @@ import { DonationThankYouPage } from './components/DonationThankYouPage';
 import { AnalyticsService } from './services/analyticsService';
 import { PaymentService } from './services/paymentService';
 import { TradingService as TradingApiService } from './services/tradingService';
+import { ComplianceFeatureKey, ComplianceService } from './services/complianceService';
 import { BrowserProvider } from 'ethers';
 import { FeatureFlagService } from './services/featureFlagService';
 
@@ -220,6 +221,7 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const refCode = params.get('ref');
     const deckMode = params.get('deck');
+    const requestedView = params.get('view');
     const donationStatus = params.get('donation');
     const thankYouMode = params.get('thank_you');
     const sessionId = params.get('session_id');
@@ -234,6 +236,18 @@ const App: React.FC = () => {
     if (refCode) {
       localStorage.setItem('p3_pending_ref', refCode);
       params.delete('ref');
+    }
+
+    if (
+      requestedView === 'borrow' ||
+      requestedView === 'lend' ||
+      requestedView === 'trade' ||
+      requestedView === 'mentorship' ||
+      requestedView === 'profile' ||
+      requestedView === 'knowledge_base'
+    ) {
+      setActiveView(requestedView as AppView);
+      params.delete('view');
     }
 
     if (shouldShowDonationThankYou) {
@@ -255,7 +269,7 @@ const App: React.FC = () => {
       localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
     }
 
-    if (refCode || deckMode || donationStatus || thankYouMode || sessionId) {
+    if (refCode || deckMode || requestedView || donationStatus || thankYouMode || sessionId) {
       const nextQuery = params.toString();
       const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
       window.history.replaceState({}, document.title, nextUrl);
@@ -449,6 +463,7 @@ const App: React.FC = () => {
     if (!Number.isFinite(amount) || amount < 1) {
       throw new Error('Deposit amount must be at least $1.');
     }
+    await ensureFeatureComplianceAccess('ADD_FUNDS', 'Add Funds');
 
     const session = await PaymentService.createDepositCheckoutSession({
       amountUsd: amount,
@@ -462,8 +477,72 @@ const App: React.FC = () => {
   const refreshRiskAnalysis = async () => { if (!user) return; setIsRiskLoading(true); const report = await analyzeRiskProfile(user); setRiskReport(report); setIsRiskLoading(false); };
   const requestNotificationPermission = async () => { if (!('Notification' in window)) return; const permission = await Notification.requestPermission(); if (permission === 'granted') setNotificationsEnabled(true); };
 
+  const ensureFeatureComplianceAccess = async (
+    featureKey: ComplianceFeatureKey,
+    actionLabel: string
+  ) => {
+    if (!user) {
+      throw new Error('You must be logged in to continue.');
+    }
+
+    if (!FeatureFlagService.isEnabled('ENABLE_COMPLIANCE_GATING')) {
+      return;
+    }
+
+    const status = await ComplianceService.getFeatureStatus({
+      userId: user.id,
+      featureKey,
+    });
+
+    if (status.approved && !status.requiresReacceptance) {
+      return;
+    }
+
+    const riskContext =
+      status.riskReasons.length > 0
+        ? `\n\nCurrent risk notes:\n- ${status.riskReasons.join('\n- ')}`
+        : '';
+
+    const accepted = window.confirm(
+      `${status.title}\n\n${status.summary}\n\nApply now to use ${actionLabel}?${riskContext}`
+    );
+
+    if (!accepted) {
+      throw new Error(`${actionLabel} cancelled. Terms application is required before use.`);
+    }
+
+    const application = await ComplianceService.applyForFeature({
+      userId: user.id,
+      featureKey,
+      accepted: true,
+      walletAddress: wallet.address || undefined,
+      source: `app_${actionLabel.toLowerCase().replace(/\s+/g, '_')}`,
+    });
+
+    if (application.decision === 'approved' && application.approved) {
+      return;
+    }
+
+    if (application.decision === 'manual_review') {
+      const ticketText = application.manualReviewTicketId
+        ? ` Ticket: ${application.manualReviewTicketId}.`
+        : '';
+      throw new Error(
+        `Your ${actionLabel} access request is pending manual review.${ticketText} We sent this to the admin console.`
+      );
+    }
+
+    throw new Error(`${actionLabel} access was denied. Please contact admin support.`);
+  };
+
   // New Trading Handler
-  const handleTrade = async (asset: Asset, amount: number, isBuy: boolean, sellDisclosureAccepted: boolean) => {
+  const handleTrade = async (
+    asset: Asset,
+    amount: number,
+    isBuy: boolean,
+    sellDisclosureAccepted: boolean,
+    fiatCurrency: string
+  ) => {
     if (!user) return;
     if (!FeatureFlagService.isEnabled('ENABLE_TRADING_EXECUTION')) {
       throw new Error('Trading execution is disabled by BETA feature flags.');
@@ -475,6 +554,23 @@ const App: React.FC = () => {
     if (!isBuy && !sellDisclosureAccepted) {
       throw new Error('Sell fee disclosure must be accepted before executing a sell order.');
     }
+    await ensureFeatureComplianceAccess('TRADE_CRYPTO', 'Crypto Trading');
+
+    const normalizedFiatCurrency = String(fiatCurrency || 'USD').trim().toUpperCase();
+    const formatLocalMoney = (value: number) =>
+      new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: normalizedFiatCurrency,
+        maximumFractionDigits: 2,
+      }).format(value);
+    const side = isBuy ? 'BUY' : 'SELL';
+    const preview = await TradingApiService.previewOrder({
+      userId: user.id,
+      symbol: asset.symbol,
+      side,
+      amountFiat: amount,
+      fiatCurrency: normalizedFiatCurrency,
+    });
 
     let sellDisclosureSignature = '';
     if (!isBuy) {
@@ -502,6 +598,8 @@ const App: React.FC = () => {
             { name: 'userId', type: 'string' },
             { name: 'symbol', type: 'string' },
             { name: 'amountUsd', type: 'string' },
+            { name: 'amountLocal', type: 'string' },
+            { name: 'fiatCurrency', type: 'string' },
             { name: 'feePolicy', type: 'string' },
             { name: 'timestamp', type: 'uint256' },
           ],
@@ -509,27 +607,26 @@ const App: React.FC = () => {
         {
           userId: user.id,
           symbol: asset.symbol,
-          amountUsd: amount.toFixed(2),
+          amountUsd: preview.grossAmountUsd.toFixed(2),
+          amountLocal: preview.grossAmountLocal.toFixed(2),
+          fiatCurrency: preview.fiatCurrency,
           feePolicy: '3USD+3%',
           timestamp,
         }
       );
     }
 
-    const side = isBuy ? 'BUY' : 'SELL';
-    const preview = await TradingApiService.previewOrder({
-      userId: user.id,
-      symbol: asset.symbol,
-      side,
-      amountUsd: amount,
-    });
-
     const confirmMessage = [
       `${side} ${asset.symbol}`,
+      `Requested: ${formatLocalMoney(preview.requestedAmountLocal)} (${preview.fiatCurrency})`,
+      `Gross: ${formatLocalMoney(preview.grossAmountLocal)} (${preview.fiatCurrency})`,
       `Gross: $${preview.grossAmountUsd.toFixed(2)}`,
+      `Fee: ${formatLocalMoney(preview.feeLocal)} (${preview.fiatCurrency})`,
       `Fee: $${preview.feeUsd.toFixed(2)}`,
       `${isBuy ? 'Estimated Qty' : 'Estimated Qty To Sell'}: ${preview.estimatedQuantity.toFixed(8)} ${asset.symbol}`,
+      isBuy ? '' : `Net Payout: ${formatLocalMoney(preview.netAmountLocal)} (${preview.fiatCurrency})`,
       isBuy ? '' : `Net Payout: $${preview.netAmountUsd.toFixed(2)}`,
+      `Price: ${formatLocalMoney(preview.priceLocal)} (${preview.fiatCurrency})`,
       `Price: $${preview.priceUsd.toFixed(2)}`,
       '',
       'Continue?'
@@ -544,7 +641,8 @@ const App: React.FC = () => {
       userId: user.id,
       symbol: asset.symbol,
       side,
-      amountUsd: amount,
+      amountFiat: amount,
+      fiatCurrency: normalizedFiatCurrency,
       sellDisclosureSignature,
     });
 
@@ -585,7 +683,7 @@ const App: React.FC = () => {
     await PersistenceService.saveUser(updatedUser);
 
     alert(
-      `${side} completed.\nFee: $${execution.feeUsd.toFixed(2)}\n${isBuy ? `Qty: ${execution.quantity.toFixed(8)} ${asset.symbol}` : `Net payout: $${execution.netAmountUsd.toFixed(2)}`}`
+      `${side} completed.\nFee: ${formatLocalMoney(execution.feeLocal)} (${execution.fiatCurrency}) / $${execution.feeUsd.toFixed(2)}\n${isBuy ? `Qty: ${execution.quantity.toFixed(8)} ${asset.symbol}` : `Net payout: ${formatLocalMoney(execution.netAmountLocal)} (${execution.fiatCurrency}) / $${execution.netAmountUsd.toFixed(2)}`}`
     );
   };
 
@@ -603,6 +701,7 @@ const App: React.FC = () => {
     if (!destination.trim()) {
       throw new Error('A payout destination is required.');
     }
+    await ensureFeatureComplianceAccess('WITHDRAW_FUNDS', 'Withdrawals');
 
     const result = await TradingApiService.requestWithdrawal({
       userId: user.id,

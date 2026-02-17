@@ -14,9 +14,11 @@ import tradingRoutes from './routes/tradingRoutes';
 import withdrawalRoutes from './routes/withdrawalRoutes';
 import plaidRoutes from './routes/plaidRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import complianceRoutes from './routes/complianceRoutes';
 import { PaymentController } from './controllers/paymentController';
 import { TradingController } from './controllers/tradingController';
 import { publicApiLimiter } from './middleware/rateLimiter';
+import { ComplianceService } from './services/complianceService';
 
 export const createApp = () => {
     const app = express();
@@ -40,6 +42,7 @@ export const createApp = () => {
     app.use('/api/withdrawals', withdrawalRoutes);
     app.use('/api/plaid', plaidRoutes);
     app.use('/api/notifications', notificationRoutes);
+    app.use('/api/compliance', complianceRoutes);
     app.get('/api/prices', publicApiLimiter, TradingController.getPrices);
 
     // Health Check
@@ -71,6 +74,7 @@ export const createApp = () => {
 const app = createApp();
 
 if (process.env.NODE_ENV !== 'test') {
+    ComplianceService.startStatementScheduler();
     app.listen(config.port, () => {
         console.log(`P3 Backend running on port ${config.port}`);
     });

@@ -58,7 +58,12 @@ const normalizePlaidProducts = () => {
 export const PlaidService = {
   isConfigured: () => Boolean(config.plaid.clientId && config.plaid.secret),
 
-  async createLinkToken(payload: { userId: string; email?: string }) {
+  async createLinkToken(payload: {
+    userId: string;
+    email?: string;
+    redirectUri?: string;
+    androidPackageName?: string;
+  }) {
     type LinkTokenResponse = {
       link_token: string;
       expiration: string;
@@ -77,7 +82,8 @@ export const PlaidService = {
           email_address: payload.email || undefined,
         },
         webhook: config.plaid.webhookUrl || undefined,
-        redirect_uri: config.plaid.redirectUri || undefined,
+        redirect_uri: payload.redirectUri || config.plaid.redirectUri || undefined,
+        android_package_name: payload.androidPackageName || undefined,
       },
     });
   },

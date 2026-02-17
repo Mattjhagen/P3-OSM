@@ -562,6 +562,102 @@ export const AdminOpsService = {
       }
     }
 
+    try {
+      const { error } = await supabase
+        .from('feature_access_controls')
+        .select('id', { head: true, count: 'exact' })
+        .limit(1);
+      if (error) {
+        throw error;
+      }
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      if (isMissingTableError(message, 'feature_access_controls')) {
+        alerts.push({
+          id: 'feature-access-controls-missing',
+          severity: 'critical',
+          title: "Supabase table 'feature_access_controls' is missing",
+          detail:
+            'Feature TOS + risk approval gates are unavailable until feature_access_controls exists.',
+          action:
+            'Run Supabase migration 20260217101500_compliance_statements_and_disclosures.sql.',
+        });
+      } else {
+        alerts.push({
+          id: 'feature-access-controls-query-failed',
+          severity: 'warning',
+          title: 'Feature access controls query failed',
+          detail:
+            'Feature compliance status checks are unavailable due to a Supabase query error.',
+          action: 'Review Supabase logs and table permissions for feature_access_controls.',
+        });
+      }
+    }
+
+    try {
+      const { error } = await supabase
+        .from('signed_disclosures')
+        .select('id', { head: true, count: 'exact' })
+        .limit(1);
+      if (error) {
+        throw error;
+      }
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      if (isMissingTableError(message, 'signed_disclosures')) {
+        alerts.push({
+          id: 'signed-disclosures-missing',
+          severity: 'critical',
+          title: "Supabase table 'signed_disclosures' is missing",
+          detail:
+            'Signed disclosure downloads are unavailable until signed_disclosures exists.',
+          action:
+            'Run Supabase migration 20260217101500_compliance_statements_and_disclosures.sql.',
+        });
+      } else {
+        alerts.push({
+          id: 'signed-disclosures-query-failed',
+          severity: 'warning',
+          title: 'Signed disclosures query failed',
+          detail:
+            'Signed disclosure files are unavailable due to a Supabase query error.',
+          action: 'Review Supabase logs and table permissions for signed_disclosures.',
+        });
+      }
+    }
+
+    try {
+      const { error } = await supabase
+        .from('account_statements')
+        .select('id', { head: true, count: 'exact' })
+        .limit(1);
+      if (error) {
+        throw error;
+      }
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      if (isMissingTableError(message, 'account_statements')) {
+        alerts.push({
+          id: 'account-statements-missing',
+          severity: 'critical',
+          title: "Supabase table 'account_statements' is missing",
+          detail:
+            'Monthly statements and yearly tax statements cannot be generated until account_statements exists.',
+          action:
+            'Run Supabase migration 20260217101500_compliance_statements_and_disclosures.sql.',
+        });
+      } else {
+        alerts.push({
+          id: 'account-statements-query-failed',
+          severity: 'warning',
+          title: 'Account statements query failed',
+          detail:
+            'Statement generation/download workflows are unavailable due to a Supabase query error.',
+          action: 'Review Supabase logs and table permissions for account_statements.',
+        });
+      }
+    }
+
     alerts.sort((a, b) => buildSeveritySort(a.severity) - buildSeveritySort(b.severity));
 
     return {

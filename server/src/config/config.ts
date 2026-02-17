@@ -5,7 +5,7 @@ export const config = {
     frontendUrl: validatedEnv.FRONTEND_URL,
     supabase: {
         url: validatedEnv.SUPABASE_URL,
-        anonKey: validatedEnv.SUPABASE_ANON_KEY,
+        anonKey: validatedEnv.SUPABASE_ANON_KEY || validatedEnv.SUPABASE_SERVICE_ROLE_KEY,
         serviceKey: validatedEnv.SUPABASE_SERVICE_ROLE_KEY,
     },
     smtp: {
@@ -20,6 +20,15 @@ export const config = {
         secretKey: validatedEnv.STRIPE_SECRET_KEY,
         webhookSecret: validatedEnv.STRIPE_WEBHOOK_SECRET,
         payoutsEnabled: validatedEnv.STRIPE_PAYOUTS_ENABLED,
+        taxEnabled: validatedEnv.STRIPE_TAX_ENABLED,
+        serviceFeePercent: validatedEnv.STRIPE_SERVICE_FEE_PERCENT,
+        serviceFeeFixedUsd: validatedEnv.STRIPE_SERVICE_FEE_FIXED_USD,
+        serviceFeeTaxable: validatedEnv.STRIPE_SERVICE_FEE_TAXABLE,
+        serviceDefaultTaxCode: validatedEnv.STRIPE_SERVICE_DEFAULT_TAX_CODE,
+        serviceCatalogJson: validatedEnv.STRIPE_SERVICE_CATALOG_JSON,
+    },
+    compliance: {
+        statementSigningSecret: validatedEnv.STATEMENT_SIGNING_SECRET,
     },
     coingecko: {
         apiKey: validatedEnv.COINGECKO_API_KEY,

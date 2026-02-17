@@ -21,7 +21,7 @@ const attachStatus = (error: any) => {
 export const PlaidController = {
   createLinkToken: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { userId, email } = req.body || {};
+      const { userId, email, redirectUri, androidPackageName } = req.body || {};
       const normalizedUserId = String(userId || '').trim();
 
       if (!normalizedUserId) {
@@ -34,6 +34,9 @@ export const PlaidController = {
       const token = await PlaidService.createLinkToken({
         userId: normalizedUserId,
         email: typeof email === 'string' ? email : undefined,
+        redirectUri: typeof redirectUri === 'string' ? redirectUri.trim() : undefined,
+        androidPackageName:
+          typeof androidPackageName === 'string' ? androidPackageName.trim() : undefined,
       });
 
       return res.status(200).json({
@@ -47,9 +50,9 @@ export const PlaidController = {
 
   exchangePublicToken: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { userId, publicToken, accountId } = req.body || {};
+      const { userId, publicToken, public_token, accountId } = req.body || {};
       const normalizedUserId = String(userId || '').trim();
-      const normalizedPublicToken = String(publicToken || '').trim();
+      const normalizedPublicToken = String(publicToken || public_token || '').trim();
 
       if (!normalizedUserId) {
         return res.status(400).json({

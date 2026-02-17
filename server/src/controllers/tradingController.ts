@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { MarketPriceService } from '../services/marketPriceService';
 import { TradingService } from '../services/tradingService';
+import { ComplianceService } from '../services/complianceService';
 
 const parseSymbolsQuery = (value: unknown): string[] => {
   if (typeof value !== 'string') return [];
@@ -36,13 +37,21 @@ export const TradingController = {
   getPrices: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const symbols = parseSymbolsQuery(req.query.symbols);
-      const quotes = await MarketPriceService.getQuotes(symbols);
+      const fiatCurrency =
+        typeof req.query.fiat === 'string' && req.query.fiat.trim()
+          ? req.query.fiat.trim().toUpperCase()
+          : 'USD';
+      const quotes = await MarketPriceService.getQuotes(symbols, fiatCurrency);
+      const returnedFiat =
+        Object.values(quotes)[0]?.fiatCurrency || fiatCurrency;
 
       return res.status(200).json({
         success: true,
         data: {
           quotes,
           symbols: Object.keys(quotes),
+          fiatCurrency: returnedFiat,
+          supportedFiatCurrencies: MarketPriceService.supportedFiatCurrencies,
           fetchedAt: new Date().toISOString(),
           source: 'coingecko',
           cacheTtlSeconds: Number(process.env.COINGECKO_CACHE_SECONDS || 20),
@@ -55,13 +64,16 @@ export const TradingController = {
 
   previewOrder: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { userId, symbol, side, amountUsd } = req.body || {};
+      const { userId, symbol, side, amountUsd, amountFiat, fiatCurrency } = req.body || {};
+      await ComplianceService.requireFeatureApproval(String(userId || ''), 'TRADE_CRYPTO');
 
       const preview = await TradingService.previewOrder({
         userId: String(userId || ''),
         symbol: String(symbol || ''),
         side: side === 'SELL' ? 'SELL' : 'BUY',
         amountUsd: Number(amountUsd || 0),
+        amountFiat: Number(amountFiat || 0),
+        fiatCurrency: typeof fiatCurrency === 'string' ? fiatCurrency : undefined,
       });
 
       return res.status(200).json({
@@ -75,13 +87,25 @@ export const TradingController = {
 
   executeOrder: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { userId, symbol, side, amountUsd, sellDisclosureSignature, settlementAccount } = req.body || {};
+      const {
+        userId,
+        symbol,
+        side,
+        amountUsd,
+        amountFiat,
+        fiatCurrency,
+        sellDisclosureSignature,
+        settlementAccount,
+      } = req.body || {};
+      await ComplianceService.requireFeatureApproval(String(userId || ''), 'TRADE_CRYPTO');
 
       const result = await TradingService.executeOrder({
         userId: String(userId || ''),
         symbol: String(symbol || ''),
         side: side === 'SELL' ? 'SELL' : 'BUY',
         amountUsd: Number(amountUsd || 0),
+        amountFiat: Number(amountFiat || 0),
+        fiatCurrency: typeof fiatCurrency === 'string' ? fiatCurrency : undefined,
         sellDisclosureSignature: typeof sellDisclosureSignature === 'string' ? sellDisclosureSignature : undefined,
         settlementAccount: typeof settlementAccount === 'string' ? settlementAccount : undefined,
       });

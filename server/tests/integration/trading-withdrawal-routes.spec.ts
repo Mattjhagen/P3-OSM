@@ -1,10 +1,15 @@
 import request from 'supertest';
 import app from '../../src/index';
+import { ComplianceService } from '../../src/services/complianceService';
 import { MarketPriceService } from '../../src/services/marketPriceService';
 import { TradingService } from '../../src/services/tradingService';
 import { WithdrawalService } from '../../src/services/withdrawalService';
 
 describe('Trading + withdrawal routes', () => {
+  beforeEach(() => {
+    vi.spyOn(ComplianceService, 'requireFeatureApproval').mockResolvedValue(undefined as any);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -14,9 +19,14 @@ describe('Trading + withdrawal routes', () => {
       BTC: {
         symbol: 'BTC',
         coinId: 'bitcoin',
+        fiatCurrency: 'USD',
         usd: 100000,
         usd24hChange: 1.5,
         usdMarketCap: 2000000000000,
+        localPrice: 100000,
+        local24hChange: 1.5,
+        localMarketCap: 2000000000000,
+        localToUsdRate: 1,
         fetchedAt: '2026-02-17T00:00:00.000Z',
       },
     });

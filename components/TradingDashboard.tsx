@@ -13,13 +13,29 @@ const INITIAL_ASSETS: Asset[] = [
   { id: 'solana', symbol: 'SOL', name: 'Solana', currentPrice: 0, priceChange24h: 0, color: '#00e599', marketCap: '-', description: 'Solana is a high-performance blockchain supporting builders around the world.' },
   { id: 'dogecoin', symbol: 'DOGE', name: 'Dogecoin', currentPrice: 0, priceChange24h: 0, color: '#fbbf24', marketCap: '-', description: 'Dogecoin is an open source peer-to-peer digital currency.' },
   { id: 'chainlink', symbol: 'LINK', name: 'Chainlink', currentPrice: 0, priceChange24h: 0, color: '#2a5ada', marketCap: '-', description: 'Chainlink is a decentralized oracle network.' },
+  { id: 'aave', symbol: 'AAVE', name: 'Aave', currentPrice: 0, priceChange24h: 0, color: '#b6509e', marketCap: '-', description: 'Aave is a decentralized liquidity protocol for lending and borrowing.' },
+  { id: 'uniswap', symbol: 'UNI', name: 'Uniswap', currentPrice: 0, priceChange24h: 0, color: '#ff007a', marketCap: '-', description: 'Uniswap is a decentralized exchange protocol for token swaps.' },
 ];
 
 const TIME_RANGES = ['1D', '1W', '1M', '1Y', 'ALL'];
+const FIAT_OPTIONS = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'MXN', 'BRL', 'INR', 'SGD'];
+
+const formatMoney = (value: number, currency: string) =>
+  new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
 
 interface Props {
   user: UserProfile;
-  onTrade: (asset: Asset, amount: number, isBuy: boolean, sellDisclosureAccepted: boolean) => Promise<void>;
+  onTrade: (
+    asset: Asset,
+    amount: number,
+    isBuy: boolean,
+    sellDisclosureAccepted: boolean,
+    fiatCurrency: string
+  ) => Promise<void>;
 }
 
 export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
@@ -30,6 +46,13 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
   const [isLoadingChart, setIsLoadingChart] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [priceFeedError, setPriceFeedError] = useState('');
+  const [fiatCurrency, setFiatCurrency] = useState('USD');
+  const [quoteMap, setQuoteMap] = useState<Record<string, {
+    localToUsdRate: number;
+    localPrice: number;
+    local24hChange: number;
+    localMarketCap: number;
+  }>>({});
   
   // Trade Form State
   const [orderType, setOrderType] = useState<'BUY' | 'SELL'>('BUY');
@@ -42,8 +65,24 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const symbols = assets.map((a) => a.symbol);
-        const quotes = await TradingApiService.getPrices(symbols);
+        const symbols = INITIAL_ASSETS.map((a) => a.symbol);
+        const quotes = await TradingApiService.getPrices(symbols, fiatCurrency);
+        setQuoteMap(
+          Object.entries(quotes || {}).reduce((acc, [symbol, quote]) => {
+            acc[symbol] = {
+              localToUsdRate: Number(quote.localToUsdRate || 1),
+              localPrice: Number(quote.localPrice || quote.usd || 0),
+              local24hChange: Number(quote.local24hChange || quote.usd24hChange || 0),
+              localMarketCap: Number(quote.localMarketCap || quote.usdMarketCap || 0),
+            };
+            return acc;
+          }, {} as Record<string, {
+            localToUsdRate: number;
+            localPrice: number;
+            local24hChange: number;
+            localMarketCap: number;
+          }>)
+        );
 
         setAssets((prev) =>
           prev.map((asset) => {
@@ -51,9 +90,9 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
             if (!coinData) return asset;
             return {
               ...asset,
-              currentPrice: coinData.usd,
-              priceChange24h: coinData.usd24hChange,
-              marketCap: MarketDataService.formatMarketCap(coinData.usdMarketCap),
+              currentPrice: Number(coinData.localPrice || coinData.usd || 0),
+              priceChange24h: Number(coinData.local24hChange || coinData.usd24hChange || 0),
+              marketCap: MarketDataService.formatMarketCap(Number(coinData.localMarketCap || coinData.usdMarketCap || 0)),
             };
           })
         );
@@ -67,7 +106,7 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
     fetchPrices();
     const interval = setInterval(fetchPrices, 30000); // Update every 30s to respect free API limits
     return () => clearInterval(interval);
-  }, []); // Run once on mount, then interval
+  }, [fiatCurrency]); // Refresh when fiat currency changes
 
   // 2. Sync Selected Asset when Assets Update
   useEffect(() => {
@@ -118,7 +157,7 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
 
     setIsProcessing(true);
     try {
-      await onTrade(selectedAsset, numAmount, orderType === 'BUY', sellDisclosureAccepted);
+      await onTrade(selectedAsset, numAmount, orderType === 'BUY', sellDisclosureAccepted, fiatCurrency);
       setAmount('');
     } catch (error: any) {
       setTradeError(error?.message || 'Trade execution failed.');
@@ -135,8 +174,17 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
   const isPositive = selectedAsset.priceChange24h >= 0;
   const chartColor = isPositive ? '#00e599' : '#ef4444';
   const numericAmount = Number.parseFloat(amount || '0');
-  const estimatedSellFee = numericAmount > 0 ? Math.round((3 + numericAmount * 0.03) * 100) / 100 : 0;
-  const estimatedSellNet = Math.max(0, numericAmount - estimatedSellFee);
+  const selectedQuote = quoteMap[selectedAsset.symbol];
+  const localToUsdRate =
+    Number.isFinite(selectedQuote?.localToUsdRate) && (selectedQuote?.localToUsdRate || 0) > 0
+      ? (selectedQuote?.localToUsdRate as number)
+      : 1;
+  const estimatedSellFeeUsd =
+    numericAmount > 0 ? Math.round((3 + numericAmount * localToUsdRate * 0.03) * 100) / 100 : 0;
+  const estimatedSellNetUsd = Math.max(0, numericAmount * localToUsdRate - estimatedSellFeeUsd);
+  const estimatedSellFee = estimatedSellFeeUsd / localToUsdRate;
+  const estimatedSellNet = estimatedSellNetUsd / localToUsdRate;
+  const localBuyingPower = user.balance / localToUsdRate;
 
   return (
     <div className="flex flex-col md:flex-row min-h-[calc(100dvh-56px)] md:min-h-[calc(100vh-64px)] overflow-hidden">
@@ -152,7 +200,7 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
               </h1>
               <div className="flex items-baseline gap-4 mt-1">
                 <span className={`text-3xl sm:text-4xl font-bold font-mono tracking-tight ${isPositive ? 'text-[#00e599]' : 'text-red-500'} transition-colors duration-500`}>
-                  ${selectedAsset.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatMoney(selectedAsset.currentPrice, fiatCurrency)}
                 </span>
                 <span className={`text-sm font-medium flex items-center ${isPositive ? 'text-[#00e599]' : 'text-red-500'}`}>
                   {isPositive ? '▲' : '▼'} {Math.abs(selectedAsset.priceChange24h).toFixed(2)}% (24h)
@@ -162,7 +210,7 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
             
             <div className="hidden md:block text-right">
               <span className="text-xs text-zinc-500 font-mono block">MARKET CAP</span>
-              <div className="text-white font-bold">{selectedAsset.marketCap}</div>
+              <div className="text-white font-bold">{selectedAsset.marketCap} {fiatCurrency}</div>
               <span className="text-[9px] text-zinc-600 mt-1">Updated: {lastUpdated.toLocaleTimeString()}</span>
             </div>
           </div>
@@ -198,7 +246,7 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
                   contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                   itemStyle={{ color: '#fff', fontFamily: 'monospace' }}
                   labelStyle={{ display: 'none' }}
-                  formatter={(value: number) => [`$${value.toLocaleString(undefined, {minimumFractionDigits: 2})}`, 'Price']}
+                  formatter={(value: number) => [formatMoney(value, fiatCurrency), 'Price']}
                   labelFormatter={(label) => new Date(label).toLocaleString()}
                   cursor={{ stroke: '#52525b', strokeDasharray: '5 5' }}
                 />
@@ -244,9 +292,9 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
                  <span className="text-white font-bold">{selectedAsset.symbol} Held</span>
                  <span className="font-mono text-white">{getHoldings(selectedAsset.symbol).toFixed(4)}</span>
                </div>
-               <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center">
                  <span className="text-white font-bold">Equity Value</span>
-                 <span className="font-mono text-white">${(getHoldings(selectedAsset.symbol) * selectedAsset.currentPrice).toFixed(2)}</span>
+                 <span className="font-mono text-white">{formatMoney(getHoldings(selectedAsset.symbol) * selectedAsset.currentPrice, fiatCurrency)}</span>
                </div>
              </div>
 
@@ -283,17 +331,31 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
           <form onSubmit={handleOrderSubmit} className="space-y-6">
             <div>
               <div className="flex justify-between mb-2">
-                 <label className="text-xs font-bold text-white">Amount (USD)</label>
-                 <span className="text-xs text-[#00e599]">Buying Power: ${user.balance.toFixed(2)}</span>
+                 <label className="text-xs font-bold text-white">Amount ({fiatCurrency})</label>
+                 <span className="text-xs text-[#00e599]">
+                  Buying Power: {formatMoney(localBuyingPower, fiatCurrency)} ({formatMoney(user.balance, 'USD')})
+                 </span>
+              </div>
+              <div className="mb-2 flex items-center justify-end">
+                <select
+                  value={fiatCurrency}
+                  onChange={(e) => setFiatCurrency(e.target.value)}
+                  className="rounded-lg border border-zinc-700 bg-black px-2 py-1 text-xs text-zinc-200 focus:border-[#00e599] outline-none"
+                >
+                  {FIAT_OPTIONS.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="relative">
-                <span className="absolute left-4 top-3 text-white font-mono">$</span>
                 <input 
                   type="number" 
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full bg-black border border-zinc-800 rounded-xl py-3 pl-8 pr-4 text-white font-mono text-lg focus:border-[#00e599] outline-none transition-all"
+                  className="w-full bg-black border border-zinc-800 rounded-xl py-3 pl-4 pr-4 text-white font-mono text-lg focus:border-[#00e599] outline-none transition-all"
                 />
               </div>
             </div>
@@ -307,17 +369,17 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
 
             {orderType === 'BUY' && (
               <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-2 text-[11px] text-zinc-400">
-                Buy fee: <span className="text-white font-mono">$0.00</span>
+                Buy fee: <span className="text-white font-mono">{formatMoney(0, fiatCurrency)}</span>
               </div>
             )}
 
             {orderType === 'SELL' && amount && (
               <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-2 text-[11px] text-zinc-400 space-y-1">
                 <div>
-                  Estimated sell fee: <span className="text-white font-mono">${estimatedSellFee.toFixed(2)}</span> (3% + $3)
+                  Estimated sell fee: <span className="text-white font-mono">{formatMoney(estimatedSellFee, fiatCurrency)}</span> (3% + {formatMoney(3 / localToUsdRate, fiatCurrency)})
                 </div>
                 <div>
-                  Estimated net payout: <span className="text-white font-mono">${estimatedSellNet.toFixed(2)}</span>
+                  Estimated net payout: <span className="text-white font-mono">{formatMoney(estimatedSellNet, fiatCurrency)}</span>
                 </div>
               </div>
             )}
@@ -372,7 +434,7 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
                  </div>
                </div>
                <div className="text-right">
-                  <div className="text-white font-mono text-sm">${asset.currentPrice.toLocaleString()}</div>
+                  <div className="text-white font-mono text-sm">{formatMoney(asset.currentPrice, fiatCurrency)}</div>
                   <div className={`text-xs font-mono ${asset.priceChange24h >= 0 ? 'text-[#00e599]' : 'text-red-500'}`}>
                     {asset.priceChange24h >= 0 ? '+' : ''}{asset.priceChange24h.toFixed(2)}%
                   </div>

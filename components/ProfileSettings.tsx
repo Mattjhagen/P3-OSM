@@ -1,8 +1,10 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { UserProfile } from '../types';
 import { Button } from './Button';
-import { DocumentService } from '../services/documentService';
+import { ComplianceService, DisclosureSummaryDto, StatementSummaryDto } from '../services/complianceService';
+import { FeatureFlagService } from '../services/featureFlagService';
+import { PlaidLinkService } from '../services/plaidLinkService';
 
 interface Props {
   user: UserProfile;
@@ -22,7 +24,85 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
   const [withdrawDestination, setWithdrawDestination] = useState('');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
+  const [isLinkingBank, setIsLinkingBank] = useState(false);
+  const [bankLinkStatus, setBankLinkStatus] = useState('');
+  const [statements, setStatements] = useState<StatementSummaryDto[]>([]);
+  const [disclosures, setDisclosures] = useState<DisclosureSummaryDto[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsError, setDocumentsError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDocuments = async () => {
+      if (!FeatureFlagService.isEnabled('ENABLE_STATEMENT_DOWNLOADS')) {
+        if (!cancelled) {
+          setStatements([]);
+          setDisclosures([]);
+        }
+        return;
+      }
+
+      setDocumentsLoading(true);
+      setDocumentsError('');
+      try {
+        const [statementRows, disclosureRows] = await Promise.all([
+          ComplianceService.listStatements({ userId: user.id, limit: 24 }),
+          ComplianceService.listSignedDisclosures({ userId: user.id, limit: 24 }),
+        ]);
+
+        if (!cancelled) {
+          setStatements(statementRows);
+          setDisclosures(disclosureRows);
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setDocumentsError(error?.message || 'Documents are temporarily unavailable.');
+        }
+      } finally {
+        if (!cancelled) {
+          setDocumentsLoading(false);
+        }
+      }
+    };
+
+    loadDocuments();
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resumePlaidOAuthIfNeeded = async () => {
+      if (!PlaidLinkService.hasPendingOAuthRedirect()) return;
+      setIsLinkingBank(true);
+      setBankLinkStatus('');
+
+      try {
+        const result = await PlaidLinkService.resumeOAuthRedirect({ userId: user.id });
+        if (cancelled || !result) return;
+        const institution = String(result?.institutionName || 'institution');
+        const mask = String(result?.mask || '****');
+        setBankLinkStatus(`Bank account linked (${institution} • ${mask}).`);
+      } catch (error: any) {
+        if (!cancelled) {
+          setBankLinkStatus(error?.message || 'Plaid OAuth resume failed.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLinkingBank(false);
+        }
+      }
+    };
+
+    resumePlaidOAuthIfNeeded();
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
 
   const handleChange = (field: keyof UserProfile, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -48,8 +128,20 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
     setIsSaving(false);
   };
 
-  const handleDownloadStatement = () => {
-    DocumentService.generateStatement(user);
+  const handleDownloadStatement = async (statementId: string) => {
+    try {
+      await ComplianceService.downloadStatement({ statementId, userId: user.id });
+    } catch (error: any) {
+      setDocumentsError(error?.message || 'Failed to download statement.');
+    }
+  };
+
+  const handleDownloadDisclosure = async (disclosureId: string) => {
+    try {
+      await ComplianceService.downloadSignedDisclosure({ disclosureId, userId: user.id });
+    } catch (error: any) {
+      setDocumentsError(error?.message || 'Failed to download signed disclosure.');
+    }
   };
 
   const handleDeposit = async () => {
@@ -93,6 +185,24 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
       setWithdrawError(error?.message || 'Withdrawal could not be processed.');
     } finally {
       setIsWithdrawing(false);
+    }
+  };
+
+  const handleLinkBankWithPlaid = async () => {
+    setBankLinkStatus('');
+    setIsLinkingBank(true);
+    try {
+      const result = await PlaidLinkService.openLink({
+        userId: user.id,
+        email: user.email || '',
+      });
+      const institution = String(result?.institutionName || 'institution');
+      const mask = String(result?.mask || '****');
+      setBankLinkStatus(`Bank account linked (${institution} • ${mask}).`);
+    } catch (error: any) {
+      setBankLinkStatus(error?.message || 'Plaid bank linking did not complete.');
+    } finally {
+      setIsLinkingBank(false);
     }
   };
 
@@ -149,37 +259,97 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
           </div>
         </div>
 
-        {/* Documents & Statements Section (NEW) */}
+        {/* Documents & Statements Section */}
         <div className="glass-panel p-8 rounded-2xl space-y-6 border border-zinc-800/50">
-           <h3 className="text-lg font-bold text-white border-b border-zinc-800 pb-4 mb-6">Documents & Statements</h3>
-           
-           <div className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-zinc-800 hover:border-[#00e599]/30 transition-colors">
-              <div className="flex items-center gap-4">
-                 <div className="w-10 h-10 bg-red-900/20 text-red-500 rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                 </div>
-                 <div>
-                    <h4 className="text-white font-bold text-sm">Monthly Statement (Feb 2025)</h4>
-                    <p className="text-xs text-zinc-500">PDF • 1.2 MB • Generated Automatically</p>
-                 </div>
-              </div>
-              <Button type="button" size="sm" variant="outline" onClick={handleDownloadStatement}>
-                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                 Download
-              </Button>
-           </div>
+          <h3 className="text-lg font-bold text-white border-b border-zinc-800 pb-4 mb-6">
+            Documents & Statements
+          </h3>
 
-           <div className="p-4 bg-zinc-900/30 rounded-xl border border-zinc-800/50 opacity-75">
-              <div className="flex items-center gap-4">
-                 <div className="w-10 h-10 bg-zinc-800 text-zinc-500 rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                 </div>
-                 <div>
-                    <h4 className="text-zinc-400 font-bold text-sm">Annual Tax Form 1099-INT</h4>
-                    <p className="text-xs text-zinc-600">Available Jan 31, 2026</p>
-                 </div>
+          {!FeatureFlagService.isEnabled('ENABLE_STATEMENT_DOWNLOADS') && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 text-xs text-zinc-500">
+              Statement and disclosure downloads are disabled by BETA feature flags.
+            </div>
+          )}
+
+          {documentsError && (
+            <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-4 text-xs text-red-300">
+              {documentsError}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white">Generated Statements</h4>
+              {documentsLoading && <span className="text-[11px] text-zinc-500">Loading...</span>}
+            </div>
+
+            {statements.length === 0 && !documentsLoading ? (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 text-xs text-zinc-500">
+                No statements are available yet. Monthly statements are generated after each month closes.
               </div>
-           </div>
+            ) : (
+              statements.map((statement) => (
+                <div
+                  key={statement.id}
+                  className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-zinc-800 hover:border-[#00e599]/30 transition-colors"
+                >
+                  <div>
+                    <h5 className="text-white font-bold text-sm">
+                      {statement.statementType === 'YEARLY_TAX'
+                        ? `Yearly Tax Statement (${statement.periodStart.slice(0, 4)})`
+                        : `Monthly Statement (${statement.periodStart.slice(0, 7)})`}
+                    </h5>
+                    <p className="text-xs text-zinc-500">
+                      {statement.periodStart} to {statement.periodEnd} • Closing ${statement.closingBalanceUsd.toFixed(2)}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDownloadStatement(statement.id)}
+                    disabled={!FeatureFlagService.isEnabled('ENABLE_STATEMENT_DOWNLOADS')}
+                  >
+                    Download
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <h4 className="text-sm font-bold text-white">Signed Disclosures</h4>
+            {disclosures.length === 0 && !documentsLoading ? (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 text-xs text-zinc-500">
+                No signed disclosures yet. They appear after you apply for feature access.
+              </div>
+            ) : (
+              disclosures.map((disclosure) => (
+                <div
+                  key={disclosure.id}
+                  className="flex items-center justify-between p-4 bg-zinc-900/40 rounded-xl border border-zinc-800"
+                >
+                  <div>
+                    <h5 className="text-white font-bold text-sm">
+                      {disclosure.featureKey.replace(/_/g, ' ')} • {disclosure.decision.toUpperCase()}
+                    </h5>
+                    <p className="text-xs text-zinc-500">
+                      Signed {new Date(disclosure.acceptedAt).toLocaleString()} • Version {disclosure.tosVersion}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDownloadDisclosure(disclosure.id)}
+                    disabled={!FeatureFlagService.isEnabled('ENABLE_STATEMENT_DOWNLOADS')}
+                  >
+                    Download
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Deposit Funds Section */}
@@ -263,6 +433,30 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
              <p className="text-[10px] text-zinc-500 mt-2">
                Withdrawal fee: $3 + 3% of amount. BTC withdrawals execute only when BTC provider is configured. Stripe withdrawals require Stripe Connect payouts.
              </p>
+           </div>
+
+           <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800">
+             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+               <div>
+                 <label className="block text-xs text-zinc-500 uppercase tracking-wider font-bold mb-1">
+                   Link Bank Account (Plaid)
+                 </label>
+                 <p className="text-[10px] text-zinc-500">
+                   OAuth institutions redirect through <code>/oauth.html</code> and return to P3 automatically.
+                 </p>
+               </div>
+               <Button
+                 type="button"
+                 variant="outline"
+                 onClick={handleLinkBankWithPlaid}
+                 isLoading={isLinkingBank}
+               >
+                 Link Bank
+               </Button>
+             </div>
+             {bankLinkStatus && (
+               <p className="text-[11px] text-zinc-300 mt-3">{bankLinkStatus}</p>
+             )}
            </div>
         </div>
 

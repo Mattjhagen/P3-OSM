@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P3 OAuth Redirect</title>
+</head>
+<body>
+  <script>
+    // Plaid Link redirects here after OAuth auth.
+    // Send the user back into the app and force profile view to resume bank-link flow.
+    const params = new URLSearchParams(window.location.search || '');
+    params.set('view', 'profile');
+    window.location.replace(`/?${params.toString()}`);
+  </script>
+</body>
+</html>

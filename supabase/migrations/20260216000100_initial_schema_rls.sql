@@ -1,9 +1,10 @@
 -- P3 Lending Protocol local Supabase schema + RLS baseline
 
+create extension if not exists "pgcrypto";
 create extension if not exists "uuid-ossp";
 
 create table if not exists public.users (
-    id uuid primary key default uuid_generate_v4(),
+    id uuid primary key default gen_random_uuid(),
     wallet_address text unique,
     kyc_tier integer default 0,
     created_at timestamptz default now(),
@@ -11,7 +12,7 @@ create table if not exists public.users (
 );
 
 create table if not exists public.behavioral_signals (
-    id uuid primary key default uuid_generate_v4(),
+    id uuid primary key default gen_random_uuid(),
     user_id uuid not null references public.users(id) on delete cascade,
     signal_type text not null,
     severity integer check (severity >= 1 and severity <= 10),
@@ -20,7 +21,7 @@ create table if not exists public.behavioral_signals (
 );
 
 create table if not exists public.loan_activity (
-    id uuid primary key default uuid_generate_v4(),
+    id uuid primary key default gen_random_uuid(),
     borrower_id uuid not null references public.users(id),
     lender_id uuid references public.users(id),
     amount_usd numeric not null,
@@ -31,7 +32,7 @@ create table if not exists public.loan_activity (
 );
 
 create table if not exists public.repayment_history (
-    id uuid primary key default uuid_generate_v4(),
+    id uuid primary key default gen_random_uuid(),
     loan_id uuid not null references public.loan_activity(id) on delete cascade,
     amount numeric not null,
     is_late boolean default false,
@@ -40,7 +41,7 @@ create table if not exists public.repayment_history (
 );
 
 create table if not exists public.trust_score_snapshots (
-    id uuid primary key default uuid_generate_v4(),
+    id uuid primary key default gen_random_uuid(),
     user_id uuid not null references public.users(id) on delete cascade,
     score integer check (score >= 0 and score <= 100),
     risk_tier integer,
@@ -51,7 +52,7 @@ create table if not exists public.trust_score_snapshots (
 );
 
 create table if not exists public.fraud_flags (
-    id uuid primary key default uuid_generate_v4(),
+    id uuid primary key default gen_random_uuid(),
     user_id uuid not null references public.users(id) on delete cascade,
     reason_code text not null,
     is_active boolean default true,
@@ -60,7 +61,7 @@ create table if not exists public.fraud_flags (
 );
 
 create table if not exists public.audit_log (
-    id uuid primary key default uuid_generate_v4(),
+    id uuid primary key default gen_random_uuid(),
     actor_id uuid references public.users(id),
     action text not null,
     resource_type text not null,
@@ -124,20 +125,24 @@ alter table public.fraud_flags enable row level security;
 alter table public.audit_log enable row level security;
 
 -- users
+drop policy if exists "users_select_self_or_admin" on public.users;
 create policy "users_select_self_or_admin" on public.users
 for select
 using (auth.uid() = id or public.current_is_admin());
 
+drop policy if exists "users_insert_self_or_service" on public.users;
 create policy "users_insert_self_or_service" on public.users
 for insert
 with check (auth.uid() = id or auth.role() = 'service_role');
 
+drop policy if exists "users_update_self_or_admin" on public.users;
 create policy "users_update_self_or_admin" on public.users
 for update
 using (auth.uid() = id or public.current_is_admin())
 with check (auth.uid() = id or public.current_is_admin());
 
 -- behavioral_signals
+drop policy if exists "behavioral_select_self_or_admin" on public.behavioral_signals;
 create policy "behavioral_select_self_or_admin" on public.behavioral_signals
 for select
 using (
@@ -148,11 +153,13 @@ using (
     )
 );
 
+drop policy if exists "behavioral_insert_self_or_admin" on public.behavioral_signals;
 create policy "behavioral_insert_self_or_admin" on public.behavioral_signals
 for insert
 with check (user_id = auth.uid() or public.current_is_admin());
 
 -- loan_activity
+drop policy if exists "loan_select_self_or_admin" on public.loan_activity;
 create policy "loan_select_self_or_admin" on public.loan_activity
 for select
 using (
@@ -161,6 +168,7 @@ using (
     or public.current_is_admin()
 );
 
+drop policy if exists "loan_insert_self_or_admin" on public.loan_activity;
 create policy "loan_insert_self_or_admin" on public.loan_activity
 for insert
 with check (
@@ -168,6 +176,7 @@ with check (
     or public.current_is_admin()
 );
 
+drop policy if exists "loan_update_self_or_admin" on public.loan_activity;
 create policy "loan_update_self_or_admin" on public.loan_activity
 for update
 using (
@@ -182,6 +191,7 @@ with check (
 );
 
 -- repayment_history
+drop policy if exists "repayment_select_related_loan" on public.repayment_history;
 create policy "repayment_select_related_loan" on public.repayment_history
 for select
 using (
@@ -197,6 +207,7 @@ using (
     )
 );
 
+drop policy if exists "repayment_insert_related_loan" on public.repayment_history;
 create policy "repayment_insert_related_loan" on public.repayment_history
 for insert
 with check (
@@ -213,28 +224,34 @@ with check (
 );
 
 -- trust_score_snapshots
+drop policy if exists "trust_select_self_or_admin" on public.trust_score_snapshots;
 create policy "trust_select_self_or_admin" on public.trust_score_snapshots
 for select
 using (user_id = auth.uid() or public.current_is_admin());
 
+drop policy if exists "trust_insert_admin_or_service" on public.trust_score_snapshots;
 create policy "trust_insert_admin_or_service" on public.trust_score_snapshots
 for insert
 with check (public.current_is_admin() or auth.role() = 'service_role');
 
 -- fraud_flags
+drop policy if exists "fraud_select_self_or_admin" on public.fraud_flags;
 create policy "fraud_select_self_or_admin" on public.fraud_flags
 for select
 using (user_id = auth.uid() or public.current_is_admin());
 
+drop policy if exists "fraud_insert_admin_or_service" on public.fraud_flags;
 create policy "fraud_insert_admin_or_service" on public.fraud_flags
 for insert
 with check (public.current_is_admin() or auth.role() = 'service_role');
 
 -- audit_log
+drop policy if exists "audit_select_admin_only" on public.audit_log;
 create policy "audit_select_admin_only" on public.audit_log
 for select
 using (public.current_is_admin() or auth.role() = 'service_role');
 
+drop policy if exists "audit_insert_admin_or_service" on public.audit_log;
 create policy "audit_insert_admin_or_service" on public.audit_log
 for insert
 with check (public.current_is_admin() or auth.role() = 'service_role');

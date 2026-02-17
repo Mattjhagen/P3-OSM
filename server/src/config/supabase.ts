@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { config } from './config';
 
-if (!config.supabase.url || !config.supabase.serviceKey || !config.supabase.anonKey) {
-    console.warn('Supabase configuration missing. Ensure SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY are set.');
+if (!config.supabase.url || !config.supabase.serviceKey) {
+    console.warn('Supabase configuration missing. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.');
+}
+
+if (!process.env.SUPABASE_ANON_KEY) {
+    console.warn('SUPABASE_ANON_KEY not set. Falling back to SUPABASE_SERVICE_ROLE_KEY for RLS client initialization.');
 }
 
 export const supabase = createClient(

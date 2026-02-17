@@ -70,20 +70,32 @@ const parseApiResponse = async (response: Response) => {
 
 export interface PriceQuoteDto {
   symbol: string;
+  fiatCurrency: string;
   usd: number;
   usd24hChange: number;
   usdMarketCap: number;
+  localPrice: number;
+  local24hChange: number;
+  localMarketCap: number;
+  localToUsdRate: number;
   fetchedAt: string;
 }
 
 export interface OrderPreviewDto {
   symbol: string;
   side: 'BUY' | 'SELL';
+  fiatCurrency: string;
+  requestedAmountLocal: number;
+  grossAmountLocal: number;
+  feeLocal: number;
+  netAmountLocal: number;
   grossAmountUsd: number;
   feeUsd: number;
   netAmountUsd: number;
   estimatedQuantity: number;
+  priceLocal: number;
   priceUsd: number;
+  localToUsdRate: number;
   providerEnabled: boolean;
   provider: string;
   feePolicy: {
@@ -98,10 +110,15 @@ export interface OrderExecutionDto {
   balanceUsd: number;
   symbol: string;
   side: 'BUY' | 'SELL';
+  fiatCurrency: string;
+  grossAmountLocal: number;
+  feeLocal: number;
+  netAmountLocal: number;
   feeUsd: number;
   grossAmountUsd: number;
   netAmountUsd: number;
   quantity: number;
+  priceLocal: number;
   priceUsd: number;
   provider: string;
 }
@@ -121,12 +138,13 @@ export interface WithdrawalDto {
 }
 
 export const TradingService = {
-  getPrices: async (symbols: string[]) => {
+  getPrices: async (symbols: string[], fiatCurrency: string = 'USD') => {
     const query = encodeURIComponent(symbols.join(','));
+    const fiat = encodeURIComponent(String(fiatCurrency || 'USD').trim().toUpperCase());
 
     let response: Response;
     try {
-      response = await fetch(`${getBackendBaseUrl()}/api/prices?symbols=${query}`, {
+      response = await fetch(`${getBackendBaseUrl()}/api/prices?symbols=${query}&fiat=${fiat}`, {
         method: 'GET',
       });
     } catch (error) {
@@ -141,7 +159,9 @@ export const TradingService = {
     userId: string;
     symbol: string;
     side: 'BUY' | 'SELL';
-    amountUsd: number;
+    amountUsd?: number;
+    amountFiat?: number;
+    fiatCurrency?: string;
   }) => {
     let response: Response;
     try {
@@ -163,7 +183,9 @@ export const TradingService = {
     userId: string;
     symbol: string;
     side: 'BUY' | 'SELL';
-    amountUsd: number;
+    amountUsd?: number;
+    amountFiat?: number;
+    fiatCurrency?: string;
     sellDisclosureSignature?: string;
     settlementAccount?: string;
   }) => {
@@ -215,7 +237,12 @@ export const TradingService = {
     return (await parseApiResponse(response)) as WithdrawalDto;
   },
 
-  createPlaidLinkToken: async (payload: { userId: string; email?: string }) => {
+  createPlaidLinkToken: async (payload: {
+    userId: string;
+    email?: string;
+    redirectUri?: string;
+    androidPackageName?: string;
+  }) => {
     let response: Response;
     try {
       response = await fetch(`${getBackendBaseUrl()}/api/plaid/link-token`, {

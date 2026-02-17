@@ -6,6 +6,7 @@ const router = Router();
 
 router.post('/link-token', createRateLimiter(40, 15), PlaidController.createLinkToken);
 router.post('/exchange-public-token', createRateLimiter(30, 15), PlaidController.exchangePublicToken);
+router.post('/exchange_public_token', createRateLimiter(30, 15), PlaidController.exchangePublicToken);
 router.post('/identity-check', createRateLimiter(20, 15), PlaidController.identityCheck);
 
 export default router;

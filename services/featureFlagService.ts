@@ -3,7 +3,9 @@ import { RuntimeConfigService } from './runtimeConfigService';
 export type BetaFeatureFlagKey =
   | 'ENABLE_TRADING_EXECUTION'
   | 'ENABLE_WITHDRAWALS'
-  | 'ENABLE_PLAID_BANKING';
+  | 'ENABLE_PLAID_BANKING'
+  | 'ENABLE_COMPLIANCE_GATING'
+  | 'ENABLE_STATEMENT_DOWNLOADS';
 
 export type BetaFeatureFlags = Record<BetaFeatureFlagKey, boolean>;
 
@@ -11,6 +13,8 @@ const DEFAULT_FLAGS: BetaFeatureFlags = {
   ENABLE_TRADING_EXECUTION: true,
   ENABLE_WITHDRAWALS: true,
   ENABLE_PLAID_BANKING: true,
+  ENABLE_COMPLIANCE_GATING: true,
+  ENABLE_STATEMENT_DOWNLOADS: true,
 };
 
 const parseBoolean = (value: unknown, fallback: boolean) => {
@@ -32,6 +36,8 @@ const parseFlags = (raw: string): BetaFeatureFlags => {
       ENABLE_TRADING_EXECUTION: parseBoolean(parsed?.ENABLE_TRADING_EXECUTION, DEFAULT_FLAGS.ENABLE_TRADING_EXECUTION),
       ENABLE_WITHDRAWALS: parseBoolean(parsed?.ENABLE_WITHDRAWALS, DEFAULT_FLAGS.ENABLE_WITHDRAWALS),
       ENABLE_PLAID_BANKING: parseBoolean(parsed?.ENABLE_PLAID_BANKING, DEFAULT_FLAGS.ENABLE_PLAID_BANKING),
+      ENABLE_COMPLIANCE_GATING: parseBoolean(parsed?.ENABLE_COMPLIANCE_GATING, DEFAULT_FLAGS.ENABLE_COMPLIANCE_GATING),
+      ENABLE_STATEMENT_DOWNLOADS: parseBoolean(parsed?.ENABLE_STATEMENT_DOWNLOADS, DEFAULT_FLAGS.ENABLE_STATEMENT_DOWNLOADS),
     };
   } catch {
     return { ...DEFAULT_FLAGS };

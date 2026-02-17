@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { WithdrawalService } from '../services/withdrawalService';
+import { ComplianceService } from '../services/complianceService';
 
 const attachStatus = (error: any) => {
   if (typeof error?.status === 'number') {
@@ -27,6 +28,7 @@ export const WithdrawalController = {
   requestWithdrawal: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { userId, method, amountUsd, destination } = req.body || {};
+      await ComplianceService.requireFeatureApproval(String(userId || ''), 'WITHDRAW_FUNDS');
 
       const result = await WithdrawalService.requestWithdrawal({
         userId: String(userId || ''),
