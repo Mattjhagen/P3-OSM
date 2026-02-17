@@ -8,12 +8,18 @@ import userRoutes from './routes/userRoutes';
 import loanRoutes from './routes/loanRoutes';
 import verificationRoutes from './routes/verificationRoutes';
 import adminRoutes from './routes/adminRoutes';
+import paymentRoutes from './routes/paymentRoutes';
+import { PaymentController } from './controllers/paymentController';
 
 export const createApp = () => {
     const app = express();
 
     // Middleware
     app.use(cors());
+
+    // Stripe webhook must receive raw body for signature verification.
+    app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
+
     app.use(express.json());
 
     // Routes
@@ -21,6 +27,7 @@ export const createApp = () => {
     app.use('/api/loans', loanRoutes);
     app.use('/api/verification', verificationRoutes);
     app.use('/api/admin', adminRoutes);
+    app.use('/api/payments', paymentRoutes);
 
     // Health Check
     app.get('/health', (req: Request, res: Response) => {

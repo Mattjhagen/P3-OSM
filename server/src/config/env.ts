@@ -16,6 +16,7 @@ for (const envPath of envPaths) {
 export const validatedEnv = cleanEnv(process.env, {
   NODE_ENV: str({ default: 'development', choices: ['development', 'test', 'production'] }),
   PORT: port({ default: 5000 }),
+  FRONTEND_URL: url({ default: 'http://localhost:5173', desc: 'Public frontend base URL for Stripe redirect callbacks' }),
   SUPABASE_URL: url({ desc: 'Supabase project URL for backend service operations' }),
   SUPABASE_ANON_KEY: str({ desc: 'Supabase anon key for RLS-scoped user queries' }),
   SUPABASE_SERVICE_ROLE_KEY: str({ desc: 'Supabase service role key for privileged server access' }),

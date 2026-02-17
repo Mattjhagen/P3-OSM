@@ -3,15 +3,173 @@ import React, { useState, useEffect } from 'react';
 import { Logo } from './Logo';
 import { Button } from './Button';
 import { ScoreGauge } from './ScoreGauge';
-import { RuntimeConfigService } from '../services/runtimeConfigService';
+import { PaymentService } from '../services/paymentService';
 
 interface Props {
   onClose: () => void;
 }
 
 const CALENDLY_MEETING_URL = 'https://calendly.com/admin-p3lending/new-meeting';
-const STRIPE_DONATE_FALLBACK =
-  (import.meta as any).env?.VITE_STRIPE_DONATE_URL || 'https://stripe.com/payments/checkout';
+
+interface DonationCheckoutButtonProps {
+  className: string;
+  source: string;
+  children: React.ReactNode;
+}
+
+const DonationCheckoutButton: React.FC<DonationCheckoutButtonProps> = ({
+  className,
+  source,
+  children,
+}) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [amountUsd, setAmountUsd] = useState('25');
+  const [donorEmail, setDonorEmail] = useState('');
+  const [donorName, setDonorName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const closeModal = () => {
+    if (isSubmitting) return;
+    setIsModalOpen(false);
+    setError('');
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    const parsedAmount = Number.parseFloat(amountUsd);
+    if (!Number.isFinite(parsedAmount) || parsedAmount < 1) {
+      setError('Enter a valid donation amount of at least $1.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await PaymentService.createDonationCheckoutSession({
+        amountUsd: parsedAmount,
+        donorEmail: donorEmail.trim() || undefined,
+        donorName: donorName.trim() || undefined,
+        source,
+      });
+      window.location.assign(response.checkoutUrl);
+    } catch (submitError: any) {
+      setIsSubmitting(false);
+      setError(submitError?.message || 'Unable to start checkout. Please try again.');
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className={className}
+        onClick={() => {
+          setError('');
+          setIsModalOpen(true);
+        }}
+      >
+        {children}
+      </button>
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black/80 px-4 py-6 flex items-center justify-center"
+          onClick={closeModal}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-zinc-700 bg-[#090909] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-white">Support P3 Lending</h3>
+            <p className="mt-1 text-sm text-zinc-400">
+              Complete a secure donation through Stripe Checkout.
+            </p>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {[25, 100, 500].map((presetAmount) => (
+                <button
+                  key={presetAmount}
+                  type="button"
+                  onClick={() => setAmountUsd(String(presetAmount))}
+                  className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
+                    amountUsd === String(presetAmount)
+                      ? 'border-[#00e599] bg-[#00e599]/10 text-[#00e599]'
+                      : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500'
+                  }`}
+                >
+                  ${presetAmount}
+                </button>
+              ))}
+            </div>
+
+            <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  Donation Amount (USD)
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="decimal"
+                  value={amountUsd}
+                  onChange={(event) => setAmountUsd(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#00e599]"
+                  placeholder="25"
+                  required
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  Name (Optional)
+                </span>
+                <input
+                  type="text"
+                  value={donorName}
+                  onChange={(event) => setDonorName(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#00e599]"
+                  placeholder="Your name"
+                  maxLength={120}
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  Email For Receipt (Optional)
+                </span>
+                <input
+                  type="email"
+                  value={donorEmail}
+                  onChange={(event) => setDonorEmail(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#00e599]"
+                  placeholder="you@example.com"
+                  maxLength={160}
+                />
+              </label>
+
+              {error && (
+                <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={closeModal} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+                <Button type="submit" isLoading={isSubmitting} className="w-full sm:w-auto">
+                  Continue To Checkout
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
 
 const SLIDES = [
   {
@@ -267,14 +425,12 @@ const SLIDES = [
              >
                Schedule a Meeting
              </a>
-             <a
-               href={STRIPE_DONATE_FALLBACK}
-               target="_blank"
-               rel="noopener noreferrer"
+             <DonationCheckoutButton
+               source="pitch_deck_ask_slide"
                className="inline-flex items-center rounded-lg border border-zinc-600 bg-zinc-900 px-5 py-2 text-sm font-bold text-white transition-all hover:border-zinc-400 hover:text-[#00e599]"
              >
                Donate Now via Stripe
-             </a>
+             </DonationCheckoutButton>
            </div>
         </div>
       </div>
@@ -284,10 +440,7 @@ const SLIDES = [
 
 export const PitchDeck: React.FC<Props> = ({ onClose }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const stripeDonateUrl = RuntimeConfigService.getEffectiveValue(
-    'STRIPE_DONATE_URL',
-    STRIPE_DONATE_FALLBACK
-  );
+  const [donationNotice, setDonationNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -303,8 +456,32 @@ export const PitchDeck: React.FC<Props> = ({ onClose }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search);
+    const donationStatus = search.get('donation');
+
+    if (donationStatus === 'success') {
+      setDonationNotice('Donation received. Thank you for supporting P3 Lending.');
+    } else if (donationStatus === 'cancelled') {
+      setDonationNotice('Donation checkout was canceled.');
+    } else {
+      return;
+    }
+
+    search.delete('donation');
+    search.delete('session_id');
+    const nextQuery = search.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
+    window.history.replaceState({}, document.title, nextUrl);
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-[#050505] z-[9999] flex flex-col">
+      {donationNotice && (
+        <div className="absolute top-16 left-4 right-4 z-50 mx-auto max-w-xl rounded-xl border border-[#00e599]/40 bg-[#00e599]/10 px-4 py-2 text-center text-xs font-semibold text-[#9ff8d7] sm:text-sm">
+          {donationNotice}
+        </div>
+      )}
       <div className="absolute top-3 sm:top-6 left-3 sm:left-6 flex flex-wrap items-center gap-2 sm:gap-3 z-50">
         <a
           href={CALENDLY_MEETING_URL}
@@ -314,14 +491,12 @@ export const PitchDeck: React.FC<Props> = ({ onClose }) => {
         >
           Book Calendly Call
         </a>
-        <a
-          href={stripeDonateUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+        <DonationCheckoutButton
+          source="pitch_deck_header"
           className="inline-flex items-center rounded-lg border border-zinc-700 bg-zinc-900/90 px-3 py-2 text-xs font-bold text-zinc-100 hover:border-zinc-500 hover:text-[#00e599]"
         >
           Donate via Stripe
-        </a>
+        </DonationCheckoutButton>
       </div>
 
       {/* Controls */}

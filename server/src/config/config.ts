@@ -2,6 +2,7 @@ import { validatedEnv } from './env';
 
 export const config = {
     port: validatedEnv.PORT,
+    frontendUrl: validatedEnv.FRONTEND_URL,
     supabase: {
         url: validatedEnv.SUPABASE_URL,
         anonKey: validatedEnv.SUPABASE_ANON_KEY,

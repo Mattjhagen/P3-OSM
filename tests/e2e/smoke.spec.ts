@@ -8,10 +8,12 @@ test('first-time users see the pitch deck with investor actions', async ({ page 
     'href',
     'https://calendly.com/admin-p3lending/new-meeting'
   );
-  await expect(page.getByRole('link', { name: 'Donate via Stripe' }).first()).toHaveAttribute(
-    'href',
-    'https://stripe.com/payments/checkout'
-  );
+  await expect(page.getByRole('button', { name: 'Donate via Stripe' }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Donate via Stripe' }).first().click();
+  await expect(page.getByText('Support P3 Lending')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue To Checkout' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByText('Support P3 Lending')).not.toBeVisible();
 
   await page.getByRole('button', { name: 'Close pitch deck' }).click();
   await expect(page.getByRole('button', { name: 'Get Early Access' })).toBeVisible();

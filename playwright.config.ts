@@ -18,6 +18,14 @@ export default defineConfig({
     port: 4173,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      VITE_SUPABASE_URL:
+        process.env.VITE_SUPABASE_URL || 'https://example.supabase.co',
+      VITE_SUPABASE_ANON_KEY:
+        process.env.VITE_SUPABASE_ANON_KEY || 'test_supabase_anon_key_for_e2e',
+      VITE_BACKEND_URL: process.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000',
+    },
   },
   projects: [
     {
