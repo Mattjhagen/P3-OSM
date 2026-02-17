@@ -63,6 +63,8 @@ export interface UserProfile {
     faceFile?: string; // Base64 or URL
     submittedAt: number;
   };
+  accountStatus?: 'ACTIVE' | 'DEFAULTED' | 'SUSPENDED';
+  defaultFlag?: boolean;
   isFrozen?: boolean; // Admin action
   adminNotes?: string;
 

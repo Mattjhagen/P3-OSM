@@ -9,7 +9,14 @@ import loanRoutes from './routes/loanRoutes';
 import verificationRoutes from './routes/verificationRoutes';
 import adminRoutes from './routes/adminRoutes';
 import paymentRoutes from './routes/paymentRoutes';
+import waitlistRoutes from './routes/waitlistRoutes';
+import tradingRoutes from './routes/tradingRoutes';
+import withdrawalRoutes from './routes/withdrawalRoutes';
+import plaidRoutes from './routes/plaidRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 import { PaymentController } from './controllers/paymentController';
+import { TradingController } from './controllers/tradingController';
+import { publicApiLimiter } from './middleware/rateLimiter';
 
 export const createApp = () => {
     const app = express();
@@ -28,10 +35,31 @@ export const createApp = () => {
     app.use('/api/verification', verificationRoutes);
     app.use('/api/admin', adminRoutes);
     app.use('/api/payments', paymentRoutes);
+    app.use('/api/waitlist', waitlistRoutes);
+    app.use('/api/trading', tradingRoutes);
+    app.use('/api/withdrawals', withdrawalRoutes);
+    app.use('/api/plaid', plaidRoutes);
+    app.use('/api/notifications', notificationRoutes);
+    app.get('/api/prices', publicApiLimiter, TradingController.getPrices);
 
     // Health Check
     app.get('/health', (req: Request, res: Response) => {
-        res.json({ status: 'active', timestamp: new Date().toISOString() });
+        res.json({
+            status: 'active',
+            timestamp: new Date().toISOString(),
+            providers: {
+                stripePaymentsConfigured: Boolean(config.stripe.secretKey),
+                stripePayoutsEnabled: Boolean(config.stripe.secretKey && config.stripe.payoutsEnabled),
+                plaidConfigured: Boolean(config.plaid.clientId && config.plaid.secret),
+                btcWithdrawalsEnabled: Boolean(
+                    config.withdrawals.btcEnabled &&
+                        config.withdrawals.btcProviderUrl &&
+                        config.withdrawals.btcProviderToken
+                ),
+                coingeckoConfigured: Boolean(config.coingecko.apiBaseUrl),
+                tradingProviderEnabled: Boolean(config.trading.providerEnabled),
+            },
+        });
     });
 
     // Error handling

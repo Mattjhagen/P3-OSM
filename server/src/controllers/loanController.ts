@@ -38,7 +38,7 @@ export const LoanController = {
     createRequest: async (req: Request, res: Response, next: NextFunction) => {
         try {
             const borrowerId = req.auth?.userId;
-            const { amount_usd, interest_rate, lender_id, status } = req.body || {};
+            const { amount_usd, interest_rate, lender_id, status, due_date } = req.body || {};
 
             if (!borrowerId) {
                 return res.status(401).json({
@@ -68,6 +68,16 @@ export const LoanController = {
                 });
             }
 
+            if (due_date) {
+                const parsedDate = new Date(due_date);
+                if (Number.isNaN(parsedDate.getTime())) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'due_date must be a valid ISO date when provided.',
+                    });
+                }
+            }
+
             const created = await LoanService.createLoanRequest(
                 {
                     borrowerId,
@@ -75,6 +85,7 @@ export const LoanController = {
                     amountUsd: amount_usd,
                     interestRate: interest_rate,
                     status: status || 'pending',
+                    dueDate: due_date || null,
                 },
                 req.accessToken
             );

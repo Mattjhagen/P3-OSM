@@ -5,6 +5,7 @@ import { publicApiLimiter } from '../middleware/rateLimiter';
 const router = Router();
 
 // Create Checkout Session
+router.post('/deposit/create', publicApiLimiter, PaymentController.createCheckoutSession);
 router.post('/create-checkout-session', publicApiLimiter, PaymentController.createCheckoutSession);
 router.post('/donations/create-checkout-session', publicApiLimiter, PaymentController.createDonationCheckoutSession);
 

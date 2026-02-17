@@ -53,3 +53,52 @@ describe('PaymentService.createDonationCheckoutSession', () => {
     ).rejects.toThrow('Stripe is not configured on the server.');
   });
 });
+
+describe('PaymentService.createDepositCheckoutSession', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    (globalThis as any).fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('returns checkout URL when backend responds with success payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test_deposit',
+          sessionId: 'cs_test_deposit',
+        },
+      }),
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const result = await PaymentService.createDepositCheckoutSession({
+      amountUsd: 10,
+      userId: 'user_123',
+      userEmail: 'matt@example.com',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/payments/deposit/create'),
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
+    expect(result.checkoutUrl).toContain('checkout.stripe.com');
+  });
+
+  it('throws explicit backend unavailable message when network fetch fails', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
+    (globalThis as any).fetch = fetchMock;
+
+    await expect(
+      PaymentService.createDepositCheckoutSession({
+        amountUsd: 15,
+        userId: 'user_123',
+      })
+    ).rejects.toThrow('Payments backend is unavailable right now');
+  });
+});

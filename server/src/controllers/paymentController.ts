@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { config } from '../config/config';
 import logger from '../utils/logger';
 import { supabase } from '../config/supabase';
+import { AccountRecoveryService } from '../services/accountRecoveryService';
 
 const DEFAULT_FRONTEND_URL = 'https://p3lending.space';
 const DONATION_AUDIT_ACTION = 'STRIPE_DONATION_COMPLETED';
@@ -339,37 +340,42 @@ export const PaymentController = {
             } else {
                 const userId = session.metadata?.userId;
                 const amount = normalizeAmount(session.metadata?.amount);
+                const userEmail =
+                    session.customer_details?.email ||
+                    session.customer_email ||
+                    session.metadata?.userEmail ||
+                    undefined;
 
                 if (userId && amount) {
                     logger.info({ userId, amount }, 'Processing successful deposit via webhook');
 
                     try {
-                        // Update user balance in Supabase
-                        // Note: We need to fetch the existing data blob and update the balance
-                        const { data: userData, error: fetchError } = await supabase
-                            .from('users')
-                            .select('data')
-                            .eq('id', userId)
-                            .single();
+                        const result = await AccountRecoveryService.processConfirmedDeposit({
+                            userId,
+                            depositedUsd: amount,
+                            stripeEventId: event.id,
+                            stripeSessionId: session.id,
+                            userEmail,
+                        });
 
-                        if (fetchError || !userData) {
-                            throw new Error(`User ${userId} not found for balance update`);
-                        }
-
-                        const profile = userData.data;
-                        profile.balance = (profile.balance || 0) + amount;
-
-                        const { error: updateError } = await supabase
-                            .from('users')
-                            .update({ data: profile })
-                            .eq('id', userId);
-
-                        if (updateError) throw updateError;
-
-                        logger.info({ userId, newBalance: profile.balance }, 'User balance updated successfully');
-                    } catch (dbError: any) {
-                        logger.error({ error: dbError.message, userId }, 'Failed to update user balance after successful payment');
-                        // Stripe will retry if we don't return 200, but we should probably log this critically
+                        logger.info(
+                            {
+                                userId,
+                                depositedUsd: amount,
+                                resultingBalanceUsd: result.balanceUsd,
+                                autoRepaidLoanCount: result.autoRepaidLoanCount,
+                                reactivated: result.reactivated,
+                                alreadyProcessed: result.alreadyProcessed,
+                                manualReviewRequired: result.manualReview.required,
+                                manualReviewTicketId: result.manualReview.ticketId || null,
+                            },
+                            'Stripe deposit confirmed and processed'
+                        );
+                    } catch (processingError: any) {
+                        logger.error(
+                            { error: processingError.message, userId, stripeEventId: event.id },
+                            'Failed to process confirmed deposit'
+                        );
                         return res.status(500).json({ received: true, error: 'DB Update Failed' });
                     }
                 }

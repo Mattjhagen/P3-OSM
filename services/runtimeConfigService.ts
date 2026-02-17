@@ -4,7 +4,15 @@ export type RuntimeConfigKey =
   | 'STRIPE_DONATE_URL'
   | 'BACKEND_URL'
   | 'OPENAI_API_KEY'
-  | 'OPENAI_MODEL';
+  | 'OPENAI_MODEL'
+  | 'STRIPE_PAYOUTS_ENABLED'
+  | 'BTC_WITHDRAWALS_ENABLED'
+  | 'BTC_WITHDRAW_PROVIDER_URL'
+  | 'BTC_WITHDRAW_PROVIDER_TOKEN'
+  | 'PLAID_CLIENT_ID'
+  | 'PLAID_SECRET'
+  | 'PLAID_ENV'
+  | 'BETA_FEATURE_FLAGS';
 
 export interface RuntimeConfigEntry {
   value: string;
@@ -23,6 +31,14 @@ const VALID_KEYS: RuntimeConfigKey[] = [
   'BACKEND_URL',
   'OPENAI_API_KEY',
   'OPENAI_MODEL',
+  'STRIPE_PAYOUTS_ENABLED',
+  'BTC_WITHDRAWALS_ENABLED',
+  'BTC_WITHDRAW_PROVIDER_URL',
+  'BTC_WITHDRAW_PROVIDER_TOKEN',
+  'PLAID_CLIENT_ID',
+  'PLAID_SECRET',
+  'PLAID_ENV',
+  'BETA_FEATURE_FLAGS',
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

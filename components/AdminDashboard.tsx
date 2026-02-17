@@ -74,6 +74,14 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     BACKEND_URL: '',
     OPENAI_API_KEY: '',
     OPENAI_MODEL: 'gpt-5-codex',
+    STRIPE_PAYOUTS_ENABLED: 'false',
+    BTC_WITHDRAWALS_ENABLED: 'false',
+    BTC_WITHDRAW_PROVIDER_URL: '',
+    BTC_WITHDRAW_PROVIDER_TOKEN: '',
+    PLAID_CLIENT_ID: '',
+    PLAID_SECRET: '',
+    PLAID_ENV: 'sandbox',
+    BETA_FEATURE_FLAGS: '{}',
   });
   const [clientLogs, setClientLogs] = useState<ClientLogEntry[]>([]);
   const [externalLogText, setExternalLogText] = useState('');
@@ -119,6 +127,12 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
         limit: 400,
       });
       setRemoteUserLogs(logs);
+      const logStatus = AdminUserLogService.getStatus();
+      if (logStatus.analyticsEventsTableMissing) {
+        setOpsMessage(
+          "Per-user logs are temporarily unavailable because 'public.analytics_events' is missing. Run the latest Supabase migrations."
+        );
+      }
     } catch (error) {
       console.error('Failed to load remote user logs', error);
       setOpsMessage('Failed to refresh per-user logs.');

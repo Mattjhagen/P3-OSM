@@ -1,5 +1,6 @@
 import { UserProfile, LoanRequest, LoanOffer, EmployeeProfile, ReferralData, InternalTicket, ChatMessage, Dispute, KYCTier, KYCStatus, WaitlistEntry } from '../types';
 import { supabase } from '../supabaseClient';
+import { AdminNotificationClient } from './adminNotificationClient';
 
 // INITIAL TEMPLATE REMAINING FOR FALLBACK
 const INITIAL_USER_TEMPLATE: UserProfile = {
@@ -25,6 +26,7 @@ const INITIAL_USER_TEMPLATE: UserProfile = {
 };
 
 const BASE_WAITLIST_COUNT = 4291;
+const truncate = (value: string, max = 400) => (value.length > max ? `${value.slice(0, max - 3)}...` : value);
 
 // NOTE: All methods are now ASYNC because they hit the database.
 export const PersistenceService = {
@@ -263,6 +265,23 @@ export const PersistenceService = {
       status: ticket.status,
       data: ticket
     });
+
+    try {
+      await AdminNotificationClient.notify({
+        category: 'ticket',
+        subject: ticket.subject || 'New internal ticket',
+        message: ticket.description || 'A new ticket was submitted.',
+        metadata: {
+          ticket_id: ticket.id,
+          priority: ticket.priority,
+          status: ticket.status,
+          author_name: ticket.authorName,
+        },
+      });
+    } catch (error) {
+      console.warn('Admin ticket email notification failed', error);
+    }
+
     return PersistenceService.getInternalTickets();
   },
 
@@ -318,6 +337,20 @@ export const PersistenceService = {
   },
 
   addChatMessage: async (msg: ChatMessage) => {
+    const shouldNotifyChatRequest = msg.type === 'CUSTOMER_SUPPORT' && msg.role === 'CUSTOMER';
+    let isFirstSupportMessage = false;
+
+    if (shouldNotifyChatRequest && msg.threadId) {
+      const { count } = await supabase
+        .from('chats')
+        .select('id', { count: 'exact', head: true })
+        .eq('thread_id', msg.threadId)
+        .eq('type', 'CUSTOMER_SUPPORT');
+      isFirstSupportMessage = (count || 0) === 0;
+    } else if (shouldNotifyChatRequest) {
+      isFirstSupportMessage = true;
+    }
+
     await supabase.from('chats').insert({
       id: msg.id,
       thread_id: msg.threadId,
@@ -326,6 +359,23 @@ export const PersistenceService = {
       type: msg.type,
       data: msg
     });
+
+    if (shouldNotifyChatRequest && isFirstSupportMessage) {
+      try {
+        await AdminNotificationClient.notify({
+          category: 'chat_request',
+          subject: `New support chat request from ${msg.senderName || msg.senderId}`,
+          message: truncate(msg.message || 'Customer requested support.', 800),
+          metadata: {
+            thread_id: msg.threadId || null,
+            sender_id: msg.senderId,
+            sender_name: msg.senderName,
+          },
+        });
+      } catch (error) {
+        console.warn('Admin chat notification failed', error);
+      }
+    }
   },
 
   // --- Disputes ---

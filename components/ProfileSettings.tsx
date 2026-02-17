@@ -7,13 +7,21 @@ import { DocumentService } from '../services/documentService';
 interface Props {
   user: UserProfile;
   onSave: (updatedUser: UserProfile) => void;
-  onDeposit: (amount: number) => void;
+  onDeposit: (amount: number) => Promise<void>;
+  onWithdraw: (amount: number, method: 'STRIPE' | 'BTC', destination: string) => Promise<void>;
 }
 
-export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit }) => {
+export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWithdraw }) => {
   const [formData, setFormData] = useState(user);
   const [isSaving, setIsSaving] = useState(false);
   const [depositAmount, setDepositAmount] = useState(100);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [depositError, setDepositError] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState(50);
+  const [withdrawMethod, setWithdrawMethod] = useState<'STRIPE' | 'BTC'>('STRIPE');
+  const [withdrawDestination, setWithdrawDestination] = useState('');
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (field: keyof UserProfile, value: any) => {
@@ -42,6 +50,50 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit }) =>
 
   const handleDownloadStatement = () => {
     DocumentService.generateStatement(user);
+  };
+
+  const handleDeposit = async () => {
+    setDepositError('');
+    const amount = Number(depositAmount);
+    if (!Number.isFinite(amount) || amount < 1) {
+      setDepositError('Enter a valid deposit amount of at least $1.');
+      return;
+    }
+
+    setIsDepositing(true);
+    try {
+      await onDeposit(amount);
+    } catch (error: any) {
+      setDepositError(error?.message || 'Deposit checkout could not be started.');
+    } finally {
+      setIsDepositing(false);
+    }
+  };
+
+  const handleWithdrawal = async () => {
+    setWithdrawError('');
+    const amount = Number(withdrawAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setWithdrawError('Enter a valid withdrawal amount greater than $0.');
+      return;
+    }
+
+    if (!withdrawDestination.trim()) {
+      setWithdrawError(withdrawMethod === 'BTC' ? 'Enter a BTC destination address.' : 'Enter a Stripe connected account id.');
+      return;
+    }
+
+    setIsWithdrawing(true);
+    try {
+      await onWithdraw(amount, withdrawMethod, withdrawDestination.trim());
+      setWithdrawAmount(50);
+      setWithdrawDestination('');
+    } catch (error: any) {
+      setWithdrawError(error?.message || 'Withdrawal could not be processed.');
+    } finally {
+      setIsWithdrawing(false);
+    }
   };
 
   return (
@@ -130,7 +182,7 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit }) =>
            </div>
         </div>
 
-        {/* Deposit Funds Section (For Testing Referrals) */}
+        {/* Deposit Funds Section */}
         <div className="glass-panel p-8 rounded-2xl space-y-6 border border-zinc-800/50">
            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-6">
              <h3 className="text-lg font-bold text-white">Wallet & Funds</h3>
@@ -138,20 +190,78 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit }) =>
            </div>
            
            <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800">
-             <label className="block text-xs text-zinc-500 uppercase tracking-wider font-bold mb-2">Simulate Deposit ($)</label>
+             <label className="block text-xs text-zinc-500 uppercase tracking-wider font-bold mb-2">
+               Deposit Amount (USD)
+             </label>
              <div className="flex gap-4">
                <input 
                  type="number" 
+                 min={1}
                  value={depositAmount}
                  onChange={(e) => setDepositAmount(Number(e.target.value))}
                  className="flex-1 bg-black border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00e599] outline-none transition-colors"
                />
-               <Button type="button" variant="primary" onClick={() => onDeposit(depositAmount)}>
+               <Button
+                 type="button"
+                 variant="primary"
+                 onClick={handleDeposit}
+                 isLoading={isDepositing}
+               >
                  Add Funds
                </Button>
              </div>
+             {depositError && (
+               <p className="text-[11px] text-red-400 mt-2">{depositError}</p>
+             )}
              <p className="text-[10px] text-zinc-500 mt-2">
-               *Adding $100+ will trigger a "Qualified Referral" event if you were invited.
+               Deposits are processed through Stripe Checkout. If the backend is unavailable, this action will fail safely and no funds are simulated.
+             </p>
+           </div>
+
+           <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800">
+             <label className="block text-xs text-zinc-500 uppercase tracking-wider font-bold mb-2">
+               Withdraw Funds
+             </label>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+               <input
+                 type="number"
+                 min={1}
+                 value={withdrawAmount}
+                 onChange={(e) => setWithdrawAmount(Number(e.target.value))}
+                 className="bg-black border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00e599] outline-none transition-colors"
+                 placeholder="Amount (USD)"
+               />
+               <select
+                 value={withdrawMethod}
+                 onChange={(e) => setWithdrawMethod(e.target.value === 'BTC' ? 'BTC' : 'STRIPE')}
+                 className="bg-black border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00e599] outline-none transition-colors"
+               >
+                 <option value="STRIPE">Stripe (Connected Acct)</option>
+                 <option value="BTC">BTC Wallet</option>
+               </select>
+               <input
+                 type="text"
+                 value={withdrawDestination}
+                 onChange={(e) => setWithdrawDestination(e.target.value)}
+                 className="bg-black border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00e599] outline-none transition-colors"
+                 placeholder={withdrawMethod === 'BTC' ? 'BTC address (bc1...)' : 'acct_...'}
+               />
+             </div>
+             <div className="mt-3">
+               <Button
+                 type="button"
+                 variant="secondary"
+                 onClick={handleWithdrawal}
+                 isLoading={isWithdrawing}
+               >
+                 Withdraw
+               </Button>
+             </div>
+             {withdrawError && (
+               <p className="text-[11px] text-red-400 mt-2">{withdrawError}</p>
+             )}
+             <p className="text-[10px] text-zinc-500 mt-2">
+               Withdrawal fee: $3 + 3% of amount. BTC withdrawals execute only when BTC provider is configured. Stripe withdrawals require Stripe Connect payouts.
              </p>
            </div>
         </div>

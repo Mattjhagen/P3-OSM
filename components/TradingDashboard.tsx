@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { UserProfile, Asset } from '../types';
 import { Button } from './Button';
 import { MarketDataService, ASSET_IDS } from '../services/marketDataService';
+import { TradingService as TradingApiService } from '../services/tradingService';
 
 // Base assets structure (will be hydrated with real data)
 const INITIAL_ASSETS: Asset[] = [
@@ -18,7 +19,7 @@ const TIME_RANGES = ['1D', '1W', '1M', '1Y', 'ALL'];
 
 interface Props {
   user: UserProfile;
-  onTrade: (asset: Asset, amount: number, isBuy: boolean) => void;
+  onTrade: (asset: Asset, amount: number, isBuy: boolean, sellDisclosureAccepted: boolean) => Promise<void>;
 }
 
 export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
@@ -28,30 +29,38 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [priceFeedError, setPriceFeedError] = useState('');
   
   // Trade Form State
   const [orderType, setOrderType] = useState<'BUY' | 'SELL'>('BUY');
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [tradeError, setTradeError] = useState('');
+  const [sellDisclosureAccepted, setSellDisclosureAccepted] = useState(false);
 
   // 1. Fetch Real Prices on Mount & Interval
   useEffect(() => {
     const fetchPrices = async () => {
-      const ids = assets.map(a => a.id);
-      const data = await MarketDataService.getPrices(ids);
-      
-      if (data) {
-        setAssets(prev => prev.map(asset => {
-          const coinData = data[asset.id];
-          if (!coinData) return asset;
-          return {
-            ...asset,
-            currentPrice: coinData.usd,
-            priceChange24h: coinData.usd_24h_change,
-            marketCap: MarketDataService.formatMarketCap(coinData.usd_market_cap)
-          };
-        }));
+      try {
+        const symbols = assets.map((a) => a.symbol);
+        const quotes = await TradingApiService.getPrices(symbols);
+
+        setAssets((prev) =>
+          prev.map((asset) => {
+            const coinData = quotes[asset.symbol];
+            if (!coinData) return asset;
+            return {
+              ...asset,
+              currentPrice: coinData.usd,
+              priceChange24h: coinData.usd24hChange,
+              marketCap: MarketDataService.formatMarketCap(coinData.usdMarketCap),
+            };
+          })
+        );
         setLastUpdated(new Date());
+        setPriceFeedError('');
+      } catch (error: any) {
+        setPriceFeedError(error?.message || 'Price feed unavailable.');
       }
     };
 
@@ -84,19 +93,38 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
     fetchChart();
   }, [selectedAsset.id, timeRange]);
 
+  useEffect(() => {
+    if (orderType === 'BUY') {
+      setSellDisclosureAccepted(false);
+    }
+    setTradeError('');
+  }, [orderType]);
+
   const handleOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTradeError('');
     if (!amount) return;
-    
-    setIsProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate tx time
-    
+
     const numAmount = parseFloat(amount);
-    onTrade(selectedAsset, numAmount, orderType === 'BUY');
-    
-    setIsProcessing(false);
-    setAmount('');
-    alert(`Order Executed: ${orderType} $${amount} of ${selectedAsset.symbol}`);
+    if (!Number.isFinite(numAmount) || numAmount <= 0) {
+      setTradeError('Enter a valid USD amount greater than 0.');
+      return;
+    }
+
+    if (orderType === 'SELL' && !sellDisclosureAccepted) {
+      setTradeError('Please accept the sell fee disclosure and signature attestation.');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await onTrade(selectedAsset, numAmount, orderType === 'BUY', sellDisclosureAccepted);
+      setAmount('');
+    } catch (error: any) {
+      setTradeError(error?.message || 'Trade execution failed.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const getHoldings = (symbol: string) => {
@@ -106,6 +134,9 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
 
   const isPositive = selectedAsset.priceChange24h >= 0;
   const chartColor = isPositive ? '#00e599' : '#ef4444';
+  const numericAmount = Number.parseFloat(amount || '0');
+  const estimatedSellFee = numericAmount > 0 ? Math.round((3 + numericAmount * 0.03) * 100) / 100 : 0;
+  const estimatedSellNet = Math.max(0, numericAmount - estimatedSellFee);
 
   return (
     <div className="flex flex-col md:flex-row min-h-[calc(100dvh-56px)] md:min-h-[calc(100vh-64px)] overflow-hidden">
@@ -135,6 +166,12 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
               <span className="text-[9px] text-zinc-600 mt-1">Updated: {lastUpdated.toLocaleTimeString()}</span>
             </div>
           </div>
+
+          {priceFeedError && (
+            <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-300">
+              {priceFeedError}
+            </div>
+          )}
 
           {/* CHART */}
           <div className="h-[280px] sm:h-[400px] w-full relative group cursor-crosshair bg-[#050505]">
@@ -266,6 +303,43 @@ export const TradingDashboard: React.FC<Props> = ({ user, onTrade }) => {
                  <span>Est. Qty</span>
                  <span>{(parseFloat(amount) / selectedAsset.currentPrice).toFixed(6)} {selectedAsset.symbol}</span>
                </div>
+            )}
+
+            {orderType === 'BUY' && (
+              <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-2 text-[11px] text-zinc-400">
+                Buy fee: <span className="text-white font-mono">$0.00</span>
+              </div>
+            )}
+
+            {orderType === 'SELL' && amount && (
+              <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-2 text-[11px] text-zinc-400 space-y-1">
+                <div>
+                  Estimated sell fee: <span className="text-white font-mono">${estimatedSellFee.toFixed(2)}</span> (3% + $3)
+                </div>
+                <div>
+                  Estimated net payout: <span className="text-white font-mono">${estimatedSellNet.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
+            {orderType === 'SELL' && (
+              <label className="flex items-start gap-2 rounded-lg border border-zinc-800 bg-black/20 px-3 py-2 text-[11px] text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={sellDisclosureAccepted}
+                  onChange={(e) => setSellDisclosureAccepted(e.target.checked)}
+                  className="mt-0.5 accent-[#00e599]"
+                />
+                <span>
+                  I acknowledge the sell fee disclosure and digitally attest this order with my wallet session.
+                </span>
+              </label>
+            )}
+
+            {tradeError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-[11px] text-red-300">
+                {tradeError}
+              </div>
             )}
 
             <Button 

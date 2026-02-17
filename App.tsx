@@ -30,6 +30,10 @@ import { CustomerChatWidget } from './components/CustomerChatWidget';
 import { TradingDashboard } from './components/TradingDashboard'; 
 import { PitchDeck } from './components/PitchDeck';
 import { AnalyticsService } from './services/analyticsService';
+import { PaymentService } from './services/paymentService';
+import { TradingService as TradingApiService } from './services/tradingService';
+import { BrowserProvider } from 'ethers';
+import { FeatureFlagService } from './services/featureFlagService';
 
 type AppView = 'borrow' | 'lend' | 'trade' | 'mentorship' | 'profile' | 'knowledge_base';
 
@@ -51,6 +55,14 @@ const MOCK_CHARITIES: Charity[] = [
 const FIRST_VISIT_PITCH_DECK_KEY = 'p3_has_seen_pitch_deck';
 const QUICK_SWITCH_SOURCE_EMAIL = 'mattjhagen@ymail.com';
 const QUICK_SWITCH_TARGET_ADMIN_EMAIL = 'admin@p3lending.space';
+const DEFAULT_RESTRICTION_MESSAGE = 'Your account is restricted due to default. Please contact support with explanation.';
+
+const isFinanciallyRestricted = (profile: UserProfile | null) => {
+  if (!profile) return false;
+  if (profile.defaultFlag) return true;
+  const normalizedStatus = String(profile.accountStatus || 'ACTIVE').toUpperCase();
+  return normalizedStatus === 'DEFAULTED' || normalizedStatus === 'SUSPENDED';
+};
 
 const App: React.FC = () => {
   const [appReady, setAppReady] = useState(false);
@@ -304,6 +316,7 @@ const App: React.FC = () => {
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (isFinanciallyRestricted(user)) { alert(DEFAULT_RESTRICTION_MESSAGE); return; }
     if (!wallet.isConnected) { alert("Please connect your wallet first."); setShowWalletModal(true); return; }
     if (loanAmount > user.kycLimit) { alert(`Loan amount exceeds your KYC limit ($${user.kycLimit}).`); setShowKYCModal(true); return; }
     const newRequest: LoanRequest = {
@@ -334,6 +347,15 @@ const App: React.FC = () => {
       return; 
     } 
     if (!user) return;
+    if (isFinanciallyRestricted(user)) {
+      alert(DEFAULT_RESTRICTION_MESSAGE);
+      return;
+    }
+    if (user.balance < req.amount) {
+      alert('Insufficient balance to fund this loan. Add funds via Stripe or transfer BTC first.');
+      setActiveView('profile');
+      return;
+    }
 
     try {
       // 1. Call the Contract Service (Real/Simulated Transaction)
@@ -387,63 +409,183 @@ const App: React.FC = () => {
   const handleAdminPasswordReset = async (newPassword: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); const updatedEmp: EmployeeProfile = { ...matchedEmp, passwordHash: newPassword, passwordLastSet: Date.now() }; await PersistenceService.updateEmployee(updatedEmp); setAdminUser(updatedEmp); setIsQuickAdminSession(false); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); alert("Password successfully reset."); } catch (e) { console.error(e); alert("Failed."); } };
   
   const handleProfileUpdate = async (updatedUser: UserProfile) => { if (!user) return; setUser(updatedUser); await PersistenceService.saveUser(updatedUser); };
-  const handleDeposit = async (amount: number) => { if (!user) return; const updatedUser = await PersistenceService.processDeposit(user, amount); setUser(updatedUser); alert(`Successfully deposited $${amount}. New Balance: $${updatedUser.balance}`); };
+  const handleDeposit = async (amount: number) => {
+    if (!user) throw new Error('You must be logged in to make a deposit.');
+    if (!Number.isFinite(amount) || amount < 1) {
+      throw new Error('Deposit amount must be at least $1.');
+    }
+
+    const session = await PaymentService.createDepositCheckoutSession({
+      amountUsd: amount,
+      userId: user.id,
+      userEmail: user.email || '',
+    });
+    window.location.assign(session.checkoutUrl);
+  };
   const handleKYCUpgrade = (newTier: KYCTier, limit: number, docData?: any) => { setUser(prev => { if (!prev) return null; const updated = { ...prev, kycTier: newTier === KYCTier.TIER_2 ? prev.kycTier : newTier, kycStatus: newTier === KYCTier.TIER_2 ? KYCStatus.PENDING : KYCStatus.VERIFIED, kycLimit: newTier === KYCTier.TIER_2 ? prev.kycLimit : limit, documents: docData ? docData : prev.documents }; PersistenceService.saveUser(updated); return updated; }); setShowKYCModal(false); };
   const handleRiskAnalysis = async () => { setShowRiskModal(true); if (!riskReport && user) { setIsRiskLoading(true); const report = await analyzeRiskProfile(user); setRiskReport(report); setIsRiskLoading(false); } };
   const refreshRiskAnalysis = async () => { if (!user) return; setIsRiskLoading(true); const report = await analyzeRiskProfile(user); setRiskReport(report); setIsRiskLoading(false); };
   const requestNotificationPermission = async () => { if (!('Notification' in window)) return; const permission = await Notification.requestPermission(); if (permission === 'granted') setNotificationsEnabled(true); };
 
   // New Trading Handler
-  const handleTrade = (asset: Asset, amount: number, isBuy: boolean) => {
+  const handleTrade = async (asset: Asset, amount: number, isBuy: boolean, sellDisclosureAccepted: boolean) => {
     if (!user) return;
-    
-    // Create new portfolio array if it doesn't exist
-    let newPortfolio: PortfolioItem[] = user.portfolio ? [...user.portfolio] : [];
-    let newBalance = user.balance;
+    if (!FeatureFlagService.isEnabled('ENABLE_TRADING_EXECUTION')) {
+      throw new Error('Trading execution is disabled by BETA feature flags.');
+    }
+    if (isFinanciallyRestricted(user)) {
+      throw new Error(DEFAULT_RESTRICTION_MESSAGE);
+    }
 
-    if (isBuy) {
-      if (user.balance < amount) {
-        alert("Insufficient funds");
-        return;
+    if (!isBuy && !sellDisclosureAccepted) {
+      throw new Error('Sell fee disclosure must be accepted before executing a sell order.');
+    }
+
+    let sellDisclosureSignature = '';
+    if (!isBuy) {
+      if (!wallet.isConnected || !wallet.address) {
+        throw new Error('Connect your wallet to sign the sell fee disclosure.');
       }
-      newBalance -= amount;
-      
-      const existing = newPortfolio.find(p => p.symbol === asset.symbol);
-      const qty = amount / asset.currentPrice;
-      
+
+      const ethereumProvider = (window as any).ethereum;
+      if (!ethereumProvider) {
+        throw new Error('No wallet provider detected for EIP-712 signature.');
+      }
+
+      const provider = new BrowserProvider(ethereumProvider);
+      const signer = await provider.getSigner();
+      const chainId = Number((await provider.getNetwork()).chainId);
+      const timestamp = Math.floor(Date.now() / 1000);
+      sellDisclosureSignature = await signer.signTypedData(
+        {
+          name: 'P3 Lending Sell Disclosure',
+          version: '1',
+          chainId,
+        },
+        {
+          SellDisclosure: [
+            { name: 'userId', type: 'string' },
+            { name: 'symbol', type: 'string' },
+            { name: 'amountUsd', type: 'string' },
+            { name: 'feePolicy', type: 'string' },
+            { name: 'timestamp', type: 'uint256' },
+          ],
+        },
+        {
+          userId: user.id,
+          symbol: asset.symbol,
+          amountUsd: amount.toFixed(2),
+          feePolicy: '3USD+3%',
+          timestamp,
+        }
+      );
+    }
+
+    const side = isBuy ? 'BUY' : 'SELL';
+    const preview = await TradingApiService.previewOrder({
+      userId: user.id,
+      symbol: asset.symbol,
+      side,
+      amountUsd: amount,
+    });
+
+    const confirmMessage = [
+      `${side} ${asset.symbol}`,
+      `Gross: $${preview.grossAmountUsd.toFixed(2)}`,
+      `Fee: $${preview.feeUsd.toFixed(2)}`,
+      `${isBuy ? 'Estimated Qty' : 'Estimated Qty To Sell'}: ${preview.estimatedQuantity.toFixed(8)} ${asset.symbol}`,
+      isBuy ? '' : `Net Payout: $${preview.netAmountUsd.toFixed(2)}`,
+      `Price: $${preview.priceUsd.toFixed(2)}`,
+      '',
+      'Continue?'
+    ].filter(Boolean).join('\n');
+
+    const shouldProceed = window.confirm(confirmMessage);
+    if (!shouldProceed) {
+      throw new Error('Order cancelled.');
+    }
+
+    const execution = await TradingApiService.executeOrder({
+      userId: user.id,
+      symbol: asset.symbol,
+      side,
+      amountUsd: amount,
+      sellDisclosureSignature,
+    });
+
+    let newPortfolio: PortfolioItem[] = user.portfolio ? [...user.portfolio] : [];
+    if (isBuy) {
+      const existing = newPortfolio.find((item) => item.symbol === asset.symbol);
       if (existing) {
-        const totalValueOld = existing.amount * existing.avgBuyPrice;
-        const totalValueNew = qty * asset.currentPrice;
-        const newTotalQty = existing.amount + qty;
-        existing.avgBuyPrice = (totalValueOld + totalValueNew) / newTotalQty;
-        existing.amount = newTotalQty;
+        const oldValue = existing.amount * existing.avgBuyPrice;
+        const newValue = execution.quantity * execution.priceUsd;
+        const nextQuantity = existing.amount + execution.quantity;
+        existing.amount = nextQuantity;
+        existing.avgBuyPrice = (oldValue + newValue) / nextQuantity;
       } else {
         newPortfolio.push({
           assetId: asset.id,
           symbol: asset.symbol,
-          amount: qty,
-          avgBuyPrice: asset.currentPrice
+          amount: execution.quantity,
+          avgBuyPrice: execution.priceUsd,
         });
       }
     } else {
-      const existing = newPortfolio.find(p => p.symbol === asset.symbol);
-      const qtyToSell = amount / asset.currentPrice;
-      
-      if (!existing || existing.amount < qtyToSell) {
-        alert("Insufficient holdings");
-        return;
-      }
-      
-      newBalance += amount;
-      existing.amount -= qtyToSell;
-      if (existing.amount <= 0.000001) {
-        newPortfolio = newPortfolio.filter(p => p.symbol !== asset.symbol);
+      const existing = newPortfolio.find((item) => item.symbol === asset.symbol);
+      if (existing) {
+        existing.amount = existing.amount - execution.quantity;
+        if (existing.amount <= 0.00000001) {
+          newPortfolio = newPortfolio.filter((item) => item.symbol !== asset.symbol);
+        }
       }
     }
 
-    const updatedUser = { ...user, balance: newBalance, portfolio: newPortfolio };
+    const updatedUser = {
+      ...user,
+      balance: execution.balanceUsd,
+      portfolio: newPortfolio,
+    };
+
     setUser(updatedUser);
-    PersistenceService.saveUser(updatedUser);
+    await PersistenceService.saveUser(updatedUser);
+
+    alert(
+      `${side} completed.\nFee: $${execution.feeUsd.toFixed(2)}\n${isBuy ? `Qty: ${execution.quantity.toFixed(8)} ${asset.symbol}` : `Net payout: $${execution.netAmountUsd.toFixed(2)}`}`
+    );
+  };
+
+  const handleWithdrawal = async (amount: number, method: 'STRIPE' | 'BTC', destination: string) => {
+    if (!user) throw new Error('You must be logged in to withdraw.');
+    if (!FeatureFlagService.isEnabled('ENABLE_WITHDRAWALS')) {
+      throw new Error('Withdrawals are disabled by BETA feature flags.');
+    }
+    if (isFinanciallyRestricted(user)) {
+      throw new Error(DEFAULT_RESTRICTION_MESSAGE);
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('Withdrawal amount must be greater than 0.');
+    }
+    if (!destination.trim()) {
+      throw new Error('A payout destination is required.');
+    }
+
+    const result = await TradingApiService.requestWithdrawal({
+      userId: user.id,
+      method,
+      amountUsd: amount,
+      destination,
+    });
+
+    const updatedUser = {
+      ...user,
+      balance: result.balanceUsd,
+    };
+    setUser(updatedUser);
+    await PersistenceService.saveUser(updatedUser);
+
+    alert(
+      `Withdrawal submitted via ${result.method}.\nFee: $${result.feeUsd.toFixed(2)}\nPayout: $${result.payoutAmountUsd.toFixed(2)}\nNew Balance: $${result.balanceUsd.toFixed(2)}`
+    );
   };
 
   if (!appReady) return <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
@@ -698,7 +840,14 @@ const App: React.FC = () => {
                  </div>
                )}
 
-               {activeView === 'profile' && <ProfileSettings user={user} onSave={handleProfileUpdate} onDeposit={handleDeposit} />}
+               {activeView === 'profile' && (
+                 <ProfileSettings
+                   user={user}
+                   onSave={handleProfileUpdate}
+                   onDeposit={handleDeposit}
+                   onWithdraw={handleWithdrawal}
+                 />
+               )}
              </div>
              {activeView !== 'trade' && <Footer onOpenLegal={(type) => setActiveLegalDoc(type)} />}
           </div>
