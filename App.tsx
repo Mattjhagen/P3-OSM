@@ -49,6 +49,8 @@ const MOCK_CHARITIES: Charity[] = [
 ];
 
 const FIRST_VISIT_PITCH_DECK_KEY = 'p3_has_seen_pitch_deck';
+const QUICK_SWITCH_SOURCE_EMAIL = 'mattjhagen@ymail.com';
+const QUICK_SWITCH_TARGET_ADMIN_EMAIL = 'admin@p3lending.space';
 
 const App: React.FC = () => {
   const [appReady, setAppReady] = useState(false);
@@ -58,6 +60,7 @@ const App: React.FC = () => {
   
   const [user, setUser] = useState<UserProfile | null>(null);
   const [adminUser, setAdminUser] = useState<EmployeeProfile | null>(null);
+  const [isQuickAdminSession, setIsQuickAdminSession] = useState(false);
 
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [pendingAdminEmail, setPendingAdminEmail] = useState('');
@@ -126,6 +129,7 @@ const App: React.FC = () => {
     setIsVerifyingEmail(false); 
     setIsAuthenticated(true);
     setShowLanding(false);
+    setIsQuickAdminSession(false);
     
     const email = netlifyUser.email || '';
 
@@ -252,12 +256,49 @@ const App: React.FC = () => {
     setShowLanding(true);
     setUser(null);
     setAdminUser(null);
+    setIsQuickAdminSession(false);
     setMyRequests([]);
     setMyOffers([]);
     setShowAdminLogin(false);
     setPendingAdminEmail('');
     AnalyticsService.recordLogout();
     AuthService.logout();
+  };
+
+  const handleOpenAdminConsoleQuickSwitch = async () => {
+    if (!user) return;
+    const normalizedUserEmail = (user.email || '').toLowerCase();
+    if (normalizedUserEmail !== QUICK_SWITCH_SOURCE_EMAIL) {
+      alert('Quick admin console access is not enabled for this account.');
+      return;
+    }
+
+    try {
+      const employees = await PersistenceService.getEmployees();
+      const matchedAdmin = employees.find(
+        (employee) =>
+          employee.isActive &&
+          employee.email.toLowerCase() === QUICK_SWITCH_TARGET_ADMIN_EMAIL
+      );
+
+      if (!matchedAdmin) {
+        alert(`Active admin profile not found for ${QUICK_SWITCH_TARGET_ADMIN_EMAIL}.`);
+        return;
+      }
+
+      setAdminUser(matchedAdmin);
+      setIsQuickAdminSession(true);
+      setShowAdminLogin(false);
+      setPendingAdminEmail('');
+    } catch (error) {
+      console.error('Quick admin console switch failed', error);
+      alert('Failed to open admin console. Please try again.');
+    }
+  };
+
+  const handleExitAdminToUser = () => {
+    setAdminUser(null);
+    setIsQuickAdminSession(false);
   };
 
   const handleCreateRequest = async (e: React.FormEvent) => {
@@ -342,8 +383,8 @@ const App: React.FC = () => {
   const handleRepayLoan = async (req: LoanRequest) => { if (!user) return; const platformFee = req.amount * 0.02; const charityDonation = platformFee * 0.5; const updatedReq = { ...req, status: 'REPAID' as const }; await PersistenceService.saveRequest(updatedReq); await refreshGlobalData(); if (req.charityId) { setCharities(prev => prev.map(c => c.id === req.charityId ? { ...c, totalRaised: c.totalRaised + charityDonation } : c)); } const updatedUser = { ...user, successfulRepayments: user.successfulRepayments + 1, currentStreak: user.currentStreak + 1 }; setUser(updatedUser); await PersistenceService.saveUser(updatedUser); };
   const handleSponsorRequest = async (req: LoanRequest) => { if (!user) return; if (!wallet.isConnected) { setShowWalletModal(true); return; } const updatedReq = { ...req, status: 'ACTIVE' as const, mentorId: user.id }; await PersistenceService.saveRequest(updatedReq); await refreshGlobalData(); const updatedUser = { ...user, mentorshipsCount: (user.mentorshipsCount || 0) + 1, totalSponsored: (user.totalSponsored || 0) + req.amount }; setUser(updatedUser); await PersistenceService.saveUser(updatedUser); };
 
-  const handleAdminPasswordLogin = async (password: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); if (password === matchedEmp.passwordHash || matchedEmp.passwordHash === 'temp123' || password === 'admin123') { if (SecurityService.isPasswordExpired(matchedEmp.passwordLastSet)) { alert("Password expired. Please update."); } setAdminUser(matchedEmp); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); } else { alert("Invalid Password"); } } catch (e) { console.error(e); alert("Login failed."); } };
-  const handleAdminPasswordReset = async (newPassword: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); const updatedEmp: EmployeeProfile = { ...matchedEmp, passwordHash: newPassword, passwordLastSet: Date.now() }; await PersistenceService.updateEmployee(updatedEmp); setAdminUser(updatedEmp); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); alert("Password successfully reset."); } catch (e) { console.error(e); alert("Failed."); } };
+  const handleAdminPasswordLogin = async (password: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); if (password === matchedEmp.passwordHash || matchedEmp.passwordHash === 'temp123' || password === 'admin123') { if (SecurityService.isPasswordExpired(matchedEmp.passwordLastSet)) { alert("Password expired. Please update."); } setAdminUser(matchedEmp); setIsQuickAdminSession(false); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); } else { alert("Invalid Password"); } } catch (e) { console.error(e); alert("Login failed."); } };
+  const handleAdminPasswordReset = async (newPassword: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); const updatedEmp: EmployeeProfile = { ...matchedEmp, passwordHash: newPassword, passwordLastSet: Date.now() }; await PersistenceService.updateEmployee(updatedEmp); setAdminUser(updatedEmp); setIsQuickAdminSession(false); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); alert("Password successfully reset."); } catch (e) { console.error(e); alert("Failed."); } };
   
   const handleProfileUpdate = async (updatedUser: UserProfile) => { if (!user) return; setUser(updatedUser); await PersistenceService.saveUser(updatedUser); };
   const handleDeposit = async (amount: number) => { if (!user) return; const updatedUser = await PersistenceService.processDeposit(user, amount); setUser(updatedUser); alert(`Successfully deposited $${amount}. New Balance: $${updatedUser.balance}`); };
@@ -479,12 +520,22 @@ const App: React.FC = () => {
     );
   }
 
-  if (adminUser) return <AdminDashboard currentAdmin={adminUser} onLogout={handleLogout} />;
+  if (adminUser) {
+    return (
+      <AdminDashboard
+        currentAdmin={adminUser}
+        onLogout={handleLogout}
+        onExitToUser={isQuickAdminSession ? handleExitAdminToUser : undefined}
+      />
+    );
+  }
 
   // ... Rest of the App logic (dashboard render) is identical ...
   if (activeView === 'knowledge_base') return <><LegalModal type={activeLegalDoc} onClose={() => setActiveLegalDoc(null)} /><KnowledgeBase onBack={() => setActiveView('borrow')} onOpenLegal={(type) => setActiveLegalDoc(type)} /></>;
 
   if (user) {
+    const canQuickSwitchToAdmin = (user.email || '').toLowerCase() === QUICK_SWITCH_SOURCE_EMAIL;
+
     const NavItem = ({ view, label, icon }: { view: AppView, label: string, icon: React.ReactNode }) => (
       <button
         onClick={() => {
@@ -564,6 +615,16 @@ const App: React.FC = () => {
                 </button>
                 <Button size="sm" variant="secondary" onClick={handleRiskAnalysis} className="border border-zinc-700 hidden sm:inline-flex"><span className="mr-1">🛡️</span> Risk Profile</Button>
                 <Button size="sm" variant="secondary" onClick={handleRiskAnalysis} className="border border-zinc-700 sm:hidden px-3">🛡️</Button>
+                {canQuickSwitchToAdmin && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-500/40 text-amber-300 hover:text-amber-200"
+                    onClick={handleOpenAdminConsoleQuickSwitch}
+                  >
+                    Admin Console
+                  </Button>
+                )}
                 {wallet.isConnected ? (
                   <>
                     <div className="hidden sm:flex items-center gap-3 bg-zinc-900/80 pl-4 pr-1 py-1 rounded-full border border-zinc-800">

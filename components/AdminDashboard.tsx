@@ -30,9 +30,10 @@ declare global {
 interface Props {
   currentAdmin: EmployeeProfile;
   onLogout: () => void;
+  onExitToUser?: () => void;
 }
 
-export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
+export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExitToUser }) => {
   const [activeTab, setActiveTab] = useState<
     'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE'
   >('OVERVIEW');
@@ -746,6 +747,16 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout }) => {
             </h1>
           </div>
           <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
+             {onExitToUser && (
+               <Button
+                 size="sm"
+                 variant="outline"
+                 className="border-amber-500/40 text-amber-300 hover:text-amber-200"
+                 onClick={onExitToUser}
+               >
+                 Return to User App
+               </Button>
+             )}
              <button 
                onClick={() => setIsChatOpen(!isChatOpen)}
                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all 
