@@ -19,6 +19,8 @@ export const validatedEnv = cleanEnv(process.env, {
   SUPABASE_URL: url({ desc: 'Supabase project URL for backend service operations' }),
   SUPABASE_ANON_KEY: str({ desc: 'Supabase anon key for RLS-scoped user queries' }),
   SUPABASE_SERVICE_ROLE_KEY: str({ desc: 'Supabase service role key for privileged server access' }),
+  STRIPE_SECRET_KEY: str({ default: '', desc: 'Stripe secret key for creating checkout sessions' }),
+  STRIPE_WEBHOOK_SECRET: str({ default: '', desc: 'Stripe webhook signing secret' }),
   ETH_RPC_URL: str({ default: 'http://127.0.0.1:8545' }),
   P3_PROTOCOL_ADDRESS: str({ default: '0x0000000000000000000000000000000000000000' }),
 });
