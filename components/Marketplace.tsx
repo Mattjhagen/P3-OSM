@@ -36,6 +36,13 @@ export const Marketplace: React.FC<Props> = ({
     setMatches(prev => ({ ...prev, [req.id]: results }));
   };
 
+  const handleAcceptOffer = (requestId: string | null) => {
+    if (!requestId) return;
+    const matchedRequest = activeRequests.find((request) => request.id === requestId);
+    if (!matchedRequest) return;
+    onFundRequest(matchedRequest);
+  };
+
   const getStatusColor = (status: string) => {
     switch(status) {
       case 'MATCHED': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
@@ -272,7 +279,14 @@ export const Marketplace: React.FC<Props> = ({
                         </p>
                       </div>
                       
-                      <Button size="sm" className="w-full group-hover:bg-[#00e599] group-hover:text-black transition-colors">Accept Offer</Button>
+                      <Button
+                        size="sm"
+                        className="w-full group-hover:bg-[#00e599] group-hover:text-black transition-colors"
+                        onClick={() => handleAcceptOffer(selectedRequest)}
+                        disabled={!selectedRequest}
+                      >
+                        Accept Offer
+                      </Button>
                     </div>
                   );
                 })

@@ -28,6 +28,43 @@ const INITIAL_USER_TEMPLATE: UserProfile = {
 const BASE_WAITLIST_COUNT = 4291;
 const truncate = (value: string, max = 400) => (value.length > max ? `${value.slice(0, max - 3)}...` : value);
 
+const toMillis = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const direct = Number(value);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const parsedDate = new Date(value).getTime();
+    if (Number.isFinite(parsedDate) && parsedDate > 0) return parsedDate;
+  }
+  return Date.now();
+};
+
+const parseChatType = (value: unknown): 'INTERNAL' | 'CUSTOMER_SUPPORT' =>
+  String(value || '').toUpperCase() === 'INTERNAL' ? 'INTERNAL' : 'CUSTOMER_SUPPORT';
+
+const toChatMessage = (row: any): ChatMessage | null => {
+  const payload = row?.data && typeof row.data === 'object' ? row.data : {};
+  const id = String(payload.id || row?.id || '').trim();
+  const senderId = String(payload.senderId || row?.sender_id || '').trim();
+  const message = String(payload.message || row?.message || '').trim();
+
+  if (!id || !senderId || !message) return null;
+
+  const threadIdRaw = payload.threadId || row?.thread_id || undefined;
+  const threadId = typeof threadIdRaw === 'string' && threadIdRaw.trim() ? threadIdRaw : undefined;
+
+  return {
+    id,
+    senderId,
+    senderName: String(payload.senderName || row?.sender_name || 'User'),
+    role: (payload.role || row?.role || 'CUSTOMER') as ChatMessage['role'],
+    message,
+    timestamp: toMillis(payload.timestamp || row?.created_at),
+    type: parseChatType(payload.type || row?.type),
+    threadId,
+  };
+};
+
 // NOTE: All methods are now ASYNC because they hit the database.
 export const PersistenceService = {
   
@@ -332,8 +369,19 @@ export const PersistenceService = {
   // --- Chat & Realtime ---
 
   getChatHistory: async (): Promise<ChatMessage[]> => {
-    const { data } = await supabase.from('chats').select('*').order('created_at', { ascending: false }).limit(200);
-    return data ? data.map((r: any) => r.data).reverse() : [];
+    const { data, error } = await supabase.from('chats').select('*').limit(500);
+
+    if (error) {
+      throw new Error(`Failed to load chat history: ${error.message}`);
+    }
+
+    const parsed = (data || [])
+      .map((row: any) => toChatMessage(row))
+      .filter((msg): msg is ChatMessage => Boolean(msg))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    if (parsed.length <= 200) return parsed;
+    return parsed.slice(parsed.length - 200);
   },
 
   addChatMessage: async (msg: ChatMessage) => {

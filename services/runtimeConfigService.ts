@@ -12,7 +12,8 @@ export type RuntimeConfigKey =
   | 'PLAID_CLIENT_ID'
   | 'PLAID_SECRET'
   | 'PLAID_ENV'
-  | 'BETA_FEATURE_FLAGS';
+  | 'BETA_FEATURE_FLAGS'
+  | 'SELL_CRYPTO_ACCOUNTS';
 
 export interface RuntimeConfigEntry {
   value: string;
@@ -39,6 +40,7 @@ const VALID_KEYS: RuntimeConfigKey[] = [
   'PLAID_SECRET',
   'PLAID_ENV',
   'BETA_FEATURE_FLAGS',
+  'SELL_CRYPTO_ACCOUNTS',
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

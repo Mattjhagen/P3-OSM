@@ -246,7 +246,7 @@ export const PaymentController = {
                         quantity: 1,
                     },
                 ],
-                success_url: `${frontendBaseUrl}/?deck=true&donation=success&session_id={CHECKOUT_SESSION_ID}`,
+                success_url: `${frontendBaseUrl}/Thanks?donation=success&session_id={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${frontendBaseUrl}/?deck=true&donation=cancelled`,
                 customer_email: donorEmail || undefined,
                 allow_promotion_codes: true,

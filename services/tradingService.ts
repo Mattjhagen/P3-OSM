@@ -2,11 +2,43 @@ import { frontendEnv } from './env';
 import { RuntimeConfigService } from './runtimeConfigService';
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+const normalizeBackendBaseUrl = (value: string) =>
+  trimTrailingSlash(value).replace(/\/api$/i, '');
 
 const getBackendBaseUrl = () =>
-  trimTrailingSlash(
+  normalizeBackendBaseUrl(
     RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
   );
+
+const parseSellCryptoAccounts = (): Record<string, string> => {
+  const raw = RuntimeConfigService.getConfigValue('SELL_CRYPTO_ACCOUNTS');
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+
+    return Object.entries(parsed as Record<string, unknown>).reduce<Record<string, string>>(
+      (acc, [symbol, destination]) => {
+        const normalizedSymbol = String(symbol || '').trim().toUpperCase();
+        const normalizedDestination = String(destination || '').trim();
+        if (!normalizedSymbol || !normalizedDestination) return acc;
+        acc[normalizedSymbol] = normalizedDestination;
+        return acc;
+      },
+      {}
+    );
+  } catch {
+    return {};
+  }
+};
+
+const resolveSettlementAccount = (symbol: string): string | undefined => {
+  const normalizedSymbol = symbol.trim().toUpperCase();
+  if (!normalizedSymbol) return undefined;
+  const accounts = parseSellCryptoAccounts();
+  return accounts[normalizedSymbol];
+};
 
 const normalizeFetchError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error || '');
@@ -133,7 +165,14 @@ export const TradingService = {
     side: 'BUY' | 'SELL';
     amountUsd: number;
     sellDisclosureSignature?: string;
+    settlementAccount?: string;
   }) => {
+    const symbol = String(payload.symbol || '').trim().toUpperCase();
+    const settlementAccount =
+      payload.side === 'SELL'
+        ? String(payload.settlementAccount || '').trim() || resolveSettlementAccount(symbol)
+        : undefined;
+
     let response: Response;
     try {
       response = await fetch(`${getBackendBaseUrl()}/api/trading/orders/execute`, {
@@ -141,7 +180,11 @@ export const TradingService = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          symbol,
+          settlementAccount,
+        }),
       });
     } catch (error) {
       throw new Error(normalizeFetchError(error));

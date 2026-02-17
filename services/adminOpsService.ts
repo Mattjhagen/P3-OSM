@@ -50,6 +50,8 @@ interface IntegrationDefinition {
 }
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+const normalizeBackendBaseUrl = (value: string) =>
+  trimTrailingSlash(value).replace(/\/api$/i, '');
 const parseBooleanLike = (value: string) => ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
 
 const isMissingTableError = (message: string, tableName: string) => {
@@ -197,6 +199,17 @@ const createIntegrationDefinitions = (): IntegrationDefinition[] => {
       envValue: viteEnv.VITE_BETA_FEATURE_FLAGS || '',
       fallbackValue: '{}',
     },
+    {
+      key: 'SELL_CRYPTO_ACCOUNTS',
+      label: 'Sell Crypto Accounts',
+      description:
+        'JSON map of settlement destinations per symbol. Example: {"BTC":"acct_stripe_btc","ETH":"0xabc..."}',
+      required: false,
+      isSecret: false,
+      inputType: 'text',
+      envValue: viteEnv.VITE_SELL_CRYPTO_ACCOUNTS || '',
+      fallbackValue: '{}',
+    },
   ];
 };
 
@@ -287,6 +300,18 @@ const addKeyStateAlerts = (
     });
   }
 
+  if (status.key === 'BACKEND_URL' && /\/api\/?$/i.test(status.effectiveValue || '')) {
+    alerts.push({
+      id: 'backend-url-api-suffix',
+      severity: 'warning',
+      title: 'Backend URL should not include /api',
+      detail:
+        'The API client appends /api paths automatically. Keeping /api in BACKEND_URL can cause endpoint mismatches.',
+      action: 'Set BACKEND_URL to the backend root domain only (example: https://p3-lending-protocol.onrender.com).',
+      integrationKey: 'BACKEND_URL',
+    });
+  }
+
   if (status.key === 'STRIPE_DONATE_URL' && status.source === 'fallback') {
     alerts.push({
       id: `${status.key}-fallback`,
@@ -360,6 +385,21 @@ const addKeyStateAlerts = (
     }
   }
 
+  if (status.key === 'SELL_CRYPTO_ACCOUNTS') {
+    try {
+      JSON.parse(status.effectiveValue || '{}');
+    } catch {
+      alerts.push({
+        id: 'sell-crypto-accounts-invalid-json',
+        severity: 'warning',
+        title: 'Sell crypto account mapping JSON is invalid',
+        detail: 'Sell orders cannot attach per-symbol settlement accounts until this JSON is valid.',
+        action: 'Update SELL_CRYPTO_ACCOUNTS with a valid JSON object.',
+        integrationKey: 'SELL_CRYPTO_ACCOUNTS',
+      });
+    }
+  }
+
   if (status.runtimeEntry) {
     const ninetyDays = 90 * 24 * 60 * 60 * 1000;
     if (Date.now() - status.runtimeEntry.updatedAt > ninetyDays) {
@@ -392,7 +432,7 @@ export const AdminOpsService = {
     const backendConfig = integrations.find((item) => item.key === 'BACKEND_URL');
     if (backendConfig?.effectiveValue) {
       try {
-        const healthUrl = `${trimTrailingSlash(backendConfig.effectiveValue)}/health`;
+        const healthUrl = `${normalizeBackendBaseUrl(backendConfig.effectiveValue)}/health`;
         const response = await fetch(healthUrl, { method: 'GET' });
         if (!response.ok) {
           throw new Error(`Backend health check returned ${response.status}`);
@@ -427,11 +467,13 @@ export const AdminOpsService = {
           });
         }
       } catch (error) {
+        const healthUrl = `${normalizeBackendBaseUrl(backendConfig.effectiveValue)}/health`;
+        const message = error instanceof Error ? error.message : String(error || 'Unknown error');
         alerts.push({
           id: 'backend-health',
           severity: 'critical',
           title: 'Backend health check failed',
-          detail: 'The configured backend URL did not respond to /health.',
+          detail: `Could not reach ${healthUrl}. ${message}`,
           action: 'Update Backend API URL or restore backend service availability.',
           integrationKey: 'BACKEND_URL',
         });
@@ -454,6 +496,38 @@ export const AdminOpsService = {
         detail: 'Admin dashboard could not query waitlist data from Supabase.',
         action: 'Verify Supabase URL/anon key and RLS/policies.',
       });
+    }
+
+    try {
+      const { error } = await supabase
+        .from('live_sessions')
+        .select('session_id', { head: true, count: 'exact' })
+        .limit(1);
+      if (error) {
+        throw error;
+      }
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      if (isMissingTableError(message, 'live_sessions')) {
+        alerts.push({
+          id: 'live-sessions-missing',
+          severity: 'critical',
+          title: "Supabase table 'live_sessions' is missing",
+          detail:
+            'Live user graph and attribution metrics are unavailable until live_sessions exists.',
+          action:
+            'Run Supabase migration 20260217021000_live_sessions_and_analytics.sql.',
+        });
+      } else {
+        alerts.push({
+          id: 'live-sessions-query-failed',
+          severity: 'warning',
+          title: 'Live sessions query failed',
+          detail:
+            'Live network graph data is currently unavailable due to a Supabase query error.',
+          action: 'Review Supabase logs and table permissions for live_sessions.',
+        });
+      }
     }
 
     try {

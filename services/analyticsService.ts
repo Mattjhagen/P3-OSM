@@ -43,6 +43,35 @@ const HEARTBEAT_MS = 30_000;
 let sessionState: SessionState | null = null;
 let heartbeatTimer: number | null = null;
 let started = false;
+let liveSessionsTableAvailable = true;
+let analyticsEventsTableAvailable = true;
+const missingTableWarnings = new Set<string>();
+
+const isMissingTableError = (message: string, tableName: string) => {
+  const normalized = (message || '').toLowerCase();
+  return (
+    normalized.includes(`could not find the table 'public.${tableName}'`) ||
+    normalized.includes(`relation "${tableName}" does not exist`) ||
+    (normalized.includes(tableName.toLowerCase()) && normalized.includes('schema cache'))
+  );
+};
+
+const markTableUnavailable = (tableName: 'live_sessions' | 'analytics_events', message: string) => {
+  if (tableName === 'live_sessions') {
+    liveSessionsTableAvailable = false;
+  } else {
+    analyticsEventsTableAvailable = false;
+    ClientLogService.setRemoteSink(null);
+  }
+
+  const warningKey = `${tableName}:${message}`;
+  if (missingTableWarnings.has(warningKey)) return;
+  missingTableWarnings.add(warningKey);
+
+  console.warn(
+    `AnalyticsService disabled ${tableName} writes: ${message}. Apply Supabase migrations 20260217021000_live_sessions_and_analytics.sql and 20260217024500_analytics_events_user_indexes.sql.`
+  );
+};
 
 const getNowIso = () => new Date().toISOString();
 
@@ -202,6 +231,7 @@ const fetchGeoLocation = async (): Promise<{
 
 const upsertSession = async (patch: Partial<SessionState> = {}) => {
   if (!sessionState) return;
+  if (!liveSessionsTableAvailable) return;
 
   const nextState = { ...sessionState, ...patch };
   sessionState = nextState;
@@ -235,7 +265,11 @@ const upsertSession = async (patch: Partial<SessionState> = {}) => {
       ignoreDuplicates: false,
     });
     if (error) {
-      console.warn('AnalyticsService session upsert failed', error.message);
+      if (isMissingTableError(error.message, 'live_sessions')) {
+        markTableUnavailable('live_sessions', error.message);
+      } else {
+        console.warn('AnalyticsService session upsert failed', error.message);
+      }
     }
   });
 };
@@ -246,6 +280,7 @@ const insertEvent = async (
   metadata: Record<string, unknown> = {}
 ) => {
   if (!sessionState) return;
+  if (!analyticsEventsTableAvailable) return;
 
   await ClientLogService.withMutedCapture(async () => {
     const { error } = await supabase.from('analytics_events').insert({
@@ -258,7 +293,11 @@ const insertEvent = async (
       created_at: getNowIso(),
     });
     if (error) {
-      console.warn('AnalyticsService event insert failed', error.message);
+      if (isMissingTableError(error.message, 'analytics_events')) {
+        markTableUnavailable('analytics_events', error.message);
+      } else {
+        console.warn('AnalyticsService event insert failed', error.message);
+      }
     }
   });
 };
@@ -335,7 +374,9 @@ export const AnalyticsService = {
       landingPath: window.location.pathname,
     });
 
-    startHeartbeat();
+    if (liveSessionsTableAvailable) {
+      startHeartbeat();
+    }
   },
 
   identifyAuthenticatedUser: async (payload: { userId: string; email?: string }) => {
@@ -368,6 +409,10 @@ export const AnalyticsService = {
   flushAndStop: async () => {
     stopHeartbeat();
     if (!sessionState) return;
+    if (!liveSessionsTableAvailable) {
+      ClientLogService.setRemoteSink(null);
+      return;
+    }
     await ClientLogService.withMutedCapture(async () => {
       const { error } = await supabase
         .from('live_sessions')

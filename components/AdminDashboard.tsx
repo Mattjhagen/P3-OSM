@@ -82,6 +82,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     PLAID_SECRET: '',
     PLAID_ENV: 'sandbox',
     BETA_FEATURE_FLAGS: '{}',
+    SELL_CRYPTO_ACCOUNTS: '{}',
   });
   const [clientLogs, setClientLogs] = useState<ClientLogEntry[]>([]);
   const [externalLogText, setExternalLogText] = useState('');
@@ -445,6 +446,9 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     return 'text-blue-400 border-blue-500/40 bg-blue-900/20';
   };
 
+  const isJsonIntegration = (key: RuntimeConfigKey) =>
+    key === 'BETA_FEATURE_FLAGS' || key === 'SELL_CRYPTO_ACCOUNTS';
+
   const handleTabChange = (
     tab: 'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE'
   ) => {
@@ -456,6 +460,67 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     ClientLogService.clearLogs();
     refreshClientLogs();
     setOpsMessage('Client logs cleared.');
+  };
+
+  const downloadUserLogsCsv = () => {
+    const rows = filteredRemoteUserLogs;
+    if (rows.length === 0) {
+      setOpsMessage('No user logs available to export for the current filter.');
+      return;
+    }
+
+    const escapeCsv = (value: unknown) => {
+      const normalized = String(value ?? '').replace(/\r?\n/g, ' ').replace(/"/g, '""');
+      return `"${normalized}"`;
+    };
+
+    const headers = [
+      'timestamp',
+      'email',
+      'user_id',
+      'session_id',
+      'level',
+      'source',
+      'message',
+      'context',
+    ];
+
+    const lines = [
+      headers.join(','),
+      ...rows.map((log) =>
+        [
+          log.timestamp,
+          log.email,
+          log.userId,
+          log.sessionId,
+          log.level,
+          log.source,
+          log.message,
+          log.context,
+        ]
+          .map(escapeCsv)
+          .join(',')
+      ),
+    ];
+
+    const csvContent = lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filterName = selectedUserLogFilter === 'ALL'
+      ? 'all-users'
+      : selectedUserLogFilter.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+    const filename = `p3-user-logs-${filterName}-${timestamp}.csv`;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setOpsMessage(`Exported ${rows.length} user log rows to CSV.`);
   };
 
   const analyzeLogsWithAI = async () => {
@@ -1177,6 +1242,9 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
                       <Button size="sm" variant="outline" onClick={loadRemoteUserLogs} isLoading={isRemoteUserLogsLoading}>
                         Refresh User Logs
                       </Button>
+                      <Button size="sm" variant="ghost" onClick={downloadUserLogsCsv}>
+                        Download CSV
+                      </Button>
                     </div>
                   </div>
 
@@ -1334,13 +1402,22 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
                       <label className="text-[10px] uppercase tracking-wide text-zinc-500 font-bold">
                         {integration.isSecret ? 'Add Or Rotate Secret' : 'Update Value'}
                       </label>
-                      <input
-                        type={integration.inputType}
-                        value={opsDrafts[integration.key] || ''}
-                        onChange={(e) => handleOpsDraftChange(integration.key, e.target.value)}
-                        placeholder={integration.isSecret ? `Enter ${integration.label}` : integration.effectiveValue}
-                        className="w-full bg-black border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-[#00e599] outline-none"
-                      />
+                      {isJsonIntegration(integration.key) ? (
+                        <textarea
+                          value={opsDrafts[integration.key] || ''}
+                          onChange={(e) => handleOpsDraftChange(integration.key, e.target.value)}
+                          placeholder={integration.effectiveValue || '{}'}
+                          className="w-full min-h-[96px] bg-black border border-zinc-700 rounded px-3 py-2 text-xs font-mono text-white focus:border-[#00e599] outline-none"
+                        />
+                      ) : (
+                        <input
+                          type={integration.inputType}
+                          value={opsDrafts[integration.key] || ''}
+                          onChange={(e) => handleOpsDraftChange(integration.key, e.target.value)}
+                          placeholder={integration.isSecret ? `Enter ${integration.label}` : integration.effectiveValue}
+                          className="w-full bg-black border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-[#00e599] outline-none"
+                        />
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">

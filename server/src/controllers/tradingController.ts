@@ -75,7 +75,7 @@ export const TradingController = {
 
   executeOrder: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { userId, symbol, side, amountUsd, sellDisclosureSignature } = req.body || {};
+      const { userId, symbol, side, amountUsd, sellDisclosureSignature, settlementAccount } = req.body || {};
 
       const result = await TradingService.executeOrder({
         userId: String(userId || ''),
@@ -83,6 +83,7 @@ export const TradingController = {
         side: side === 'SELL' ? 'SELL' : 'BUY',
         amountUsd: Number(amountUsd || 0),
         sellDisclosureSignature: typeof sellDisclosureSignature === 'string' ? sellDisclosureSignature : undefined,
+        settlementAccount: typeof settlementAccount === 'string' ? settlementAccount : undefined,
       });
 
       return res.status(200).json({

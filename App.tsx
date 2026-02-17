@@ -29,6 +29,7 @@ import { KnowledgeBase } from './components/KnowledgeBase';
 import { CustomerChatWidget } from './components/CustomerChatWidget';
 import { TradingDashboard } from './components/TradingDashboard'; 
 import { PitchDeck } from './components/PitchDeck';
+import { DonationThankYouPage } from './components/DonationThankYouPage';
 import { AnalyticsService } from './services/analyticsService';
 import { PaymentService } from './services/paymentService';
 import { TradingService as TradingApiService } from './services/tradingService';
@@ -100,6 +101,7 @@ const App: React.FC = () => {
   
   // New: Pitch Deck State
   const [showPitchDeck, setShowPitchDeck] = useState(false);
+  const [showDonationThankYou, setShowDonationThankYou] = useState(false);
   
   const [riskReport, setRiskReport] = useState<RiskReport | null>(null);
   const [isRiskLoading, setIsRiskLoading] = useState(false);
@@ -218,14 +220,32 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const refCode = params.get('ref');
     const deckMode = params.get('deck');
+    const donationStatus = params.get('donation');
+    const thankYouMode = params.get('thank_you');
+    const sessionId = params.get('session_id');
+    const isThanksPath = window.location.pathname.toLowerCase() === '/thanks';
     const hasSeenPitchDeck = localStorage.getItem(FIRST_VISIT_PITCH_DECK_KEY) === 'true';
+    const shouldShowDonationThankYou =
+      isThanksPath ||
+      donationStatus === 'success' ||
+      thankYouMode === 'donation' ||
+      thankYouMode === 'investor';
 
     if (refCode) {
       localStorage.setItem('p3_pending_ref', refCode);
       params.delete('ref');
     }
 
-    if (deckMode === 'true') {
+    if (shouldShowDonationThankYou) {
+      setShowDonationThankYou(true);
+      params.delete('donation');
+      params.delete('thank_you');
+      params.delete('session_id');
+      params.delete('deck');
+      if (!isThanksPath) {
+        window.history.replaceState({}, document.title, '/Thanks');
+      }
+    } else if (deckMode === 'true') {
       setShowPitchDeck(true);
       localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
       params.delete('deck');
@@ -235,7 +255,7 @@ const App: React.FC = () => {
       localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
     }
 
-    if (refCode || deckMode) {
+    if (refCode || deckMode || donationStatus || thankYouMode || sessionId) {
       const nextQuery = params.toString();
       const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
       window.history.replaceState({}, document.title, nextUrl);
@@ -311,6 +331,21 @@ const App: React.FC = () => {
   const handleExitAdminToUser = () => {
     setAdminUser(null);
     setIsQuickAdminSession(false);
+  };
+
+  const handleCloseDonationThankYou = () => {
+    setShowDonationThankYou(false);
+    if (window.location.pathname.toLowerCase() === '/thanks') {
+      window.history.replaceState({}, document.title, '/');
+    }
+  };
+
+  const handleViewPitchDeckFromThankYou = () => {
+    setShowDonationThankYou(false);
+    if (window.location.pathname.toLowerCase() === '/thanks') {
+      window.history.replaceState({}, document.title, '/');
+    }
+    setShowPitchDeck(true);
   };
 
   const handleCreateRequest = async (e: React.FormEvent) => {
@@ -589,6 +624,15 @@ const App: React.FC = () => {
   };
 
   if (!appReady) return <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
+
+  if (showDonationThankYou) {
+    return (
+      <DonationThankYouPage
+        onContinue={handleCloseDonationThankYou}
+        onViewPitchDeck={handleViewPitchDeckFromThankYou}
+      />
+    );
+  }
 
   // Handle Pitch Deck Mode
   if (showPitchDeck) return <PitchDeck onClose={() => setShowPitchDeck(false)} />;

@@ -13,6 +13,34 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
+  const normalizeIncomingMessage = (row: any): ChatMessage | null => {
+    const payload = row?.data && typeof row.data === 'object' ? row.data : {};
+    const id = String(payload.id || row?.id || '').trim();
+    const senderId = String(payload.senderId || row?.sender_id || '').trim();
+    const message = String(payload.message || row?.message || '').trim();
+    if (!id || !senderId || !message) return null;
+
+    const rawTimestamp = payload.timestamp || row?.created_at;
+    const timestamp =
+      typeof rawTimestamp === 'number'
+        ? rawTimestamp
+        : new Date(String(rawTimestamp || '')).getTime() || Date.now();
+
+    return {
+      id,
+      senderId,
+      senderName: String(payload.senderName || row?.sender_name || 'User'),
+      role: (payload.role || row?.role || 'CUSTOMER') as ChatMessage['role'],
+      message,
+      timestamp,
+      type:
+        String(payload.type || row?.type || '').toUpperCase() === 'INTERNAL'
+          ? 'INTERNAL'
+          : 'CUSTOMER_SUPPORT',
+      threadId: String(payload.threadId || row?.thread_id || '').trim() || undefined,
+    };
+  };
+
   useEffect(() => {
     const loadHistory = async () => {
       try {
@@ -35,14 +63,8 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
     const channel = supabase
       .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, (payload) => {
-        const newMsg = (payload.new.data || {
-          id: payload.new.id,
-          senderId: payload.new.sender_id,
-          message: payload.new.message,
-          type: payload.new.type,
-          threadId: payload.new.thread_id,
-          timestamp: new Date(payload.new.created_at).getTime()
-        }) as ChatMessage;
+        const newMsg = normalizeIncomingMessage(payload.new);
+        if (!newMsg) return;
 
         const isRelevant = isAdmin || newMsg.threadId === threadId;
         if (isRelevant) {

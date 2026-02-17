@@ -30,6 +30,7 @@ export interface ExecuteTradePayload {
   side: 'BUY' | 'SELL';
   amountUsd: number;
   sellDisclosureSignature?: string;
+  settlementAccount?: string;
 }
 
 export interface ExecuteTradeResult {
@@ -100,6 +101,8 @@ export const TradingService = {
   async executeOrder(payload: ExecuteTradePayload): Promise<ExecuteTradeResult> {
     const preview = await this.previewOrder(payload);
     const existingProfile = await UserDataService.getProfile(payload.userId);
+    const settlementAccount =
+      preview.side === 'SELL' ? String(payload.settlementAccount || '').trim() || null : null;
     TransactionGuardService.validateUserStatus(existingProfile);
 
     if (preview.side === 'BUY') {
@@ -194,6 +197,7 @@ export const TradingService = {
       provider: getProviderName(),
       metadata: {
         sell_disclosure_signature: payload.sellDisclosureSignature || null,
+        settlement_account: settlementAccount,
       },
     });
 
@@ -211,6 +215,7 @@ export const TradingService = {
         quantity: preview.estimatedQuantity,
         price_usd: preview.priceUsd,
         sell_disclosure_signature: payload.sellDisclosureSignature || null,
+        settlement_account: settlementAccount,
       },
     });
 
@@ -224,6 +229,7 @@ export const TradingService = {
       metadata: {
         provider: 'stripe',
         symbol: preview.symbol,
+        settlement_account: settlementAccount,
       },
     });
 

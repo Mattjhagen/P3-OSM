@@ -2,9 +2,11 @@ import { frontendEnv } from './env';
 import { RuntimeConfigService } from './runtimeConfigService';
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+const normalizeBackendBaseUrl = (value: string) =>
+  trimTrailingSlash(value).replace(/\/api$/i, '');
 
 const getBackendBaseUrl = () =>
-  trimTrailingSlash(
+  normalizeBackendBaseUrl(
     RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
   );
 

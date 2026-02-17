@@ -5,9 +5,11 @@ import { supabase } from '../supabaseClient';
 type NotificationCategory = 'chat_request' | 'manual_review' | 'ticket' | 'risk_alert';
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+const normalizeBackendBaseUrl = (value: string) =>
+  trimTrailingSlash(value).replace(/\/api$/i, '');
 
 const getBackendBaseUrl = () =>
-  trimTrailingSlash(
+  normalizeBackendBaseUrl(
     RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
   );
 
@@ -69,4 +71,3 @@ export const AdminNotificationClient = {
     };
   },
 };
-
