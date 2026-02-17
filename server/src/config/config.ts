@@ -26,6 +26,17 @@ export const config = {
         serviceFeeTaxable: validatedEnv.STRIPE_SERVICE_FEE_TAXABLE,
         serviceDefaultTaxCode: validatedEnv.STRIPE_SERVICE_DEFAULT_TAX_CODE,
         serviceCatalogJson: validatedEnv.STRIPE_SERVICE_CATALOG_JSON,
+        identity: {
+            enabled: validatedEnv.STRIPE_IDENTITY_ENABLED,
+            requireLiveCapture: validatedEnv.STRIPE_IDENTITY_REQUIRE_LIVE_CAPTURE,
+            requireMatchingSelfie: validatedEnv.STRIPE_IDENTITY_REQUIRE_MATCHING_SELFIE,
+            requireIdNumber: validatedEnv.STRIPE_IDENTITY_REQUIRE_ID_NUMBER,
+            allowedDocTypes: validatedEnv.STRIPE_IDENTITY_ALLOWED_DOC_TYPES
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean),
+            verificationFlowId: validatedEnv.STRIPE_IDENTITY_VERIFICATION_FLOW_ID.trim(),
+        },
     },
     compliance: {
         statementSigningSecret: validatedEnv.STATEMENT_SIGNING_SECRET,

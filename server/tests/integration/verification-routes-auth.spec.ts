@@ -5,6 +5,26 @@ import { VerificationService } from '../../src/services/verificationService';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 describe('Verification routes auth and behavior', () => {
+  it('validates userId for Stripe Identity session creation', async () => {
+    const response = await request(app)
+      .post('/api/verification/stripe/session')
+      .send({ requestedTier: 2 });
+
+    expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(String(response.body.error || '')).toContain('userId');
+  });
+
+  it('returns service unavailable when Stripe Identity is not configured', async () => {
+    const response = await request(app)
+      .post('/api/verification/stripe/session')
+      .send({ userId: USER_ID, requestedTier: 2 });
+
+    expect(response.status).toBe(503);
+    expect(response.body.success).toBe(false);
+    expect(String(response.body.error || '')).toContain('Stripe is not configured');
+  });
+
   it('requires auth for KYC submission', async () => {
     const response = await request(app)
       .post('/api/verification/kyc')

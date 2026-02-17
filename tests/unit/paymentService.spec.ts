@@ -52,6 +52,19 @@ describe('PaymentService.createDonationCheckoutSession', () => {
       })
     ).rejects.toThrow('Stripe is not configured on the server.');
   });
+
+  it('falls back to hosted Stripe donation link when backend is unreachable', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
+    (globalThis as any).fetch = fetchMock;
+
+    const result = await PaymentService.createDonationCheckoutSession({
+      amountUsd: 25,
+      source: 'unit_test',
+    });
+
+    expect(result.checkoutUrl).toBe('https://buy.stripe.com/14A6oH5Nb72t38K1VEaIM00');
+    expect(result.sessionId).toBe('hosted_link');
+  });
 });
 
 describe('PaymentService.createDepositCheckoutSession', () => {

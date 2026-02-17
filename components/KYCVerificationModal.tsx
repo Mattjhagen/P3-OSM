@@ -1,252 +1,481 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from './Button';
-import { performComplianceCheck } from '../services/geminiService';
 import { KYCTier } from '../types';
+import {
+  StripeKycSessionStatusDto,
+  VerificationServiceClient,
+} from '../services/verificationService';
 
 interface Props {
   currentTier: KYCTier;
+  userId: string;
+  userEmail?: string;
   onClose: () => void;
   onUpgradeComplete: (newTier: KYCTier, limit: number, docData?: any) => void;
 }
 
-export const KYCVerificationModal: React.FC<Props> = ({ currentTier, onClose, onUpgradeComplete }) => {
-  const [step, setStep] = useState(1);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  const idInputRef = useRef<HTMLInputElement>(null);
-  const faceInputRef = useRef<HTMLInputElement>(null);
+const KYC_SESSION_STORAGE_KEY = 'p3_kyc_last_session_id';
 
-  // Form Data
+const tierToNumber = (tier: KYCTier) => {
+  if (tier === KYCTier.TIER_1) return 1;
+  if (tier === KYCTier.TIER_2) return 2;
+  if (tier === KYCTier.TIER_3) return 3;
+  return 0;
+};
+
+const numberToTier = (value: number): KYCTier => {
+  if (value >= 3) return KYCTier.TIER_3;
+  if (value >= 2) return KYCTier.TIER_2;
+  if (value >= 1) return KYCTier.TIER_1;
+  return KYCTier.TIER_0;
+};
+
+const tierToLimit = (tier: number) => {
+  if (tier >= 3) return 1000000;
+  if (tier >= 2) return 50000;
+  if (tier >= 1) return 1000;
+  return 0;
+};
+
+const getTierInfo = (tier: KYCTier) => {
+  switch (tier) {
+    case KYCTier.TIER_1:
+      return {
+        title: 'Basic Verification',
+        limit: '$1,000',
+        req: 'Legal Name, DOB, Address, Phone, Email, SSN Last 4, Annual Salary',
+      };
+    case KYCTier.TIER_2:
+      return {
+        title: 'Verified Identity',
+        limit: '$50,000',
+        req: 'Photo ID + Live Selfie + ID Number + Profile Intake',
+      };
+    case KYCTier.TIER_3:
+      return {
+        title: 'Enhanced Due Diligence',
+        limit: '$1,000,000',
+        req: 'Enhanced manual review and source-of-funds checks',
+      };
+    default:
+      return {
+        title: 'Unverified',
+        limit: '$0',
+        req: '',
+      };
+  }
+};
+
+const sanitizeSessionParams = () => {
+  const params = new URLSearchParams(window.location.search || '');
+  const keysToDelete = ['kyc', 'session_id'];
+  let changed = false;
+
+  for (const key of keysToDelete) {
+    if (params.has(key)) {
+      params.delete(key);
+      changed = true;
+    }
+  }
+
+  if (!changed) return;
+
+  const nextQuery = params.toString();
+  const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
+  window.history.replaceState({}, document.title, nextUrl);
+};
+
+const formatStatusLabel = (status: string) => {
+  const normalized = String(status || '').replace(/_/g, ' ').trim();
+  if (!normalized) return 'UNKNOWN';
+  return normalized.toUpperCase();
+};
+
+export const KYCVerificationModal: React.FC<Props> = ({
+  currentTier,
+  userId,
+  userEmail,
+  onClose,
+  onUpgradeComplete,
+}) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
+  const [error, setError] = useState('');
+  const [sessionStatus, setSessionStatus] = useState<StripeKycSessionStatusDto | null>(null);
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     dob: '',
     address: '',
-    ssn: '',
-    docType: 'drivers_license',
-    idFile: null as string | null,
-    faceFile: null as string | null
+    phone: '',
+    email: userEmail || '',
+    ssnLast4: '',
+    annualSalaryUsd: '',
   });
 
-  const nextTier = currentTier === KYCTier.TIER_0 ? KYCTier.TIER_1 : 
-                   currentTier === KYCTier.TIER_1 ? KYCTier.TIER_2 : KYCTier.TIER_3;
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      email: userEmail || prev.email,
+    }));
+  }, [userEmail]);
 
-  const getTierInfo = (tier: KYCTier) => {
-    switch(tier) {
-      case KYCTier.TIER_1: return { title: 'Basic Verification', limit: '$1,000', req: 'Legal Name, DOB, Address' };
-      case KYCTier.TIER_2: return { title: 'Verified Identity', limit: '$50,000', req: 'Government ID, Facial Scan' };
-      case KYCTier.TIER_3: return { title: 'Enhanced Due Diligence', limit: 'Unlimited', req: 'Source of Funds, Financial Statements' };
-      default: return { title: 'Unverified', limit: '$0', req: '' };
-    }
-  };
+  const nextTier = useMemo(() => {
+    if (currentTier === KYCTier.TIER_0) return KYCTier.TIER_1;
+    if (currentTier === KYCTier.TIER_1) return KYCTier.TIER_2;
+    return KYCTier.TIER_3;
+  }, [currentTier]);
 
   const targetInfo = getTierInfo(nextTier);
+  const targetTierNumber = tierToNumber(nextTier);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'idFile' | 'faceFile') => {
-    if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setFormData(prev => ({ ...prev, [field]: ev.target?.result as string }));
-      };
-      reader.readAsDataURL(e.target.files[0]);
+  const refreshLatestStatus = async () => {
+    const sessionFromStorage = localStorage.getItem(KYC_SESSION_STORAGE_KEY) || '';
+    const params = new URLSearchParams(window.location.search || '');
+    const sessionFromQuery = String(params.get('session_id') || '').trim();
+    const sessionId = sessionFromQuery || sessionFromStorage;
+
+    if (!sessionId) {
+      setError('No Stripe verification session found. Start verification to continue.');
+      return;
+    }
+
+    setIsRefreshingStatus(true);
+    setError('');
+    try {
+      const status = await VerificationServiceClient.getStripeIdentitySessionStatus({
+        userId,
+        sessionId,
+        refresh: true,
+      });
+      setSessionStatus(status);
+
+      if (status.status === 'verified' && !status.requiresManualReview) {
+        localStorage.removeItem(KYC_SESSION_STORAGE_KEY);
+        sanitizeSessionParams();
+
+        const finalTier = numberToTier(status.requestedTier || targetTierNumber);
+        const finalLimit = tierToLimit(status.requestedTier || targetTierNumber);
+
+        onUpgradeComplete(finalTier, finalLimit, {
+          provider: 'stripe_identity',
+          sessionId: status.sessionId,
+          status: status.status,
+          submittedAt: Date.now(),
+          verificationUrl: status.verificationUrl,
+        });
+        return;
+      }
+
+      if (status.status === 'requires_input' && status.verificationUrl) {
+        setError('Stripe needs additional input. Use Continue Verification to complete checks.');
+      } else if (status.requiresManualReview) {
+        setError('Verification is pending manual review. Admin team has been notified.');
+      } else if (status.status !== 'verified') {
+        setError('Verification is still in progress. Refresh status after completing Stripe checks.');
+      }
+    } catch (statusError: any) {
+      setError(statusError?.message || 'Unable to fetch Stripe verification status.');
+    } finally {
+      setIsRefreshingStatus(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsProcessing(true);
-    
-    // Simulate API delay and AI check
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search || '');
+    const shouldResume = params.get('kyc') === 'stripe-return';
+
+    if (!shouldResume) return;
+
+    refreshLatestStatus();
+  }, [userId]);
+
+  const validateForm = () => {
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      return 'Enter your legal first and last name.';
+    }
+
+    if (!formData.dob.trim()) {
+      return 'Date of birth is required.';
+    }
+
+    if (!formData.address.trim()) {
+      return 'Residential address is required.';
+    }
+
+    if (!formData.phone.trim()) {
+      return 'Phone number is required.';
+    }
+
+    if (!formData.email.trim()) {
+      return 'Email is required.';
+    }
+
+    const ssnDigits = formData.ssnLast4.replace(/\D+/g, '');
+    if (ssnDigits.length !== 4) {
+      return 'Enter SSN last 4 digits.';
+    }
+
+    const salary = Number(formData.annualSalaryUsd);
+    if (!Number.isFinite(salary) || salary < 0) {
+      return 'Enter a valid annual salary in USD.';
+    }
+
+    return '';
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      const result = await performComplianceCheck({
-        name: `${formData.firstName} ${formData.lastName}`,
-        dob: formData.dob,
-        address: formData.address,
-        ssnLast4: formData.ssn.slice(-4),
-        docType: nextTier === KYCTier.TIER_2 ? 'ID Uploaded (Manual Review Queued)' : 'Public Records Match (eIDV)'
+      const response = await VerificationServiceClient.createStripeIdentitySession({
+        userId,
+        userEmail: formData.email.trim(),
+        userPhone: formData.phone.trim(),
+        requestedTier: targetTierNumber,
+        returnUrl: `${window.location.origin}/profile?kyc=stripe-return`,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        dob: formData.dob.trim(),
+        address: formData.address.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim(),
+        ssnLast4: formData.ssnLast4.trim(),
+        annualSalaryUsd: Number(formData.annualSalaryUsd),
       });
 
-      if (result.passed) {
-         setTimeout(() => {
-            const newLimit = nextTier === KYCTier.TIER_1 ? 1000 : nextTier === KYCTier.TIER_2 ? 50000 : 1000000;
-            
-            const docData = {
-              idType: formData.docType,
-              idFile: formData.idFile,
-              faceFile: formData.faceFile,
-              submittedAt: Date.now()
-            };
-
-            onUpgradeComplete(nextTier, newLimit, docData);
-            setIsProcessing(false);
-         }, 2000);
-      } else {
-        alert(`Verification Failed: ${result.reasoning}`);
-        setIsProcessing(false);
+      if (!response.sessionId) {
+        throw new Error('Stripe did not return a verification session id.');
       }
-    } catch (err) {
-      console.error(err);
-      setIsProcessing(false);
+
+      localStorage.setItem(KYC_SESSION_STORAGE_KEY, response.sessionId);
+
+      if (!response.url) {
+        throw new Error('Stripe did not return a hosted verification URL.');
+      }
+
+      onUpgradeComplete(nextTier, tierToLimit(targetTierNumber), {
+        provider: 'stripe_identity',
+        sessionId: response.sessionId,
+        status: response.status || 'processing',
+        submittedAt: Date.now(),
+        verificationUrl: response.url,
+        requiresManualReview: false,
+      });
+
+      window.location.assign(response.url);
+    } catch (submitError: any) {
+      setError(submitError?.message || 'Unable to start Stripe Identity verification.');
+      setIsSubmitting(false);
     }
   };
+
+  const hasSessionToRefresh = Boolean(localStorage.getItem(KYC_SESSION_STORAGE_KEY));
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-      <div className="bg-[#0a0a0a] border border-zinc-800 rounded-3xl max-w-lg w-full shadow-[0_0_50px_rgba(0,229,153,0.05)] overflow-hidden animate-fade-in relative max-h-[90vh] overflow-y-auto custom-scrollbar">
-        
-        {/* Decorative Grid Background */}
-        <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none"></div>
+      <div className="bg-[#0a0a0a] border border-zinc-800 rounded-3xl max-w-xl w-full shadow-[0_0_50px_rgba(0,229,153,0.05)] overflow-hidden animate-fade-in relative max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none" />
 
         <div className="bg-zinc-900/50 p-6 border-b border-zinc-800 flex justify-between items-center relative z-10">
           <div>
             <h2 className="text-xl font-bold text-white tracking-tight">Identity Verification</h2>
-            <p className="text-xs text-zinc-500 mt-1">Compliance per Nebraska & Federal Regulations</p>
+            <p className="text-xs text-zinc-500 mt-1">Stripe Identity KYC flow</p>
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
         </div>
 
         <div className="p-8 relative z-10">
-          <div className="mb-8 bg-gradient-to-br from-[#00e599]/10 to-emerald-900/10 border border-[#00e599]/20 rounded-2xl p-5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-[#00e599]/10 blur-2xl rounded-full"></div>
-            
+          <div className="mb-6 bg-gradient-to-br from-[#00e599]/10 to-emerald-900/10 border border-[#00e599]/20 rounded-2xl p-5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-[#00e599]/10 blur-2xl rounded-full" />
+
             <h3 className="text-[#00e599] font-bold uppercase text-[10px] tracking-widest mb-2">Upgrading to</h3>
-            <div className="flex justify-between items-end">
-               <span className="text-2xl font-bold text-white">{targetInfo.title}</span>
-               <span className="text-[#00e599] font-mono font-bold bg-[#00e599]/10 border border-[#00e599]/20 px-2 py-0.5 rounded text-sm">{targetInfo.limit} Limit</span>
+            <div className="flex justify-between items-end gap-4">
+              <span className="text-2xl font-bold text-white">{targetInfo.title}</span>
+              <span className="text-[#00e599] font-mono font-bold bg-[#00e599]/10 border border-[#00e599]/20 px-2 py-0.5 rounded text-sm">
+                {targetInfo.limit} Limit
+              </span>
             </div>
-            <p className="text-xs text-zinc-400 mt-3 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00e599] shadow-[0_0_5px_#00e599]"></span>
-              Requires: {targetInfo.req}
-            </p>
+            <p className="text-xs text-zinc-400 mt-3">Requires: {targetInfo.req}</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {step === 1 && (
-              <>
-                <div className="grid grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">First Name</label>
-                    <input 
-                      required
-                      type="text" 
-                      className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
-                      value={formData.firstName}
-                      onChange={e => setFormData({...formData, firstName: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">Last Name</label>
-                    <input 
-                      required
-                      type="text" 
-                      className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
-                      value={formData.lastName}
-                      onChange={e => setFormData({...formData, lastName: e.target.value})}
-                    />
-                  </div>
+          {sessionStatus && (
+            <div className="mb-4 rounded-xl border border-zinc-700 bg-zinc-900/70 p-3 text-sm text-zinc-200">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">Stripe Status</span>
+                <span className="font-mono text-xs">{formatStatusLabel(sessionStatus.status)}</span>
+              </div>
+              <div className="mt-2 text-xs text-zinc-400">Session: {sessionStatus.sessionId}</div>
+              {sessionStatus.requiresManualReview && (
+                <div className="mt-2 text-xs text-amber-300">
+                  Manual review required. Admin team has been notified.
                 </div>
-                <div>
-                   <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">Date of Birth</label>
-                   <input 
-                      required
-                      type="date" 
-                      className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
-                      value={formData.dob}
-                      onChange={e => setFormData({...formData, dob: e.target.value})}
-                    />
-                </div>
-                <div>
-                   <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">Residential Address</label>
-                   <input 
-                      required
-                      type="text" 
-                      className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
-                      value={formData.address}
-                      onChange={e => setFormData({...formData, address: e.target.value})}
-                    />
-                </div>
-                <div>
-                   <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">SSN / TIN (Last 4)</label>
-                   <input 
-                      required
-                      type="password" 
-                      maxLength={4}
-                      placeholder="••••"
-                      className="w-32 bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none tracking-[0.5em] text-center"
-                      value={formData.ssn}
-                      onChange={e => setFormData({...formData, ssn: e.target.value})}
-                    />
-                </div>
+              )}
+            </div>
+          )}
 
-                {nextTier >= KYCTier.TIER_2 && (
-                  <div className="border-t border-zinc-800 pt-5 mt-5">
-                    <h4 className="text-white font-bold text-sm mb-4">Document Uploads</h4>
-                    
-                    {/* ID Upload */}
-                    <div className="mb-4">
-                      <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">Government ID (Driver's License / Passport)</label>
-                      <div 
-                        onClick={() => idInputRef.current?.click()}
-                        className="border border-dashed border-zinc-700 bg-black/50 rounded-xl p-4 cursor-pointer hover:border-[#00e599] transition-colors flex items-center justify-center gap-3"
-                      >
-                         {formData.idFile ? (
-                           <div className="text-[#00e599] flex items-center gap-2 text-sm font-bold">
-                             ✓ Document Loaded
-                           </div>
-                         ) : (
-                           <span className="text-zinc-500 text-sm">Click to upload ID</span>
-                         )}
-                      </div>
-                      <input 
-                        type="file" 
-                        ref={idInputRef} 
-                        className="hidden" 
-                        accept="image/*" 
-                        onChange={(e) => handleFileChange(e, 'idFile')}
-                      />
-                    </div>
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+              {error}
+            </div>
+          )}
 
-                    {/* Face Scan */}
-                    <div>
-                      <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">Selfie / Face Scan</label>
-                      <div 
-                        onClick={() => faceInputRef.current?.click()}
-                        className="border border-dashed border-zinc-700 bg-black/50 rounded-xl p-4 cursor-pointer hover:border-[#00e599] transition-colors flex items-center justify-center gap-3"
-                      >
-                         {formData.faceFile ? (
-                           <div className="text-[#00e599] flex items-center gap-2 text-sm font-bold">
-                             ✓ Face Scanned
-                           </div>
-                         ) : (
-                           <span className="text-zinc-500 text-sm">Click to upload Selfie</span>
-                         )}
-                      </div>
-                      <input 
-                        type="file" 
-                        ref={faceInputRef} 
-                        className="hidden" 
-                        accept="image/*" 
-                        onChange={(e) => handleFileChange(e, 'faceFile')}
-                      />
-                    </div>
-                  </div>
-                )}
-                
-                <p className="text-[10px] text-zinc-600 mt-4 text-center max-w-xs mx-auto">
-                  Your data is encrypted and used solely for CIP (Customer Identification Program) compliance checks.
-                </p>
-              </>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">
+                  Legal First Name
+                </label>
+                <input
+                  required
+                  type="text"
+                  className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, firstName: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">
+                  Legal Last Name
+                </label>
+                <input
+                  required
+                  type="text"
+                  className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, lastName: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">DOB</label>
+                <input
+                  required
+                  type="date"
+                  className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
+                  value={formData.dob}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, dob: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">
+                  SSN Last 4
+                </label>
+                <input
+                  required
+                  type="password"
+                  maxLength={4}
+                  inputMode="numeric"
+                  className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
+                  value={formData.ssnLast4}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, ssnLast4: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">
+                Residential Address
+              </label>
+              <input
+                required
+                type="text"
+                className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
+                value={formData.address}
+                onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">Phone</label>
+                <input
+                  required
+                  type="tel"
+                  className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
+                  value={formData.phone}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">Email</label>
+                <input
+                  required
+                  type="email"
+                  className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
+                  value={formData.email}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-500 mb-2 uppercase tracking-wide font-bold">
+                Annual Salary (USD)
+              </label>
+              <input
+                required
+                type="number"
+                min="0"
+                step="1"
+                className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white text-sm focus:border-[#00e599] outline-none transition-colors"
+                value={formData.annualSalaryUsd}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, annualSalaryUsd: e.target.value }))
+                }
+              />
+            </div>
+
+            <p className="text-[11px] text-zinc-500">
+              You will be redirected to Stripe to complete photo ID + live selfie verification.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+              <Button type="submit" className="w-full" isLoading={isSubmitting}>
+                {isSubmitting ? 'Starting Stripe Verification...' : 'Start Stripe KYC'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={refreshLatestStatus}
+                isLoading={isRefreshingStatus}
+                disabled={!hasSessionToRefresh && !sessionStatus}
+              >
+                Refresh KYC Status
+              </Button>
+            </div>
+
+            {sessionStatus?.verificationUrl && sessionStatus.status === 'requires_input' && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => window.location.assign(String(sessionStatus.verificationUrl))}
+              >
+                Continue Verification
+              </Button>
             )}
-
-            <Button 
-               type="submit" 
-               className="w-full mt-6" 
-               isLoading={isProcessing}
-            >
-              {isProcessing ? 'Verifying Identity...' : (nextTier >= KYCTier.TIER_2 ? 'Submit for Review' : 'Confirm & Upgrade')}
-            </Button>
           </form>
         </div>
       </div>

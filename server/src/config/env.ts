@@ -55,6 +55,15 @@ export const validatedEnv = cleanEnv(process.env, {
   SMTP_SECURE: bool({ default: false, desc: 'Whether to use implicit TLS (typically true for port 465)' }),
   STRIPE_SECRET_KEY: str({ default: '', desc: 'Stripe secret key for creating checkout sessions' }),
   STRIPE_WEBHOOK_SECRET: str({ default: '', desc: 'Stripe webhook signing secret' }),
+  STRIPE_IDENTITY_ENABLED: bool({ default: true, desc: 'Enable Stripe Identity KYC/AML workflows' }),
+  STRIPE_IDENTITY_REQUIRE_LIVE_CAPTURE: bool({ default: true, desc: 'Require live camera capture during Stripe Identity verification' }),
+  STRIPE_IDENTITY_REQUIRE_MATCHING_SELFIE: bool({ default: true, desc: 'Require selfie match in Stripe Identity verification' }),
+  STRIPE_IDENTITY_REQUIRE_ID_NUMBER: bool({ default: true, desc: 'Require ID number check in Stripe Identity verification' }),
+  STRIPE_IDENTITY_ALLOWED_DOC_TYPES: str({ default: 'passport,id_card,driving_license', desc: 'Comma-separated allowed Stripe Identity document types' }),
+  STRIPE_IDENTITY_VERIFICATION_FLOW_ID: str({
+    default: '',
+    desc: 'Optional Stripe Identity Verification Flow id (from Dashboard verification flows)',
+  }),
   STATEMENT_SIGNING_SECRET: str({
     default: '',
     desc: 'Optional HMAC secret used to sign generated statements/disclosures',

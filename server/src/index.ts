@@ -16,6 +16,7 @@ import plaidRoutes from './routes/plaidRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import complianceRoutes from './routes/complianceRoutes';
 import { PaymentController } from './controllers/paymentController';
+import { VerificationController } from './controllers/verificationController';
 import { TradingController } from './controllers/tradingController';
 import { publicApiLimiter } from './middleware/rateLimiter';
 import { ComplianceService } from './services/complianceService';
@@ -28,6 +29,11 @@ export const createApp = () => {
 
     // Stripe webhook must receive raw body for signature verification.
     app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
+    app.post(
+        '/api/verification/stripe/webhook',
+        express.raw({ type: 'application/json' }),
+        VerificationController.handleStripeIdentityWebhook
+    );
 
     app.use(express.json());
 

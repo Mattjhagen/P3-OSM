@@ -4,10 +4,16 @@ import { RuntimeConfigService } from './runtimeConfigService';
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 const normalizeBackendBaseUrl = (value: string) =>
   trimTrailingSlash(value).replace(/\/api$/i, '');
+const DEFAULT_STRIPE_DONATE_URL = 'https://buy.stripe.com/14A6oH5Nb72t38K1VEaIM00';
 
 const getBackendBaseUrl = () =>
   normalizeBackendBaseUrl(
     RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
+  );
+const getHostedDonationUrl = () =>
+  RuntimeConfigService.getEffectiveValue(
+    'STRIPE_DONATE_URL',
+    frontendEnv.VITE_STRIPE_DONATE_URL || DEFAULT_STRIPE_DONATE_URL
   );
 
 export interface DonationCheckoutPayload {
@@ -33,6 +39,63 @@ export interface DepositCheckoutResult {
   sessionId: string;
 }
 
+export interface ServiceCatalogItem {
+  serviceType: string;
+  displayName: string;
+  description: string;
+  defaultAmountUsd: number;
+  minAmountUsd: number;
+  maxAmountUsd: number;
+  taxCode?: string | null;
+}
+
+export interface ServiceCheckoutPayload {
+  serviceType: string;
+  amountUsd?: number;
+  userId?: string;
+  userEmail?: string;
+  source?: string;
+}
+
+export interface ServiceCheckoutResult {
+  checkoutUrl: string;
+  sessionId: string;
+  serviceType: string;
+  baseAmountUsd: number;
+  serviceFeeUsd: number;
+  subtotalUsd: number;
+}
+
+export interface ServiceTaxQuotePayload {
+  serviceType: string;
+  amountUsd?: number;
+  customerAddress: {
+    country: string;
+    postalCode?: string;
+    state?: string;
+    city?: string;
+    line1?: string;
+    line2?: string;
+  };
+}
+
+export interface ServiceTaxQuoteResult {
+  calculationId: string;
+  serviceType: string;
+  displayName: string;
+  currency: string;
+  baseAmountUsd: number;
+  serviceFeeUsd: number;
+  subtotalUsd: number;
+  taxUsd: number;
+  totalUsd: number;
+  feePolicy: {
+    percent: number;
+    fixedUsd: number;
+    feeTaxable: boolean;
+  };
+}
+
 interface DonationCheckoutApiResponse {
   success: boolean;
   data?: DonationCheckoutResult;
@@ -43,6 +106,32 @@ interface DepositCheckoutApiResponse {
   success: boolean;
   data?: DepositCheckoutResult;
   url?: string;
+  error?: string;
+}
+
+interface ServiceCatalogApiResponse {
+  success: boolean;
+  data?: {
+    services: ServiceCatalogItem[];
+    stripeTaxEnabled: boolean;
+    serviceFeePolicy: {
+      percent: number;
+      fixedUsd: number;
+      feeTaxable: boolean;
+    };
+  };
+  error?: string;
+}
+
+interface ServiceCheckoutApiResponse {
+  success: boolean;
+  data?: ServiceCheckoutResult;
+  error?: string;
+}
+
+interface ServiceTaxQuoteApiResponse {
+  success: boolean;
+  data?: ServiceTaxQuoteResult;
   error?: string;
 }
 
@@ -76,6 +165,13 @@ export const PaymentService = {
         }
       );
     } catch (error) {
+      const hostedDonationUrl = getHostedDonationUrl();
+      if (hostedDonationUrl) {
+        return {
+          checkoutUrl: hostedDonationUrl,
+          sessionId: 'hosted_link',
+        };
+      }
       throw new Error(normalizeFetchError(error));
     }
 
@@ -134,5 +230,89 @@ export const PaymentService = {
       checkoutUrl,
       sessionId: responseBody?.data?.sessionId || '',
     };
+  },
+
+  getServiceCatalog: async () => {
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/payments/services/catalog`, {
+        method: 'GET',
+      });
+    } catch (error) {
+      throw new Error(normalizeFetchError(error));
+    }
+
+    let responseBody: ServiceCatalogApiResponse | null = null;
+    try {
+      responseBody = (await response.json()) as ServiceCatalogApiResponse;
+    } catch {
+      responseBody = null;
+    }
+
+    if (!response.ok || !responseBody?.success || !responseBody.data) {
+      throw new Error(responseBody?.error || 'Failed to load service catalog.');
+    }
+
+    return responseBody.data;
+  },
+
+  createServiceTaxQuote: async (
+    payload: ServiceTaxQuotePayload
+  ): Promise<ServiceTaxQuoteResult> => {
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/payments/services/tax-quote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      throw new Error(normalizeFetchError(error));
+    }
+
+    let responseBody: ServiceTaxQuoteApiResponse | null = null;
+    try {
+      responseBody = (await response.json()) as ServiceTaxQuoteApiResponse;
+    } catch {
+      responseBody = null;
+    }
+
+    if (!response.ok || !responseBody?.success || !responseBody.data) {
+      throw new Error(responseBody?.error || 'Failed to generate service tax quote.');
+    }
+
+    return responseBody.data;
+  },
+
+  createServiceCheckoutSession: async (
+    payload: ServiceCheckoutPayload
+  ): Promise<ServiceCheckoutResult> => {
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/payments/services/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      throw new Error(normalizeFetchError(error));
+    }
+
+    let responseBody: ServiceCheckoutApiResponse | null = null;
+    try {
+      responseBody = (await response.json()) as ServiceCheckoutApiResponse;
+    } catch {
+      responseBody = null;
+    }
+
+    if (!response.ok || !responseBody?.success || !responseBody.data?.checkoutUrl) {
+      throw new Error(responseBody?.error || 'Failed to create service checkout session.');
+    }
+
+    return responseBody.data;
   },
 };

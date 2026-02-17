@@ -93,7 +93,7 @@ const createIntegrationDefinitions = (): IntegrationDefinition[] => {
       isSecret: false,
       inputType: 'url',
       envValue: viteEnv.VITE_STRIPE_DONATE_URL || '',
-      fallbackValue: 'https://stripe.com/payments/checkout',
+      fallbackValue: 'https://buy.stripe.com/14A6oH5Nb72t38K1VEaIM00',
     },
     {
       key: 'BACKEND_URL',
@@ -312,7 +312,10 @@ const addKeyStateAlerts = (
     });
   }
 
-  if (status.key === 'STRIPE_DONATE_URL' && status.source === 'fallback') {
+  if (
+    status.key === 'STRIPE_DONATE_URL' &&
+    /stripe\.com\/payments\/checkout/i.test(status.effectiveValue)
+  ) {
     alerts.push({
       id: `${status.key}-fallback`,
       severity: 'warning',

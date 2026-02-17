@@ -225,6 +225,7 @@ const App: React.FC = () => {
     const donationStatus = params.get('donation');
     const thankYouMode = params.get('thank_you');
     const sessionId = params.get('session_id');
+    const kycStatus = params.get('kyc');
     const isThanksPath = window.location.pathname.toLowerCase() === '/thanks';
     const hasSeenPitchDeck = localStorage.getItem(FIRST_VISIT_PITCH_DECK_KEY) === 'true';
     const shouldShowDonationThankYou =
@@ -259,6 +260,8 @@ const App: React.FC = () => {
       if (!isThanksPath) {
         window.history.replaceState({}, document.title, '/Thanks');
       }
+    } else if (kycStatus === 'stripe-return') {
+      setShowKYCModal(true);
     } else if (deckMode === 'true') {
       setShowPitchDeck(true);
       localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
@@ -472,7 +475,26 @@ const App: React.FC = () => {
     });
     window.location.assign(session.checkoutUrl);
   };
-  const handleKYCUpgrade = (newTier: KYCTier, limit: number, docData?: any) => { setUser(prev => { if (!prev) return null; const updated = { ...prev, kycTier: newTier === KYCTier.TIER_2 ? prev.kycTier : newTier, kycStatus: newTier === KYCTier.TIER_2 ? KYCStatus.PENDING : KYCStatus.VERIFIED, kycLimit: newTier === KYCTier.TIER_2 ? prev.kycLimit : limit, documents: docData ? docData : prev.documents }; PersistenceService.saveUser(updated); return updated; }); setShowKYCModal(false); };
+  const handleKYCUpgrade = (newTier: KYCTier, limit: number, docData?: any) => {
+    setUser((prev) => {
+      if (!prev) return null;
+
+      const stripeStatus = String(docData?.status || '').toLowerCase();
+      const requiresManualReview = Boolean(docData?.requiresManualReview);
+      const isVerified = stripeStatus === 'verified' && !requiresManualReview;
+
+      const updated = {
+        ...prev,
+        kycTier: isVerified ? newTier : prev.kycTier,
+        kycStatus: isVerified ? KYCStatus.VERIFIED : KYCStatus.PENDING,
+        kycLimit: isVerified ? limit : prev.kycLimit,
+        documents: docData ? docData : prev.documents,
+      };
+      PersistenceService.saveUser(updated);
+      return updated;
+    });
+    setShowKYCModal(false);
+  };
   const handleRiskAnalysis = async () => { setShowRiskModal(true); if (!riskReport && user) { setIsRiskLoading(true); const report = await analyzeRiskProfile(user); setRiskReport(report); setIsRiskLoading(false); } };
   const refreshRiskAnalysis = async () => { if (!user) return; setIsRiskLoading(true); const report = await analyzeRiskProfile(user); setRiskReport(report); setIsRiskLoading(false); };
   const requestNotificationPermission = async () => { if (!('Notification' in window)) return; const permission = await Notification.requestPermission(); if (permission === 'granted') setNotificationsEnabled(true); };
@@ -842,7 +864,15 @@ const App: React.FC = () => {
       <div className="relative flex min-h-screen md:h-screen bg-[#050505] text-zinc-200 font-sans selection:bg-[#00e599] selection:text-black overflow-hidden">
         <CustomerChatWidget user={user} />
         {showSnow && <SnowEffect />}
-        {showKYCModal && <KYCVerificationModal currentTier={user.kycTier} onClose={() => setShowKYCModal(false)} onUpgradeComplete={handleKYCUpgrade} />}
+        {showKYCModal && (
+          <KYCVerificationModal
+            currentTier={user.kycTier}
+            userId={user.id}
+            userEmail={user.email || ''}
+            onClose={() => setShowKYCModal(false)}
+            onUpgradeComplete={handleKYCUpgrade}
+          />
+        )}
         {showRiskModal && <RiskDashboard report={riskReport} isLoading={isRiskLoading} onRefresh={refreshRiskAnalysis} onClose={() => setShowRiskModal(false)} />}
         <WalletConnectModal isOpen={showWalletModal} onClose={() => setShowWalletModal(false)} onConnect={(info) => setWallet(info)} />
         <LegalModal type={activeLegalDoc} onClose={() => setActiveLegalDoc(null)} />
