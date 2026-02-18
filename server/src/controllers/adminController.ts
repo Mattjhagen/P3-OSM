@@ -1,9 +1,177 @@
 import { NextFunction, Request, Response } from 'express';
 import { AdminService } from '../services/adminService';
+import {
+    WaitlistAdminError,
+    WaitlistAdminService,
+} from '../services/waitlistAdminService';
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const asString = (value: unknown) => String(value || '').trim();
+
+const resolveWaitlistErrorStatus = (error: unknown) => {
+    if (error instanceof WaitlistAdminError) {
+        return error.status;
+    }
+    if (typeof (error as any)?.status === 'number') {
+        return (error as any).status;
+    }
+    return 500;
+};
+
+const resolveWaitlistErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    return 'Unexpected waitlist admin error.';
+};
 
 export const AdminController = {
+    /**
+     * GET /api/admin/waitlist
+     */
+    getWaitlist: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const adminEmail =
+                asString(req.query.adminEmail) ||
+                asString(req.header('x-admin-email')) ||
+                asString(req.auth?.email);
+
+            const pageRaw = Number(req.query.page || 1);
+            const pageSizeRaw = Number(req.query.pageSize || req.query.limit || 200);
+            const page = Number.isFinite(pageRaw) ? pageRaw : 1;
+            const pageSize = Number.isFinite(pageSizeRaw) ? pageSizeRaw : 200;
+
+            const result = await WaitlistAdminService.getWaitlistQueue({
+                adminEmail,
+                authorizationHeader: req.header('authorization') || '',
+                page,
+                pageSize,
+            });
+
+            return res.status(200).json({
+                success: true,
+                data: result.rows,
+                meta: {
+                    total: result.total,
+                    page: result.page,
+                    pageSize: result.pageSize,
+                },
+            });
+        } catch (error) {
+            const status = resolveWaitlistErrorStatus(error);
+            if (status >= 500) {
+                return next(error);
+            }
+            return res.status(status).json({
+                success: false,
+                error: resolveWaitlistErrorMessage(error),
+            });
+        }
+    },
+
+    /**
+     * POST /api/admin/waitlist/invite
+     */
+    inviteWaitlist: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const adminEmail =
+                asString(req.body?.adminEmail) ||
+                asString(req.header('x-admin-email')) ||
+                asString(req.auth?.email);
+            const waitlistId = asString(req.body?.waitlistId);
+
+            const result = await WaitlistAdminService.inviteWaitlistById({
+                adminEmail,
+                authorizationHeader: req.header('authorization') || '',
+                waitlistId,
+            });
+
+            return res.status(200).json({
+                success: true,
+                data: result,
+            });
+        } catch (error) {
+            const status = resolveWaitlistErrorStatus(error);
+            if (status >= 500) {
+                return next(error);
+            }
+            return res.status(status).json({
+                success: false,
+                error: resolveWaitlistErrorMessage(error),
+            });
+        }
+    },
+
+    /**
+     * POST /api/admin/waitlist/invite-next
+     */
+    inviteNextWaitlist: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const adminEmail =
+                asString(req.body?.adminEmail) ||
+                asString(req.header('x-admin-email')) ||
+                asString(req.auth?.email);
+            const batchSizeRaw = Number(req.body?.batchSize ?? req.body?.count ?? 10);
+            const batchSize = Number.isFinite(batchSizeRaw) ? Math.floor(batchSizeRaw) : 10;
+
+            if (batchSize < 1 || batchSize > 250) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'batchSize must be between 1 and 250.',
+                });
+            }
+
+            const result = await WaitlistAdminService.inviteNextWaitlist({
+                adminEmail,
+                authorizationHeader: req.header('authorization') || '',
+                batchSize,
+            });
+
+            return res.status(200).json({
+                success: true,
+                data: result,
+            });
+        } catch (error) {
+            const status = resolveWaitlistErrorStatus(error);
+            if (status >= 500) {
+                return next(error);
+            }
+            return res.status(status).json({
+                success: false,
+                error: resolveWaitlistErrorMessage(error),
+            });
+        }
+    },
+
+    /**
+     * POST /api/admin/waitlist/sync
+     */
+    syncWaitlist: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const adminEmail =
+                asString(req.body?.adminEmail) ||
+                asString(req.header('x-admin-email')) ||
+                asString(req.auth?.email);
+
+            const result = await WaitlistAdminService.syncWaitlist({
+                adminEmail,
+                authorizationHeader: req.header('authorization') || '',
+            });
+
+            return res.status(200).json({
+                success: true,
+                data: result,
+            });
+        } catch (error) {
+            const status = resolveWaitlistErrorStatus(error);
+            if (status >= 500) {
+                return next(error);
+            }
+            return res.status(status).json({
+                success: false,
+                error: resolveWaitlistErrorMessage(error),
+            });
+        }
+    },
+
     /**
      * GET /api/admin/stats
      */

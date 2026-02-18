@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Logo } from './Logo';
 import { Button } from './Button';
 import { UserProfile, EmployeeProfile, AdminRole, KYCTier, KYCStatus, Dispute, InternalTicket, WaitlistEntry } from '../types';
-import { NetlifyWaitlistSyncResult, PersistenceService } from '../services/persistence';
+import { AdminWaitlistSyncResult, PersistenceService } from '../services/persistence';
 import { SecurityService } from '../services/security';
 import { DocumentService } from '../services/documentService';
 import { ScoreGauge } from './ScoreGauge';
@@ -44,7 +44,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   const [internalTickets, setInternalTickets] = useState<InternalTicket[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [isWaitlistSyncing, setIsWaitlistSyncing] = useState(false);
-  const [waitlistSyncSummary, setWaitlistSyncSummary] = useState<NetlifyWaitlistSyncResult | null>(null);
+  const [waitlistSyncSummary, setWaitlistSyncSummary] = useState<AdminWaitlistSyncResult | null>(null);
   const [waitlistSyncError, setWaitlistSyncError] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   
@@ -146,12 +146,12 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   }, [selectedUserLogFilter]);
 
   const refreshWaitlist = useCallback(
-    async (syncWithNetlify: boolean): Promise<WaitlistEntry[]> => {
-      if (syncWithNetlify) {
+    async (syncWithServer: boolean): Promise<WaitlistEntry[]> => {
+      if (syncWithServer) {
         setIsWaitlistSyncing(true);
         setWaitlistSyncError('');
         try {
-          const syncSummary = await PersistenceService.syncWaitlistFromNetlify(
+          const syncSummary = await PersistenceService.syncAdminWaitlist(
             currentAdmin.email,
             currentAdmin.name
           );
@@ -164,7 +164,10 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
         }
       }
 
-      const entries = await PersistenceService.getWaitlist();
+      const entries = await PersistenceService.getAdminWaitlist(
+        currentAdmin.email,
+        currentAdmin.name
+      );
       setWaitlist(entries || []);
       return entries || [];
     },
@@ -187,7 +190,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
         const d = await PersistenceService.getAllDisputes();
         setDisputes(d || []);
 
-        const w = await refreshWaitlist(true);
+        const w = await refreshWaitlist(false);
 
         setIsKpiLoading(true);
         const snapshot = await AdminKpiService.getSnapshot(u || [], w || []);
@@ -359,28 +362,51 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   };
 
   const handleInviteWaitlist = async (id: string) => {
-    await PersistenceService.updateWaitlistStatus(id, 'INVITED');
-    const inviteUrl = `${window.location.origin}/?waitlist_invite=${encodeURIComponent(id)}`;
     try {
-      await navigator.clipboard.writeText(inviteUrl);
-      alert(`Invitation sent (simulated). User marked INVITED.\nInvite URL copied:\n${inviteUrl}`);
-    } catch {
-      alert(`Invitation sent (simulated). User marked INVITED.\nInvite URL:\n${inviteUrl}`);
+      const result = await PersistenceService.inviteAdminWaitlist(
+        currentAdmin.email,
+        currentAdmin.name,
+        id
+      );
+
+      const inviteUrl = `${window.location.origin}/?waitlist_invite=${encodeURIComponent(id)}`;
+      if (result.updated > 0) {
+        try {
+          await navigator.clipboard.writeText(inviteUrl);
+          alert(`User marked INVITED. Invite URL copied:\n${inviteUrl}`);
+        } catch {
+          alert(`User marked INVITED. Invite URL:\n${inviteUrl}`);
+        }
+      } else {
+        alert('This waitlist user is already invited or onboarded.');
+      }
+
+      const updated = await refreshWaitlist(false);
+      setWaitlist(updated);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to invite waitlist user.';
+      setWaitlistSyncError(message);
+      alert(message);
     }
-    setWaitlist(prev => prev.map(w => w.id === id ? { ...w, status: 'INVITED' } : w));
   };
 
   const handleBatchRollout = async () => {
     if (confirm(`Are you sure you want to invite the next ${batchSize} users in the queue?`)) {
       setIsRollingOut(true);
       try {
-        await PersistenceService.inviteWaitlistBatch(batchSize);
+        const result = await PersistenceService.inviteNextAdminWaitlist(
+          currentAdmin.email,
+          currentAdmin.name,
+          batchSize
+        );
         // Refresh list
         const updated = await refreshWaitlist(false);
         setWaitlist(updated);
-        alert(`Successfully rolled out access to ${batchSize} users.`);
-      } catch (e) {
-        alert("Batch rollout failed.");
+        alert(`Batch rollout complete. Requested ${result.requested}, invited ${result.updated}, skipped ${result.skipped}.`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Batch rollout failed.';
+        setWaitlistSyncError(message);
+        alert(message);
       } finally {
         setIsRollingOut(false);
       }
@@ -1477,20 +1503,20 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
                     <p className="text-xs text-zinc-500">Oldest sign-ups are at the top.</p>
                     {waitlistSyncSummary && (
                       <p className="text-xs text-[#00e599] mt-1">
-                        Netlify sync complete ({new Date(waitlistSyncSummary.syncedAt).toLocaleTimeString()}): scanned{' '}
-                        {waitlistSyncSummary.scanned}, inserted {waitlistSyncSummary.inserted}, skipped{' '}
-                        {waitlistSyncSummary.skipped}.
+                        Waitlist sync complete ({new Date(waitlistSyncSummary.syncedAt).toLocaleTimeString()}): total{' '}
+                        {waitlistSyncSummary.total ?? waitlistSyncSummary.scanned}, pending {waitlistSyncSummary.pending ?? 0}, invited{' '}
+                        {waitlistSyncSummary.invited ?? 0}, onboarded {waitlistSyncSummary.onboarded ?? 0}.
                       </p>
                     )}
                     {waitlistSyncError && (
                       <p className="text-xs text-red-400 mt-1">
-                        Netlify sync failed: {waitlistSyncError}
+                        Waitlist sync failed: {waitlistSyncError}
                       </p>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-3 bg-zinc-900 p-2 rounded-lg border border-zinc-800">
                     <Button size="sm" variant="secondary" onClick={handleWaitlistNetlifySync} isLoading={isWaitlistSyncing}>
-                      Sync Netlify
+                      Sync Waitlist
                     </Button>
                     <span className="text-xs text-zinc-500 font-bold uppercase ml-2">Batch Rollout:</span>
                     <input 

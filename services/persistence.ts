@@ -34,6 +34,7 @@ const WAITLIST_DISPLAY_OFFSET = Math.max(
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 const normalizeBackendBaseUrl = (value: string) =>
   trimTrailingSlash(value).replace(/\/api$/i, '');
+const normalizeAdminEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const getBackendBaseUrl = () =>
   normalizeBackendBaseUrl(
     RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
@@ -67,6 +68,18 @@ const resolveReferralToken = (row: any): string => {
   const fallbackId = String(row?.signup_id || row?.id || '').trim();
   return fallbackId;
 };
+
+const toWaitlistEntry = (row: any): WaitlistEntry => ({
+  id: String(row?.id || ''),
+  name: String(row?.name || ''),
+  email: String(row?.email || ''),
+  status: (String(row?.status || 'PENDING').toUpperCase() as WaitlistEntry['status']),
+  created_at: String(row?.created_at || ''),
+  referral_code: row?.referral_code ? String(row.referral_code) : undefined,
+  referred_by: row?.referred_by ? String(row.referred_by) : undefined,
+  referral_count: Number(row?.referral_count || 0),
+  waitlist_score: Number(row?.waitlist_score || 0),
+});
 
 const createOrFetchWaitlistSignup = async (payload: {
   name: string;
@@ -173,6 +186,28 @@ export interface NetlifyWaitlistSyncResult {
   syncedAt: string;
 }
 
+export interface AdminWaitlistSyncResult {
+  source: 'supabase_waitlist';
+  scanned: number;
+  inserted: number;
+  skipped: number;
+  syncedAt: string;
+  total?: number;
+  pending?: number;
+  invited?: number;
+  onboarded?: number;
+}
+
+export type WaitlistSyncResult = NetlifyWaitlistSyncResult | AdminWaitlistSyncResult;
+
+export interface AdminWaitlistInviteResult {
+  requested: number;
+  updated: number;
+  queued: number;
+  skipped: number;
+  rows: WaitlistEntry[];
+}
+
 export interface WaitlistSignupResult {
   id: string;
   name: string;
@@ -184,6 +219,58 @@ export interface WaitlistSignupResult {
   waitlistScore: number;
   isExisting: boolean;
 }
+
+const requestAdminWaitlistApi = async <T>(payload: {
+  path: string;
+  method?: 'GET' | 'POST';
+  adminEmail: string;
+  body?: Record<string, unknown>;
+}): Promise<T> => {
+  const normalizedAdminEmail = normalizeAdminEmail(payload.adminEmail);
+  if (!normalizedAdminEmail) {
+    throw new Error('Admin email is required for waitlist admin actions.');
+  }
+
+  const method = payload.method || 'GET';
+  let response: Response;
+
+  try {
+    response = await fetch(`${getBackendBaseUrl()}${payload.path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-email': normalizedAdminEmail,
+      },
+      ...(method === 'POST'
+        ? {
+            body: JSON.stringify({
+              adminEmail: normalizedAdminEmail,
+              ...(payload.body || {}),
+            }),
+          }
+        : {}),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown network error';
+    throw new Error(`Unable to reach backend for waitlist admin action: ${message}`);
+  }
+
+  let data: any = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok || !data?.success) {
+    const message =
+      String(data?.error || '').trim() ||
+      `Waitlist admin request failed with status ${response.status}.`;
+    throw new Error(message);
+  }
+
+  return data.data as T;
+};
 
 // NOTE: All methods are now ASYNC because they hit the database.
 export const PersistenceService = {
@@ -335,6 +422,85 @@ export const PersistenceService = {
       .from('waitlist')
       .update({ status: 'INVITED' })
       .in('id', idsToUpdate);
+  },
+
+  getAdminWaitlist: async (
+    adminEmail: string,
+    _adminName: string,
+    page = 1,
+    pageSize = 500
+  ): Promise<WaitlistEntry[]> => {
+    const safePage = Math.max(1, Math.floor(page || 1));
+    const safePageSize = Math.max(1, Math.min(500, Math.floor(pageSize || 500)));
+    const params = new URLSearchParams({
+      adminEmail: normalizeAdminEmail(adminEmail),
+      page: String(safePage),
+      pageSize: String(safePageSize),
+    });
+
+    const rows = await requestAdminWaitlistApi<any[]>({
+      path: `/api/admin/waitlist?${params.toString()}`,
+      method: 'GET',
+      adminEmail,
+    });
+
+    return (rows || []).map((row) => toWaitlistEntry(row));
+  },
+
+  syncAdminWaitlist: async (
+    adminEmail: string,
+    adminName: string
+  ): Promise<AdminWaitlistSyncResult> =>
+    requestAdminWaitlistApi<AdminWaitlistSyncResult>({
+      path: '/api/admin/waitlist/sync',
+      method: 'POST',
+      adminEmail,
+      body: {
+        adminName: String(adminName || '').trim(),
+      },
+    }),
+
+  inviteAdminWaitlist: async (
+    adminEmail: string,
+    adminName: string,
+    waitlistId: string
+  ): Promise<AdminWaitlistInviteResult> => {
+    const response = await requestAdminWaitlistApi<AdminWaitlistInviteResult>({
+      path: '/api/admin/waitlist/invite',
+      method: 'POST',
+      adminEmail,
+      body: {
+        adminName: String(adminName || '').trim(),
+        waitlistId: String(waitlistId || '').trim(),
+      },
+    });
+
+    return {
+      ...response,
+      rows: (response.rows || []).map((row) => toWaitlistEntry(row)),
+    };
+  },
+
+  inviteNextAdminWaitlist: async (
+    adminEmail: string,
+    adminName: string,
+    batchSize: number
+  ): Promise<AdminWaitlistInviteResult> => {
+    const safeBatchSize = Math.max(1, Math.min(250, Math.floor(Number(batchSize) || 10)));
+    const response = await requestAdminWaitlistApi<AdminWaitlistInviteResult>({
+      path: '/api/admin/waitlist/invite-next',
+      method: 'POST',
+      adminEmail,
+      body: {
+        adminName: String(adminName || '').trim(),
+        batchSize: safeBatchSize,
+      },
+    });
+
+    return {
+      ...response,
+      rows: (response.rows || []).map((row) => toWaitlistEntry(row)),
+    };
   },
 
   syncWaitlistFromNetlify: async (

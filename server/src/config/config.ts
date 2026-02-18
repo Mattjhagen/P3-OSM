@@ -16,6 +16,9 @@ export const config = {
         from: validatedEnv.SMTP_FROM,
         secure: validatedEnv.SMTP_SECURE,
     },
+    admin: {
+        internalBearer: validatedEnv.ADMIN_INTERNAL_BEARER,
+    },
     netlify: {
         apiToken: validatedEnv.NETLIFY_API_TOKEN,
         siteId: validatedEnv.NETLIFY_SITE_ID,
