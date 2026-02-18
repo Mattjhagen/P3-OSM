@@ -9,9 +9,16 @@ const parseBearerToken = (authorizationHeader?: string) => {
   return match ? trim(match[1]) : '';
 };
 
+const WAITLIST_SELECT_BASE_FIELDS = 'id,name,email,status,created_at';
 const WAITLIST_SELECT_FIELDS =
-  'id,name,email,status,created_at,referral_code,referred_by,referral_count,waitlist_score';
+  `${WAITLIST_SELECT_BASE_FIELDS},referral_code,referred_by,referral_count,waitlist_score`;
 const ALLOWED_ADMIN_ROLES = new Set(['ADMIN', 'RISK_OFFICER', 'SUPPORT']);
+const OPTIONAL_WAITLIST_COLUMNS = [
+  'referral_code',
+  'referred_by',
+  'referral_count',
+  'waitlist_score',
+] as const;
 
 export class WaitlistAdminError extends Error {
   status: number;
@@ -72,6 +79,18 @@ const formatRow = (row: any): WaitlistAdminQueueRow => ({
   referral_count: Number(row?.referral_count || 0),
   waitlist_score: Number(row?.waitlist_score || 0),
 });
+
+const isMissingOptionalWaitlistColumn = (message: string) => {
+  const normalized = trim(message).toLowerCase();
+  if (!normalized) return false;
+
+  const looksLikeColumnError =
+    (normalized.includes('column') && normalized.includes('does not exist')) ||
+    normalized.includes('schema cache');
+  if (!looksLikeColumnError) return false;
+
+  return OPTIONAL_WAITLIST_COLUMNS.some((column) => normalized.includes(column));
+};
 
 const assertAuthorizedAdmin = async (
   adminEmail: string,
@@ -135,11 +154,23 @@ const assertAuthorizedAdmin = async (
 const getRowsByIds = async (ids: string[]) => {
   if (ids.length === 0) return [];
 
-  const { data, error } = await supabase
+  const primary = await supabase
     .from('waitlist')
     .select(WAITLIST_SELECT_FIELDS)
     .in('id', ids)
     .order('created_at', { ascending: true });
+  let data: any[] | null = primary.data as any[] | null;
+  let error = primary.error;
+
+  if (error && isMissingOptionalWaitlistColumn(error.message || '')) {
+    const fallback = await supabase
+      .from('waitlist')
+      .select(WAITLIST_SELECT_BASE_FIELDS)
+      .in('id', ids)
+      .order('created_at', { ascending: true });
+    data = fallback.data as any[] | null;
+    error = fallback.error;
+  }
 
   if (error) {
     throw new WaitlistAdminError(
@@ -197,11 +228,25 @@ export const WaitlistAdminService = {
     const pageSize = Math.max(1, Math.min(500, Math.floor(payload.pageSize)));
     const offset = (page - 1) * pageSize;
 
-    const { data, error, count } = await supabase
+    const primary = await supabase
       .from('waitlist')
       .select(WAITLIST_SELECT_FIELDS, { count: 'exact' })
       .order('created_at', { ascending: true })
       .range(offset, offset + pageSize - 1);
+    let data: any[] | null = primary.data as any[] | null;
+    let error = primary.error;
+    let count = primary.count;
+
+    if (error && isMissingOptionalWaitlistColumn(error.message || '')) {
+      const fallback = await supabase
+        .from('waitlist')
+        .select(WAITLIST_SELECT_BASE_FIELDS, { count: 'exact' })
+        .order('created_at', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      data = fallback.data as any[] | null;
+      error = fallback.error;
+      count = fallback.count;
+    }
 
     if (error) {
       throw new WaitlistAdminError(

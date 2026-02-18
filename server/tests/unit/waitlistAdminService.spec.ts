@@ -20,7 +20,7 @@ vi.mock('../../src/config/supabase', () => ({
 
 import { WaitlistAdminService } from '../../src/services/waitlistAdminService';
 
-describe('WaitlistAdminService.inviteNextWaitlist', () => {
+describe('WaitlistAdminService', () => {
   afterEach(() => {
     fromMock.mockReset();
     resolveAuthUserMock.mockReset();
@@ -113,5 +113,82 @@ describe('WaitlistAdminService.inviteNextWaitlist', () => {
     expect(updateMock).toHaveBeenCalledWith({ status: 'INVITED' });
     expect(updateInMock).toHaveBeenCalledWith('id', ['wait_1', 'wait_2']);
     expect(resolveAuthUserMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to base waitlist columns when referral columns are missing', async () => {
+    const employeesMaybeSingleMock = vi.fn().mockResolvedValue({
+      data: {
+        id: 'emp_1',
+        email: 'admin@p3lending.space',
+        role: 'ADMIN',
+        is_active: true,
+      },
+      error: null,
+    });
+    const employeesLimitMock = vi.fn(() => ({ maybeSingle: employeesMaybeSingleMock }));
+    const employeesEqRoleMock = vi.fn(() => ({ limit: employeesLimitMock }));
+    const employeesEqEmailMock = vi.fn(() => ({ eq: employeesEqRoleMock }));
+    const employeesSelectMock = vi.fn(() => ({ eq: employeesEqEmailMock }));
+    const employeesBuilder = { select: employeesSelectMock };
+
+    const fullRangeMock = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        message: "column waitlist.referral_code does not exist",
+      },
+      count: null,
+    });
+    const fullOrderMock = vi.fn(() => ({ range: fullRangeMock }));
+    const fullSelectMock = vi.fn(() => ({ order: fullOrderMock }));
+    const fullWaitlistBuilder = { select: fullSelectMock };
+
+    const fallbackRangeMock = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'wait_1',
+          name: 'Alice',
+          email: 'alice@example.com',
+          status: 'PENDING',
+          created_at: '2026-02-18T00:00:00.000Z',
+        },
+      ],
+      error: null,
+      count: 1,
+    });
+    const fallbackOrderMock = vi.fn(() => ({ range: fallbackRangeMock }));
+    const fallbackSelectMock = vi.fn(() => ({ order: fallbackOrderMock }));
+    const fallbackWaitlistBuilder = { select: fallbackSelectMock };
+
+    const waitlistBuilders = [fullWaitlistBuilder, fallbackWaitlistBuilder];
+    fromMock.mockImplementation((table: string) => {
+      if (table === 'employees') return employeesBuilder;
+      if (table === 'waitlist') {
+        const next = waitlistBuilders.shift();
+        if (!next) {
+          throw new Error('Unexpected waitlist query');
+        }
+        return next;
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const result = await WaitlistAdminService.getWaitlistQueue({
+      adminEmail: 'admin@p3lending.space',
+      authorizationHeader: '',
+      page: 1,
+      pageSize: 100,
+    });
+
+    expect(fullSelectMock).toHaveBeenCalledWith(
+      'id,name,email,status,created_at,referral_code,referred_by,referral_count,waitlist_score',
+      { count: 'exact' }
+    );
+    expect(fallbackSelectMock).toHaveBeenCalledWith('id,name,email,status,created_at', {
+      count: 'exact',
+    });
+    expect(result.total).toBe(1);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].email).toBe('alice@example.com');
+    expect(result.rows[0].referral_code).toBeNull();
   });
 });

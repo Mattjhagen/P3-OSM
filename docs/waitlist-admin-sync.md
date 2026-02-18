@@ -70,3 +70,20 @@ This keeps onboarding flow unblocked while outbound email provider is unavailabl
 7. Confirm result alert shows updated/skipped counts.
 8. Refresh queue and confirm invited rows now have `INVITED` status.
 9. (Optional DB check) verify invited rows now have `status='INVITED'`.
+
+## 7) Referral column compatibility
+
+If `/api/admin/waitlist` fails with `column waitlist.referral_code does not exist`, apply the migration:
+
+- `supabase/migrations/20260218170000_waitlist_referral_code_compat.sql`
+
+It does three safe, idempotent steps:
+
+1. Adds `referral_code` if missing.
+2. Backfills missing referral codes for existing rows.
+3. Adds a unique partial index and insert trigger so future rows always get a code.
+
+After applying SQL in Supabase, reload API schema cache:
+
+1. Supabase Dashboard -> Database -> Settings -> API
+2. Click `Reload schema cache`
