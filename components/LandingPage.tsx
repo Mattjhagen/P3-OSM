@@ -342,7 +342,7 @@ const WaitlistModal = ({ isOpen, onClose, onLaunchApp }: { isOpen: boolean; onCl
 
 export const LandingPage: React.FC<Props> = ({ onLaunch, onDevAdminLogin, onOpenDocs, onOpenLegal }) => {
   const [showWaitlist, setShowWaitlist] = useState(false);
-  const [totalWaitlist, setTotalWaitlist] = useState(4291);
+  const [totalWaitlist, setTotalWaitlist] = useState(0);
 
   useEffect(() => {
     const refCode = new URLSearchParams(window.location.search).get('ref');

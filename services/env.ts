@@ -16,6 +16,7 @@ const frontendEnvSchema = z.object({
   VITE_OPENAI_MODEL: z.string().optional().default('gpt-5-codex'),
   VITE_STRIPE_DONATE_URL: z.string().optional().default(''),
   VITE_PLAID_PUBLISHABLE_KEY: z.string().optional().default(''),
+  VITE_WAITLIST_DISPLAY_OFFSET: z.coerce.number().int().min(0).default(0),
 });
 
 const rawEnv = {

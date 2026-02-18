@@ -27,7 +27,10 @@ const INITIAL_USER_TEMPLATE: UserProfile = {
   referrals: []
 };
 
-const BASE_WAITLIST_COUNT = 4291;
+const WAITLIST_DISPLAY_OFFSET = Math.max(
+  0,
+  Math.floor(Number(frontendEnv.VITE_WAITLIST_DISPLAY_OFFSET || 0))
+);
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 const normalizeBackendBaseUrl = (value: string) =>
   trimTrailingSlash(value).replace(/\/api$/i, '');
@@ -36,6 +39,53 @@ const getBackendBaseUrl = () =>
     RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
   );
 const truncate = (value: string, max = 400) => (value.length > max ? `${value.slice(0, max - 3)}...` : value);
+
+const getWaitlistDisplayName = (email: string) => email.split('@')[0] || 'User';
+
+const resolveQueuePosition = (value: unknown): number | null => {
+  const rank = Number(value);
+  if (!Number.isFinite(rank) || rank <= 0) return null;
+  return WAITLIST_DISPLAY_OFFSET + Math.floor(rank);
+};
+
+const normalizeReferralCode = (value: unknown): string => {
+  const code = String(value || '').trim();
+  return code ? code.toUpperCase() : '';
+};
+
+const normalizeReferralTokenForRpc = (value: unknown): string => {
+  const token = String(value || '').trim();
+  if (!token) return '';
+  const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
+  return looksLikeUuid ? token : token.toUpperCase();
+};
+
+const resolveReferralToken = (row: any): string => {
+  const code = normalizeReferralCode(row?.referral_code);
+  if (code) return code;
+
+  const fallbackId = String(row?.signup_id || row?.id || '').trim();
+  return fallbackId;
+};
+
+const createOrFetchWaitlistSignup = async (payload: {
+  name: string;
+  email: string;
+  referralToken?: string | null;
+}) => {
+  const normalizedEmail = payload.email.trim().toLowerCase();
+  const normalizedName = payload.name.trim() || getWaitlistDisplayName(normalizedEmail);
+  const normalizedRef = normalizeReferralTokenForRpc(payload.referralToken);
+
+  const { data, error } = await supabase.rpc('create_waitlist_signup', {
+    name_input: normalizedName,
+    email_input: normalizedEmail,
+    ref_code_input: normalizedRef || null,
+  });
+
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
 
 const toMillis = (value: unknown): number => {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
@@ -147,31 +197,26 @@ export const PersistenceService = {
   ): Promise<WaitlistSignupResult | null> => {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedName = name.trim();
-    const normalizedRef = (referralCode || '').trim().toUpperCase();
+    const normalizedRef = (referralCode || '').trim();
 
     try {
-      const { data, error } = await supabase.rpc('create_waitlist_signup', {
-        name_input: normalizedName,
-        email_input: normalizedEmail,
-        ref_code_input: normalizedRef || null,
+      const row = await createOrFetchWaitlistSignup({
+        name: normalizedName,
+        email: normalizedEmail,
+        referralToken: normalizedRef,
       });
-
-      if (error) throw error;
-
-      const row = Array.isArray(data) ? data[0] : data;
       if (!row) return null;
 
-      const rank = Number(row.queue_position ?? row.position);
-      const resolvedPosition = Number.isFinite(rank)
-        ? BASE_WAITLIST_COUNT + rank
-        : BASE_WAITLIST_COUNT + 1;
+      const resolvedPosition =
+        resolveQueuePosition(row.queue_position ?? row.position) ??
+        WAITLIST_DISPLAY_OFFSET + 1;
 
       return {
         id: String(row.signup_id || row.id || ''),
-        name: String(row.name || normalizedName || normalizedEmail.split('@')[0] || 'User'),
+        name: String(row.name || normalizedName || getWaitlistDisplayName(normalizedEmail)),
         email: String(row.email || normalizedEmail),
         position: resolvedPosition,
-        referralCode: String(row.referral_code || ''),
+        referralCode: resolveReferralToken(row),
         referredBy: row.referred_by ? String(row.referred_by) : null,
         referralCount: Number(row.referral_count || 0),
         waitlistScore: Number(row.waitlist_score || 0),
@@ -215,18 +260,38 @@ export const PersistenceService = {
     waitlistScore?: number;
   } | null> => {
     try {
+      const normalizedEmail = email.trim().toLowerCase();
       const { data, error } = await supabase.rpc('waitlist_position', {
-        email_input: email.trim().toLowerCase(),
+        email_input: normalizedEmail,
       });
       if (error || !data || data.length === 0) return null;
 
-      const row = data[0];
-      const rank = Number(row.queue_position ?? row.position);
-      if (!Number.isFinite(rank)) return null;
+      let row = data[0];
+      let referralToken = resolveReferralToken(row);
+
+      if (!referralToken) {
+        try {
+          const fallbackRow = await createOrFetchWaitlistSignup({
+            name: String(row?.name || getWaitlistDisplayName(normalizedEmail)),
+            email: normalizedEmail,
+          });
+
+          if (fallbackRow) {
+            row = { ...row, ...fallbackRow };
+            referralToken = resolveReferralToken(fallbackRow);
+          }
+        } catch (fallbackError) {
+          console.warn('Unable to recover waitlist referral token', fallbackError);
+        }
+      }
+
+      const resolvedPosition = resolveQueuePosition(row.queue_position ?? row.position);
+      if (resolvedPosition === null) return null;
+
       return {
-        position: BASE_WAITLIST_COUNT + rank,
-        name: row.name,
-        referralCode: row.referral_code || undefined,
+        position: resolvedPosition,
+        name: String(row.name || getWaitlistDisplayName(normalizedEmail)),
+        referralCode: referralToken || undefined,
         referralCount: Number(row.referral_count || 0),
         waitlistScore: Number(row.waitlist_score || 0),
       };
@@ -239,10 +304,12 @@ export const PersistenceService = {
   getWaitlistCount: async (): Promise<number> => {
     try {
       const { data, error } = await supabase.rpc('waitlist_count');
-      if (error || data === null || data === undefined) return BASE_WAITLIST_COUNT;
-      return BASE_WAITLIST_COUNT + Number(data);
+      if (error || data === null || data === undefined) return WAITLIST_DISPLAY_OFFSET;
+      const count = Number(data);
+      if (!Number.isFinite(count) || count < 0) return WAITLIST_DISPLAY_OFFSET;
+      return WAITLIST_DISPLAY_OFFSET + Math.floor(count);
     } catch (e) {
-      return BASE_WAITLIST_COUNT;
+      return WAITLIST_DISPLAY_OFFSET;
     }
   },
 

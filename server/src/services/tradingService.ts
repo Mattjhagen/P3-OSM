@@ -2,6 +2,7 @@ import { config } from '../config/config';
 import { FeePolicyService } from './feePolicyService';
 import { FinancePersistenceService } from './financePersistenceService';
 import { MarketPriceService } from './marketPriceService';
+import { recordTradeNotificationBestEffort } from './notificationEventService';
 import { TransactionGuardService } from './transactionGuardService';
 import { UserDataService } from './userDataService';
 
@@ -286,6 +287,19 @@ export const TradingService = {
         settlement_account: settlementAccount,
         fiat_currency: preview.fiatCurrency,
       },
+    });
+
+    await recordTradeNotificationBestEffort({
+      userId: payload.userId,
+      email: updatedProfile.email,
+      orderId,
+      ledgerId,
+      symbol: preview.symbol,
+      side: preview.side,
+      amountUsd: preview.grossAmountUsd,
+      netAmountUsd: preview.netAmountUsd,
+      feeUsd: preview.feeUsd,
+      fiatCurrency: preview.fiatCurrency,
     });
 
     return {

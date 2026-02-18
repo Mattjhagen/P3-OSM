@@ -3,6 +3,7 @@ import { config } from '../config/config';
 import { FeePolicyService } from './feePolicyService';
 import { FinancePersistenceService } from './financePersistenceService';
 import { MarketPriceService } from './marketPriceService';
+import { recordTransferNotificationBestEffort } from './notificationEventService';
 import { TransactionGuardService } from './transactionGuardService';
 import { UserDataService } from './userDataService';
 
@@ -260,6 +261,21 @@ export const WithdrawalService = {
         provider: 'stripe',
         provider_reference: providerReference,
       },
+    });
+
+    await recordTransferNotificationBestEffort({
+      userId: payload.userId,
+      email: updatedProfile.email,
+      requestId,
+      ledgerId,
+      method,
+      amountUsd: fee.grossAmountUsd,
+      payoutAmountUsd: fee.netAmountUsd,
+      feeUsd: fee.feeTotalUsd,
+      destinationMasked: maskDestination(payload.destination),
+      provider,
+      providerReference,
+      estimatedBtc,
     });
 
     return {

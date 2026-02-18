@@ -57,6 +57,7 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
                 <li><button onClick={() => onOpenLegal('SUPPORT')} className="hover:text-[#00e599] transition-colors">Support & Safety</button></li>
                 <li><button onClick={() => onOpenLegal('SATOSHI_WHITEPAPER')} className="hover:text-[#00e599] transition-colors">Bitcoin White Paper (Simplified)</button></li>
                 <li><a href="#" onClick={handleOpenDeck} className="hover:text-[#00e599] transition-colors">Investor Pitch Deck</a></li>
+                <li><a href="https://github.com/Mattjhagen/P3-Lending-Protocol/blob/main/Go-to-Markey-Strategy.MD" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">For Investors</a></li>
                 <li><a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Sitemap.xml</a></li>
              </ul>
           </div>

@@ -58,7 +58,7 @@ describe('PersistenceService waitlist referrals', () => {
       referralCount: 2,
       waitlistScore: 2,
       isExisting: false,
-      position: 4294,
+      position: 3,
     });
   });
 
@@ -89,7 +89,7 @@ describe('PersistenceService waitlist referrals', () => {
     expect(result?.isExisting).toBe(true);
     expect(result?.referralCount).toBe(4);
     expect(result?.waitlistScore).toBe(4);
-    expect(result?.position).toBe(4292);
+    expect(result?.position).toBe(1);
   });
 
   it('gets waitlist position from RPC ranking output', async () => {
@@ -113,11 +113,57 @@ describe('PersistenceService waitlist referrals', () => {
     });
 
     expect(result).toMatchObject({
-      position: 4298,
+      position: 7,
       name: 'Ranked User',
       referralCode: 'RANKED7777',
       referralCount: 3,
       waitlistScore: 3,
+    });
+  });
+
+  it('recovers referral token via signup RPC when waitlist_position omits referral_code', async () => {
+    rpcMock
+      .mockResolvedValueOnce({
+        data: [
+          {
+            queue_position: 8,
+            name: 'Legacy User',
+            referral_code: null,
+            referral_count: 0,
+            waitlist_score: 0,
+          },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            signup_id: '11f3a77e-9d12-4cbf-b5f8-8f0acb8f2bd4',
+            queue_position: 8,
+            name: 'Legacy User',
+            referral_code: null,
+            referral_count: 0,
+            waitlist_score: 0,
+          },
+        ],
+        error: null,
+      });
+
+    const result = await PersistenceService.getWaitlistPosition('legacy@example.com');
+
+    expect(rpcMock).toHaveBeenNthCalledWith(1, 'waitlist_position', {
+      email_input: 'legacy@example.com',
+    });
+    expect(rpcMock).toHaveBeenNthCalledWith(2, 'create_waitlist_signup', {
+      name_input: 'Legacy User',
+      email_input: 'legacy@example.com',
+      ref_code_input: null,
+    });
+
+    expect(result).toMatchObject({
+      position: 8,
+      name: 'Legacy User',
+      referralCode: '11f3a77e-9d12-4cbf-b5f8-8f0acb8f2bd4',
     });
   });
 });
