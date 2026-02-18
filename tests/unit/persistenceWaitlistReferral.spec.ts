@@ -166,4 +166,28 @@ describe('PersistenceService waitlist referrals', () => {
       referralCode: '11f3a77e-9d12-4cbf-b5f8-8f0acb8f2bd4',
     });
   });
+
+  it('reads total from waitlist_count breakdown response', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: [{ total: 8, pending: 7, invited: 0, onboarded: 1 }],
+      error: null,
+    });
+
+    const count = await PersistenceService.getWaitlistCount();
+
+    expect(rpcMock).toHaveBeenCalledWith('waitlist_count');
+    expect(count).toBe(8);
+  });
+
+  it('supports legacy scalar waitlist_count response during rollout', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: 8,
+      error: null,
+    });
+
+    const count = await PersistenceService.getWaitlistCount();
+
+    expect(rpcMock).toHaveBeenCalledWith('waitlist_count');
+    expect(count).toBe(8);
+  });
 });

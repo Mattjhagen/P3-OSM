@@ -7,6 +7,7 @@ This document describes the server-side admin waitlist flow used by the **Admin 
 - Table: `waitlist` (Supabase)
 - Queue order: `created_at ASC` (oldest first)
 - Admin UI now reads queue via backend endpoint, not direct browser-table reads.
+- RPC summary: `waitlist_count()` returns one row with `{ total, pending, invited, onboarded }`.
 
 ## 2) Server endpoints
 

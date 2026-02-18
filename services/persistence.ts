@@ -69,6 +69,35 @@ const resolveReferralToken = (row: any): string => {
   return fallbackId;
 };
 
+const parseWaitlistCountTotal = (data: unknown): number | null => {
+  const fromObject = (value: unknown): number | null => {
+    if (!value || typeof value !== 'object') return null;
+    const total = Number((value as Record<string, unknown>).total);
+    if (Number.isFinite(total) && total >= 0) return Math.floor(total);
+    return null;
+  };
+
+  // New RPC shape: [{ total, pending, invited, onboarded }]
+  if (Array.isArray(data)) {
+    if (data.length === 0) return 0;
+    const first = data[0];
+    const parsed = fromObject(first);
+    if (parsed !== null) return parsed;
+  }
+
+  // Alternative object shape: { total, ... }
+  const objectParsed = fromObject(data);
+  if (objectParsed !== null) return objectParsed;
+
+  // Legacy RPC shape: scalar integer
+  const legacyCount = Number(data);
+  if (Number.isFinite(legacyCount) && legacyCount >= 0) {
+    return Math.floor(legacyCount);
+  }
+
+  return null;
+};
+
 const toWaitlistEntry = (row: any): WaitlistEntry => ({
   id: String(row?.id || ''),
   name: String(row?.name || ''),
@@ -392,9 +421,9 @@ export const PersistenceService = {
     try {
       const { data, error } = await supabase.rpc('waitlist_count');
       if (error || data === null || data === undefined) return WAITLIST_DISPLAY_OFFSET;
-      const count = Number(data);
-      if (!Number.isFinite(count) || count < 0) return WAITLIST_DISPLAY_OFFSET;
-      return WAITLIST_DISPLAY_OFFSET + Math.floor(count);
+      const count = parseWaitlistCountTotal(data);
+      if (count === null) return WAITLIST_DISPLAY_OFFSET;
+      return WAITLIST_DISPLAY_OFFSET + count;
     } catch (e) {
       return WAITLIST_DISPLAY_OFFSET;
     }
