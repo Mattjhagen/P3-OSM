@@ -2,6 +2,25 @@
 
 This runbook covers the `Invite users` flow in Netlify Identity for `https://p3lending.space`.
 
+## 0. Production Verification Record (February 18, 2026)
+
+The template fix is deployed and verified in production.
+
+### Verified in production
+
+1. Template endpoints are served from PROD and include `{{ .Token }}`:
+   - `https://p3lending.space/email_invitation.html`
+   - `https://p3lending.space/email_confirmation.html`
+   - `https://p3lending.space/email_recovery.html`
+   - `https://p3lending.space/email_change.html`
+2. Identity health is live and healthy:
+   - `GET https://p3lending.space/.netlify/identity/health` -> `HTTP/2 200`
+3. Smoke script against PROD passed with warnings:
+   - `site_url` currently `https://precious-bonbon-9c0ca3.netlify.app` (mismatch)
+   - `smtp.host` currently `smtp.protonmail.ch`
+
+No auth-provider code changes were made in this step. Remaining blockers are Netlify UI configuration and/or SMTP relay behavior.
+
 ## 1. Current Findings (Checked on February 18, 2026)
 
 From live Netlify API inspection:
@@ -35,11 +54,55 @@ In this repo, a concrete template issue was fixed: Identity templates were confi
 4. Identity `Site URL` should be your production URL (`https://p3lending.space`), and test/deploy-preview URLs must be listed in allowed redirects if used.
 5. Invite template should be non-empty and include a token placeholder in the URL.
 
+## 3.1 Netlify UI: Fix Identity site_url + template paths
+
+Use this exact click path in Netlify:
+
+1. Open project dashboard:
+   - `https://app.netlify.com/projects/p3-lending-protocol`
+2. Go to:
+   - `Project configuration` -> `Identity` -> `Emails`
+3. In `Outgoing email address` section:
+   - Select `Configure`
+   - Find field labeled `Site URL`
+   - Set to exactly: `https://p3lending.space`
+   - Save
+4. In `Templates` section on the same `Identity > Emails` page, configure each template path:
+   - `Invitation template` -> `/email_invitation.html`
+   - `Confirmation template` -> `/email_confirmation.html`
+   - `Recovery template` -> `/email_recovery.html`
+   - `Email change template` -> `/email_change.html`
+   - Save each template configuration
+5. Optional sanity check from UI:
+   - `Project configuration` -> `Identity` -> `Users` -> `Invite users` should still be available.
+
+Field labels and path naming above follow Netlify docs references:
+- `Project configuration > Identity > Emails > Outgoing email address`
+- `Project configuration > Identity > Emails`
+
 ## 4. Proton Note (Important)
 
 1. If you use Proton Bridge with `localhost` / `127.0.0.1`, Netlify cannot reach it (cloud service cannot connect to your local machine).
 2. If using Proton SMTP endpoints (for example `smtp.protonmail.ch`), verify you are using a valid SMTP credential/token accepted by Proton for third-party SMTP submission.
 3. For lowest-friction testing, use a cloud SMTP provider that is known to work from hosted services (Postmark, Mailgun, SES, SendGrid when available).
+
+## 4.1 Re-test Invites (2-minute checklist after UI update)
+
+After updating `site_url` and template paths in Netlify UI:
+
+1. Open:
+   - `Project configuration` -> `Identity` -> `Users`
+2. Select:
+   - `Invite users`
+3. Invite a fresh test email address (not previously invited).
+4. Confirm all three:
+   - No `500` error in the Netlify UI
+   - Invite email is received
+   - Email link opens your app on `https://p3lending.space` with token fragment (for example `#invite_token=...`)
+5. If any error occurs, capture and store:
+   - `error_id` shown in Netlify UI
+   - timestamp (with timezone)
+   - matching row in `Project configuration` -> `Identity` -> `Identity audit log`
 
 ## 5. Repo-Level Notes
 
@@ -77,6 +140,30 @@ The script checks:
    - inspect SMTP provider auth/relay logs first,
    - verify Identity `site_url`,
    - rerun the smoke script and fix all warnings.
+
+## 7.1 SMTP fallback plan (documentation only; no code changes)
+
+If invites still return `500` after `site_url` and template paths are correct, treat SMTP as the primary suspect.
+
+Recommended temporary providers for beta invite mail:
+
+1. Postmark
+2. Mailgun
+3. AWS SES
+
+Netlify Identity SMTP fields you need from provider docs:
+
+1. `SMTP host`
+2. `SMTP port` (`587` for STARTTLS, `465` for implicit TLS)
+3. `SMTP username`
+4. `SMTP password` or API token
+5. `From` address (verified sender/domain)
+6. TLS mode (`secure` true/false depending on port)
+
+Expected outcome after SMTP is valid:
+- `Invite users` succeeds without `500`
+- invite email is delivered
+- `Identity audit log` shows invite action without downstream delivery failures
 
 ## 8. Env/Secret Requirements (Do Not Commit Secrets)
 
