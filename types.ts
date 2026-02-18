@@ -106,7 +106,7 @@ export interface WaitlistEntry {
   id: string;
   name: string;
   email: string;
-  status: 'PENDING' | 'INVITED' | 'ONBOARDED';
+  status: 'PENDING' | 'INVITED' | 'ONBOARDED' | 'BLOCKED';
   created_at: string;
   referral_code?: string;
   referred_by?: string | null;

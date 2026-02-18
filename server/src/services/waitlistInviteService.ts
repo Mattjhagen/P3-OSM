@@ -7,7 +7,11 @@ interface WaitlistRow {
   id: string;
   name: string;
   email: string;
-  status: 'PENDING' | 'INVITED' | 'ONBOARDED';
+  status: 'PENDING' | 'INVITED' | 'ONBOARDED' | 'BLOCKED';
+  invite_status?: 'pending' | 'invited' | 'onboarded' | 'blocked' | null;
+  invited_at?: string | null;
+  onboarded_at?: string | null;
+  invite_batch_id?: string | null;
   created_at: string;
 }
 
@@ -66,6 +70,30 @@ export class WaitlistInviteError extends Error {
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
 const trimToString = (value: unknown) => String(value || '').trim();
+const toInviteStatus = (value: unknown): 'pending' | 'invited' | 'onboarded' | 'blocked' => {
+  const normalized = trimToString(value).toLowerCase();
+  if (normalized === 'invited') return 'invited';
+  if (normalized === 'onboarded') return 'onboarded';
+  if (normalized === 'blocked') return 'blocked';
+  return 'pending';
+};
+const isInviteColumnUnavailable = (message: string) => {
+  const normalized = trimToString(message).toLowerCase();
+  if (!normalized) return false;
+  return (
+    (normalized.includes('schema cache') &&
+      (normalized.includes('invite_status') ||
+        normalized.includes('invited_at') ||
+        normalized.includes('onboarded_at') ||
+        normalized.includes('invite_batch_id'))) ||
+    (normalized.includes('column') &&
+      normalized.includes('does not exist') &&
+      (normalized.includes('invite_status') ||
+        normalized.includes('invited_at') ||
+        normalized.includes('onboarded_at') ||
+        normalized.includes('invite_batch_id')))
+  );
+};
 
 const NETLIFY_API_BASE_URL = 'https://api.netlify.com/api/v1';
 const MAX_NETLIFY_SYNC_PAGES = 50;
@@ -352,13 +380,22 @@ const syncWaitlistFromNetlifyInternal = async (): Promise<NetlifyWaitlistSyncRes
       name: candidate.name,
       email: candidate.email,
       status: 'PENDING',
+      invite_status: 'pending',
       created_at: candidate.createdAt,
     }));
 
   if (rowsToInsert.length > 0) {
-    const { error } = await supabase
+    let { error } = await supabase
       .from('waitlist')
       .upsert(rowsToInsert, { onConflict: 'email', ignoreDuplicates: true });
+
+    if (error && isInviteColumnUnavailable(error.message || '')) {
+      const fallbackRows = rowsToInsert.map(({ invite_status, ...row }) => row);
+      const fallbackResult = await supabase
+        .from('waitlist')
+        .upsert(fallbackRows, { onConflict: 'email', ignoreDuplicates: true });
+      error = fallbackResult.error;
+    }
 
     if (error) {
       throw new WaitlistInviteError(
@@ -381,11 +418,23 @@ const syncWaitlistFromNetlifyInternal = async (): Promise<NetlifyWaitlistSyncRes
 };
 
 const getWaitlistEntry = async (waitlistId: string): Promise<WaitlistRow> => {
-  const { data, error } = await supabase
+  const inviteResult = await supabase
     .from('waitlist')
-    .select('id,name,email,status,created_at')
+    .select('id,name,email,status,invite_status,created_at,invited_at,onboarded_at,invite_batch_id')
     .eq('id', waitlistId)
     .single();
+
+  let data: any = inviteResult.data as any;
+  let error = inviteResult.error;
+  if (error && isInviteColumnUnavailable(error.message || '')) {
+    const legacyResult = await supabase
+      .from('waitlist')
+      .select('id,name,email,status,created_at')
+      .eq('id', waitlistId)
+      .single();
+    data = legacyResult.data as any;
+    error = legacyResult.error;
+  }
 
   if (error || !data) {
     throw new WaitlistInviteError(404, 'Waitlist entry was not found.');
@@ -395,12 +444,25 @@ const getWaitlistEntry = async (waitlistId: string): Promise<WaitlistRow> => {
 };
 
 const getPendingWaitlistEntries = async (count: number): Promise<WaitlistRow[]> => {
-  const { data, error } = await supabase
+  const inviteResult = await supabase
     .from('waitlist')
-    .select('id,name,email,status,created_at')
-    .eq('status', 'PENDING')
+    .select('id,name,email,status,invite_status,created_at,invited_at,onboarded_at,invite_batch_id')
+    .eq('invite_status', 'pending')
     .order('created_at', { ascending: true })
     .limit(count);
+
+  let data: any[] | null = (inviteResult.data || []) as any[];
+  let error = inviteResult.error;
+  if (error && isInviteColumnUnavailable(error.message || '')) {
+    const legacyResult = await supabase
+      .from('waitlist')
+      .select('id,name,email,status,created_at')
+      .eq('status', 'PENDING')
+      .order('created_at', { ascending: true })
+      .limit(count);
+    data = (legacyResult.data || []) as any[];
+    error = legacyResult.error;
+  }
 
   if (error) {
     throw new WaitlistInviteError(
@@ -413,10 +475,23 @@ const getPendingWaitlistEntries = async (count: number): Promise<WaitlistRow[]> 
 };
 
 const markInvited = async (waitlistId: string) => {
-  const { error } = await supabase
+  const invitedAt = new Date().toISOString();
+  let { error } = await supabase
     .from('waitlist')
-    .update({ status: 'INVITED' })
+    .update({
+      status: 'INVITED',
+      invite_status: 'invited',
+      invited_at: invitedAt,
+    })
     .eq('id', waitlistId);
+
+  if (error && isInviteColumnUnavailable(error.message || '')) {
+    const fallback = await supabase
+      .from('waitlist')
+      .update({ status: 'INVITED' })
+      .eq('id', waitlistId);
+    error = fallback.error;
+  }
 
   if (error) {
     throw new WaitlistInviteError(
@@ -485,7 +560,7 @@ const sendSingleInviteInternal = async (
   adminEmail: string,
   adminName: string
 ): Promise<InviteResult> => {
-  if (row.status === 'ONBOARDED') {
+  if (toInviteStatus(row.invite_status || row.status) === 'onboarded') {
     throw new WaitlistInviteError(
       409,
       'This user is already onboarded and does not need an invite.'

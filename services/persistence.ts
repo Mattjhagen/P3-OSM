@@ -69,11 +69,46 @@ const resolveReferralToken = (row: any): string => {
   return fallbackId;
 };
 
+const normalizeWaitlistInviteStatus = (value: unknown): 'pending' | 'invited' | 'onboarded' | 'blocked' => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'invited') return 'invited';
+  if (normalized === 'onboarded') return 'onboarded';
+  if (normalized === 'blocked') return 'blocked';
+  return 'pending';
+};
+
+const toLegacyWaitlistStatus = (inviteStatus: 'pending' | 'invited' | 'onboarded' | 'blocked'): WaitlistEntry['status'] => {
+  if (inviteStatus === 'invited') return 'INVITED';
+  if (inviteStatus === 'onboarded') return 'ONBOARDED';
+  if (inviteStatus === 'blocked') return 'BLOCKED';
+  return 'PENDING';
+};
+
+const isWaitlistInviteColumnUnavailable = (message: string) => {
+  const normalized = String(message || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    (normalized.includes('schema cache') &&
+      (normalized.includes('invite_status') ||
+        normalized.includes('invited_at') ||
+        normalized.includes('onboarded_at') ||
+        normalized.includes('invite_batch_id'))) ||
+    (normalized.includes('column') &&
+      normalized.includes('does not exist') &&
+      (normalized.includes('invite_status') ||
+        normalized.includes('invited_at') ||
+        normalized.includes('onboarded_at') ||
+        normalized.includes('invite_batch_id')))
+  );
+};
+
 const toWaitlistEntry = (row: any): WaitlistEntry => ({
   id: String(row?.id || ''),
   name: String(row?.name || ''),
   email: String(row?.email || ''),
-  status: (String(row?.status || 'PENDING').toUpperCase() as WaitlistEntry['status']),
+  status: toLegacyWaitlistStatus(
+    normalizeWaitlistInviteStatus(row?.invite_status || row?.status)
+  ),
   created_at: String(row?.created_at || ''),
   referral_code: row?.referral_code ? String(row.referral_code) : undefined,
   referred_by: row?.referred_by ? String(row.referred_by) : undefined,
@@ -401,27 +436,84 @@ export const PersistenceService = {
   },
 
   updateWaitlistStatus: async (id: string, status: 'INVITED' | 'ONBOARDED') => {
-    await supabase.from('waitlist').update({ status }).eq('id', id);
+    const now = new Date().toISOString();
+    const inviteStatus = status === 'ONBOARDED' ? 'onboarded' : 'invited';
+    const payload = {
+      status,
+      invite_status: inviteStatus,
+      invited_at: status === 'INVITED' ? now : null,
+      onboarded_at: status === 'ONBOARDED' ? now : null,
+    };
+
+    let result = await supabase.from('waitlist').update(payload).eq('id', id);
+    if (!result.error) return;
+
+    if (!isWaitlistInviteColumnUnavailable(result.error.message || '')) {
+      throw result.error;
+    }
+
+    result = await supabase.from('waitlist').update({ status }).eq('id', id);
+    if (result.error) {
+      throw result.error;
+    }
   },
 
   inviteWaitlistBatch: async (count: number) => {
-    // 1. Fetch the IDs of the oldest 'PENDING' users
-    const { data: pendingUsers } = await supabase
+    const safeCount = Math.max(1, Math.min(250, Math.floor(Number(count) || 1)));
+    const pendingByInviteStatus = await supabase
       .from('waitlist')
       .select('id')
-      .eq('status', 'PENDING')
+      .eq('invite_status', 'pending')
       .order('created_at', { ascending: true })
-      .limit(count);
+      .limit(safeCount);
+
+    let pendingUsers = pendingByInviteStatus.data;
+    let pendingError = pendingByInviteStatus.error;
+
+    if (pendingError && isWaitlistInviteColumnUnavailable(pendingError.message || '')) {
+      const fallback = await supabase
+        .from('waitlist')
+        .select('id')
+        .eq('status', 'PENDING')
+        .order('created_at', { ascending: true })
+        .limit(safeCount);
+      pendingUsers = fallback.data;
+      pendingError = fallback.error;
+    }
+
+    if (pendingError) {
+      throw pendingError;
+    }
 
     if (!pendingUsers || pendingUsers.length === 0) return;
 
     const idsToUpdate = pendingUsers.map((u: any) => u.id);
+    const invitedAt = new Date().toISOString();
+    const inviteBatchId = `batch_${Date.now()}`;
 
-    // 2. Update status to INVITED
-    await supabase
+    let updateResult = await supabase
+      .from('waitlist')
+      .update({
+        status: 'INVITED',
+        invite_status: 'invited',
+        invited_at: invitedAt,
+        invite_batch_id: inviteBatchId,
+      })
+      .in('id', idsToUpdate);
+
+    if (!updateResult.error) return;
+
+    if (!isWaitlistInviteColumnUnavailable(updateResult.error.message || '')) {
+      throw updateResult.error;
+    }
+
+    updateResult = await supabase
       .from('waitlist')
       .update({ status: 'INVITED' })
       .in('id', idsToUpdate);
+    if (updateResult.error) {
+      throw updateResult.error;
+    }
   },
 
   getAdminWaitlist: async (

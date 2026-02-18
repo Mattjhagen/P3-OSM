@@ -735,6 +735,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
       return haystack.includes(query);
     });
   }, [remoteUserLogs, userLogSearchTerm]);
+  const waitlistSummaryTotal = waitlistSyncSummary?.total ?? 0;
 
   return (
     <div className="relative flex min-h-screen md:h-screen bg-[#050505] text-zinc-200 font-sans overflow-hidden">
@@ -1541,7 +1542,13 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
                    </thead>
                    <tbody>
                      {waitlist.length === 0 ? (
-                       <tr><td colSpan={6} className="p-8 text-center text-zinc-500">No users in waitlist.</td></tr>
+                       <tr>
+                        <td colSpan={6} className="p-8 text-center text-zinc-500">
+                          {waitlistSummaryTotal > 0
+                            ? `Queue summary reports ${waitlistSummaryTotal} users. Click "Sync Waitlist" to refresh row details.`
+                            : 'No users in waitlist.'}
+                        </td>
+                      </tr>
                      ) : (
                        waitlist.map((w, index) => (
                          <tr key={w.id} className="border-t border-zinc-800 hover:bg-black/40">
