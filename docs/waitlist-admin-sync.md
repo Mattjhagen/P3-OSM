@@ -1,90 +1,119 @@
-# Admin Waitlist Sync + Batch Onboarding
+# Admin Waitlist Sync + Manual Invite
 
-This document describes the server-side admin waitlist flow used by the **Admin Dashboard > Waitlist Queue**.
+This document describes the secured waitlist admin flow used by **Admin Dashboard > Waitlist Queue**.
 
-## 1) Source of truth
+## 1) Source Of Truth
 
-- Table: `waitlist` (Supabase)
+- Table: `public.waitlist` (Supabase)
 - Queue order: `created_at ASC` (oldest first)
-- Admin UI now reads queue via backend endpoint, not direct browser-table reads.
-- RPC summary: `waitlist_count()` returns one row with `{ total, pending, invited, onboarded }`.
+- Status model: `PENDING -> INVITED -> ONBOARDED`
+- Summary RPC: `waitlist_count()` returns `{ total, pending, invited, onboarded }`
 
-## 2) Server endpoints
+## 2) Architecture
+
+- Browser calls Netlify function proxy:
+  - `/.netlify/functions/admin_waitlist_proxy`
+- Proxy verifies Supabase access token and email allowlist.
+- Proxy injects internal bearer and forwards to Render:
+  - `/api/admin/waitlist*`
+- Render enforces internal bearer and employee role checks.
+
+This keeps `ADMIN_INTERNAL_BEARER` server-side only.
+
+## 3) Waitlist Admin Endpoints (Render)
 
 - `GET /api/admin/waitlist`
-  - Query: `adminEmail`, optional `page`, `pageSize`
-  - Returns paged rows from `waitlist`
+  - Query: `page`, `pageSize`
+  - Returns paged waitlist rows
 - `POST /api/admin/waitlist/sync`
-  - Body: `{ adminEmail, adminName }`
-  - Reconciles current queue counts and returns summary
+  - Body: `{ adminName }` (`adminEmail` is injected by proxy)
+  - Returns queue counts
+  - Status is read-only in sync
 - `POST /api/admin/waitlist/invite`
-  - Body: `{ adminEmail, adminName, waitlistId }`
-  - Marks one pending row as invited
+  - Body: `{ adminName, waitlistId }`
+  - Invites one pending row
 - `POST /api/admin/waitlist/invite-next`
-  - Body: `{ adminEmail, adminName, batchSize }`
-  - Marks next N pending rows as invited
+  - Body: `{ adminName, batchSize }`
+  - Invites next N pending rows
+- `POST /api/admin/waitlist/manual-invite`
+  - Body: `{ adminName, email, name? }`
+  - Create-or-reuse waitlist row by email, send invite, then set `INVITED` when send succeeds
 
-## 3) Required environment variables
+## 4) Netlify Proxy Contract
 
-Backend:
+Proxy URL format:
+
+- `/.netlify/functions/admin_waitlist_proxy?path=/api/admin/waitlist&page=1&pageSize=500`
+
+Rules:
+
+1. `path` must start with `/api/admin/waitlist`
+2. Allowed methods: `GET`, `POST`
+3. JSON content type required for `POST` only
+4. Validate Supabase token with:
+   - `GET ${SUPABASE_URL}/auth/v1/user`
+   - Headers:
+     - `Authorization: Bearer <client_access_token>`
+     - `apikey: <SUPABASE_ANON_KEY>`
+     - `Accept: application/json`
+5. Require authenticated email in `ADMIN_ALLOWED_EMAILS`
+6. Forward query params as-is except `path`; proxy sets `adminEmail` from authenticated email
+7. Proxy never forwards client `Authorization`
+8. Proxy always forwards to Render with:
+   - `Authorization: Bearer <ADMIN_INTERNAL_BEARER>`
+9. Proxy must passthrough Render status + body verbatim (including 4xx/5xx)
+
+## 5) Required Environment Variables
+
+### Render
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `SUPABASE_ANON_KEY` (optional; used for token validation client)
+- `ADMIN_INTERNAL_BEARER` (required in production for `/api/admin/waitlist*`)
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+- `SMTP_FROM_NAME` (optional)
+- `SMTP_SECURE` (optional override; default still adapts by port)
 
-Optional hardening:
+### Netlify
 
-- `ADMIN_INTERNAL_BEARER`
-  - If set, all `/api/admin/waitlist*` endpoints require:
-    - `Authorization: Bearer <ADMIN_INTERNAL_BEARER>`
-  - Do **not** expose this token in browser JavaScript.
-  - If enabled, call these routes from a trusted server-side layer (for example a Netlify Function) that injects the token.
+- `RENDER_API_BASE` (example: `https://p3-lending-protocol.onrender.com`)
+- `ADMIN_INTERNAL_BEARER` (same value as Render)
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `ADMIN_ALLOWED_EMAILS` (comma-separated)
 
-## 4) Admin authorization behavior
+## 6) Manual Invite Behavior
 
-Server validation checks:
+- Email lookup uses case-insensitive matching.
+- If duplicates exist, oldest row is used and server logs a warning.
+- Status rules:
+  - `PENDING`: send email, then set `INVITED`
+  - `INVITED`: re-send allowed, keep status `INVITED`
+  - `ONBOARDED`: reject with `409`
+- SMTP failures return `503`; status is not mutated.
+- Invite URL format:
+  - `${frontendUrl}/?waitlist_invite=<id>&email=<encoded_email>&ref=<encoded_referral_code_optional>`
 
-1. `adminEmail` must be present.
-2. If `ADMIN_INTERNAL_BEARER` is configured, request must include matching bearer token.
-3. If a bearer token is present without internal bearer mode, backend validates token with Supabase `auth.getUser`.
-4. `employees` table must contain active row for `adminEmail` with role in:
-   - `ADMIN`
-   - `RISK_OFFICER`
-   - `SUPPORT`
+## 7) Smoke Test Checklist
 
-## 5) Invite behavior with email disabled
+1. Open Admin Dashboard > Waitlist Queue.
+2. Confirm queue rows load.
+3. Click **Sync Waitlist** and verify totals refresh.
+4. Click **Invite Next N** and verify rows move from `PENDING` to `INVITED`.
+5. Use **Manual Invite** with a new email.
+6. Confirm API returns success and row appears as `INVITED`.
+7. Verify invite email is received.
+8. Trigger a known failure case (onboarded user) and verify HTTP `409` is surfaced.
+9. Trigger SMTP failure (test env) and verify HTTP `503` is surfaced.
 
-Batch invite is DB-first and does not block on SendGrid/SMTP:
+## 8) Optional DB Hardening
 
-- sets `status='INVITED'`
+Apply migration:
 
-This keeps onboarding flow unblocked while outbound email provider is unavailable.
+- `supabase/migrations/20260218190000_waitlist_email_lower_unique.sql`
 
-## 6) Smoke test checklist
-
-1. Ensure at least 2 pending rows exist in `waitlist`.
-2. Open Admin Dashboard > Waitlist Queue.
-3. Confirm rows are visible and oldest records appear first.
-4. Click **Sync Waitlist**.
-5. Confirm success summary appears with total/pending/invited counts.
-6. Click **Invite Next 10** (or lower batch).
-7. Confirm result alert shows updated/skipped counts.
-8. Refresh queue and confirm invited rows now have `INVITED` status.
-9. (Optional DB check) verify invited rows now have `status='INVITED'`.
-
-## 7) Referral column compatibility
-
-If `/api/admin/waitlist` fails with `column waitlist.referral_code does not exist`, apply the migration:
-
-- `supabase/migrations/20260218170000_waitlist_referral_code_compat.sql`
-
-It does three safe, idempotent steps:
-
-1. Adds `referral_code` if missing.
-2. Backfills missing referral codes for existing rows.
-3. Adds a unique partial index and insert trigger so future rows always get a code.
-
-After applying SQL in Supabase, reload API schema cache:
-
-1. Supabase Dashboard -> Database -> Settings -> API
-2. Click `Reload schema cache`
+It performs a preflight duplicate check and creates a case-insensitive unique index on `lower(btrim(email))` when safe.

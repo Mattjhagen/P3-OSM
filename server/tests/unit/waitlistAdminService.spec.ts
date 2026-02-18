@@ -1,14 +1,16 @@
-const { fromMock, resolveAuthUserMock } = vi.hoisted(() => ({
+const { fromMock, resolveAuthUserMock, mockedConfig } = vi.hoisted(() => ({
   fromMock: vi.fn(),
   resolveAuthUserMock: vi.fn(),
-}));
-
-vi.mock('../../src/config/config', () => ({
-  config: {
+  mockedConfig: {
     admin: {
       internalBearer: '',
     },
+    isProd: false,
   },
+}));
+
+vi.mock('../../src/config/config', () => ({
+  config: mockedConfig,
 }));
 
 vi.mock('../../src/config/supabase', () => ({
@@ -24,6 +26,8 @@ describe('WaitlistAdminService', () => {
   afterEach(() => {
     fromMock.mockReset();
     resolveAuthUserMock.mockReset();
+    mockedConfig.admin.internalBearer = '';
+    mockedConfig.isProd = false;
   });
 
   it('invites the next oldest PENDING rows using status column', async () => {
@@ -190,5 +194,105 @@ describe('WaitlistAdminService', () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].email).toBe('alice@example.com');
     expect(result.rows[0].referral_code).toBeNull();
+  });
+
+  it('requires ADMIN_INTERNAL_BEARER in production mode', async () => {
+    mockedConfig.isProd = true;
+    mockedConfig.admin.internalBearer = '';
+
+    await expect(
+      WaitlistAdminService.inviteNextWaitlist({
+        adminEmail: 'admin@p3lending.space',
+        authorizationHeader: '',
+        batchSize: 1,
+      })
+    ).rejects.toMatchObject({
+      status: 503,
+      message: expect.stringContaining('ADMIN_INTERNAL_BEARER'),
+    });
+  });
+
+  it('rejects mismatched internal bearer token in production mode', async () => {
+    mockedConfig.isProd = true;
+    mockedConfig.admin.internalBearer = 'expected-secret';
+
+    await expect(
+      WaitlistAdminService.inviteNextWaitlist({
+        adminEmail: 'admin@p3lending.space',
+        authorizationHeader: 'Bearer wrong-secret',
+        batchSize: 1,
+      })
+    ).rejects.toMatchObject({
+      status: 401,
+      message: expect.stringContaining('invalid internal admin bearer token'),
+    });
+  });
+
+  it('keeps sync waitlist status read-only', async () => {
+    const employeesMaybeSingleMock = vi.fn().mockResolvedValue({
+      data: {
+        id: 'emp_1',
+        email: 'admin@p3lending.space',
+        role: 'ADMIN',
+        is_active: true,
+      },
+      error: null,
+    });
+    const employeesLimitMock = vi.fn(() => ({ maybeSingle: employeesMaybeSingleMock }));
+    const employeesEqRoleMock = vi.fn(() => ({ limit: employeesLimitMock }));
+    const employeesEqEmailMock = vi.fn(() => ({ eq: employeesEqRoleMock }));
+    const employeesSelectMock = vi.fn(() => ({ eq: employeesEqEmailMock }));
+    const employeesBuilder = { select: employeesSelectMock };
+
+    const totalCountQuery = {
+      eq: vi.fn(() => Promise.resolve({ count: 0, error: null })),
+      then: (resolve: any, reject: any) =>
+        Promise.resolve({ count: 8, error: null }).then(resolve, reject),
+    };
+    const pendingCountQuery = {
+      eq: vi.fn(() => Promise.resolve({ count: 5, error: null })),
+      then: (resolve: any, reject: any) =>
+        Promise.resolve({ count: 0, error: null }).then(resolve, reject),
+    };
+    const invitedCountQuery = {
+      eq: vi.fn(() => Promise.resolve({ count: 2, error: null })),
+      then: (resolve: any, reject: any) =>
+        Promise.resolve({ count: 0, error: null }).then(resolve, reject),
+    };
+    const onboardedCountQuery = {
+      eq: vi.fn(() => Promise.resolve({ count: 1, error: null })),
+      then: (resolve: any, reject: any) =>
+        Promise.resolve({ count: 0, error: null }).then(resolve, reject),
+    };
+
+    const waitlistSelectMock = vi
+      .fn()
+      .mockReturnValueOnce(totalCountQuery)
+      .mockReturnValueOnce(pendingCountQuery)
+      .mockReturnValueOnce(invitedCountQuery)
+      .mockReturnValueOnce(onboardedCountQuery);
+
+    const waitlistUpdateMock = vi.fn();
+    const waitlistBuilder = {
+      select: waitlistSelectMock,
+      update: waitlistUpdateMock,
+    };
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === 'employees') return employeesBuilder;
+      if (table === 'waitlist') return waitlistBuilder;
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const result = await WaitlistAdminService.syncWaitlist({
+      adminEmail: 'admin@p3lending.space',
+      authorizationHeader: '',
+    });
+
+    expect(result.total).toBe(8);
+    expect(result.pending).toBe(5);
+    expect(result.invited).toBe(2);
+    expect(result.onboarded).toBe(1);
+    expect(waitlistUpdateMock).not.toHaveBeenCalled();
   });
 });

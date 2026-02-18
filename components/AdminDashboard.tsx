@@ -46,6 +46,9 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   const [isWaitlistSyncing, setIsWaitlistSyncing] = useState(false);
   const [waitlistSyncSummary, setWaitlistSyncSummary] = useState<AdminWaitlistSyncResult | null>(null);
   const [waitlistSyncError, setWaitlistSyncError] = useState('');
+  const [manualInviteEmail, setManualInviteEmail] = useState('');
+  const [manualInviteName, setManualInviteName] = useState('');
+  const [isManualInviting, setIsManualInviting] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   
   // New State for Chat Blinking
@@ -415,6 +418,45 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
 
   const handleWaitlistNetlifySync = async () => {
     await refreshWaitlist(true);
+  };
+
+  const handleManualInvite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const normalizedEmail = String(manualInviteEmail || '').trim().toLowerCase();
+    const normalizedName = String(manualInviteName || '').trim();
+    const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+
+    if (!isValidEmail) {
+      const message = 'Please enter a valid invite email.';
+      setWaitlistSyncError(message);
+      alert(message);
+      return;
+    }
+
+    setIsManualInviting(true);
+    setWaitlistSyncError('');
+
+    try {
+      const result = await PersistenceService.manualInviteAdminWaitlist(
+        currentAdmin.email,
+        currentAdmin.name,
+        normalizedEmail,
+        normalizedName
+      );
+      const updated = await refreshWaitlist(false);
+      setWaitlist(updated);
+      setManualInviteEmail('');
+      setManualInviteName('');
+      alert(
+        `Invite sent to ${result.email}.${result.created ? ' Added to waitlist and marked INVITED.' : ' Existing waitlist record updated.'}`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Manual invite failed.';
+      setWaitlistSyncError(message);
+      alert(message);
+    } finally {
+      setIsManualInviting(false);
+    }
   };
 
   // Internal Ticket Actions
@@ -1533,6 +1575,38 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
                     </Button>
                   </div>
                </div>
+
+               <form
+                 onSubmit={handleManualInvite}
+                 className="mb-6 bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col lg:flex-row lg:items-end gap-3"
+               >
+                 <div className="flex-1">
+                   <label className="text-[10px] uppercase tracking-wide text-zinc-500 font-bold">Manual Invite Email</label>
+                   <input
+                     type="email"
+                     value={manualInviteEmail}
+                     onChange={(e) => setManualInviteEmail(e.target.value)}
+                     placeholder="user@example.com"
+                     className="mt-1 w-full bg-black border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-[#00e599] outline-none"
+                     required
+                   />
+                 </div>
+                 <div className="flex-1">
+                   <label className="text-[10px] uppercase tracking-wide text-zinc-500 font-bold">Name (Optional)</label>
+                   <input
+                     type="text"
+                     value={manualInviteName}
+                     onChange={(e) => setManualInviteName(e.target.value)}
+                     placeholder="Optional display name"
+                     className="mt-1 w-full bg-black border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-[#00e599] outline-none"
+                   />
+                 </div>
+                 <div>
+                   <Button type="submit" size="sm" isLoading={isManualInviting}>
+                     Send Invite
+                   </Button>
+                 </div>
+               </form>
 
                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">

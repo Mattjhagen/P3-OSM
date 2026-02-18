@@ -1,5 +1,6 @@
 import { config } from '../config/config';
 import { resolveAuthUser, supabase } from '../config/supabase';
+import { ManualInviteResult, WaitlistInviteService } from './waitlistInviteService';
 
 const trim = (value: unknown) => String(value || '').trim();
 const normalizeEmail = (value: string) => trim(value).toLowerCase();
@@ -68,6 +69,8 @@ export interface WaitlistAdminSyncResult {
   onboarded: number;
 }
 
+export type WaitlistAdminManualInviteResult = ManualInviteResult;
+
 const formatRow = (row: any): WaitlistAdminQueueRow => ({
   id: String(row?.id || ''),
   name: String(row?.name || ''),
@@ -104,7 +107,21 @@ const assertAuthorizedAdmin = async (
   const expectedInternalBearer = trim(config.admin.internalBearer);
   const bearerToken = parseBearerToken(authorizationHeader);
 
-  if (expectedInternalBearer) {
+  if (config.isProd) {
+    if (!expectedInternalBearer) {
+      throw new WaitlistAdminError(
+        503,
+        'Admin waitlist routes require ADMIN_INTERNAL_BEARER in production.'
+      );
+    }
+
+    if (!bearerToken || bearerToken !== expectedInternalBearer) {
+      throw new WaitlistAdminError(
+        401,
+        'Missing or invalid internal admin bearer token.'
+      );
+    }
+  } else if (expectedInternalBearer) {
     if (!bearerToken || bearerToken !== expectedInternalBearer) {
       throw new WaitlistAdminError(
         401,
@@ -386,5 +403,22 @@ export const WaitlistAdminService = {
       invited,
       onboarded,
     };
+  },
+
+  manualInviteWaitlist: async (payload: {
+    adminEmail: string;
+    adminName: string;
+    authorizationHeader?: string;
+    email: string;
+    name?: string;
+  }): Promise<WaitlistAdminManualInviteResult> => {
+    await assertAuthorizedAdmin(payload.adminEmail, payload.authorizationHeader);
+
+    return WaitlistInviteService.sendManualInvite({
+      adminEmail: payload.adminEmail,
+      adminName: payload.adminName,
+      email: payload.email,
+      name: payload.name,
+    });
   },
 };

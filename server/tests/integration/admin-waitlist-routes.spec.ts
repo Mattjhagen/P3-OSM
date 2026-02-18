@@ -109,4 +109,59 @@ describe('Admin waitlist routes', () => {
     expect(response.body.data.updated).toBe(2);
     expect(response.body.data.rows).toHaveLength(2);
   });
+
+  it('sends manual waitlist invite through admin endpoint', async () => {
+    vi.spyOn(WaitlistAdminService, 'manualInviteWaitlist').mockResolvedValueOnce({
+      id: 'wait_3',
+      email: 'carol@example.com',
+      name: 'Carol',
+      status: 'INVITED',
+      created: true,
+    });
+
+    const response = await request(app).post('/api/admin/waitlist/manual-invite').send({
+      adminEmail: 'admin@p3lending.space',
+      adminName: 'Admin',
+      email: 'carol@example.com',
+      name: 'Carol',
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.email).toBe('carol@example.com');
+    expect(response.body.data.status).toBe('INVITED');
+    expect(response.body.data.created).toBe(true);
+  });
+
+  it('returns 409 for onboarded users on manual invite', async () => {
+    vi.spyOn(WaitlistAdminService, 'manualInviteWaitlist').mockRejectedValueOnce(
+      new WaitlistAdminError(409, 'This user is already onboarded and does not need an invite.')
+    );
+
+    const response = await request(app).post('/api/admin/waitlist/manual-invite').send({
+      adminEmail: 'admin@p3lending.space',
+      adminName: 'Admin',
+      email: 'onboarded@example.com',
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.success).toBe(false);
+    expect(String(response.body.error || '')).toContain('already onboarded');
+  });
+
+  it('returns 401 on bearer auth failure from waitlist service', async () => {
+    vi.spyOn(WaitlistAdminService, 'getWaitlistQueue').mockRejectedValueOnce(
+      new WaitlistAdminError(401, 'Missing or invalid internal admin bearer token.')
+    );
+
+    const response = await request(app).get('/api/admin/waitlist').query({
+      adminEmail: 'admin@p3lending.space',
+      page: 1,
+      pageSize: 50,
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(String(response.body.error || '')).toContain('bearer');
+  });
 });

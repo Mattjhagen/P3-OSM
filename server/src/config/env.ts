@@ -52,6 +52,7 @@ export const validatedEnv = cleanEnv(process.env, {
   SMTP_USER: str({ default: '', desc: 'SMTP username' }),
   SMTP_PASS: str({ default: '', desc: 'SMTP password/token' }),
   SMTP_FROM: str({ default: 'admin@p3lending.space', desc: 'Sender email address for invitations' }),
+  SMTP_FROM_NAME: str({ default: '', desc: 'Optional sender display name for invitation emails' }),
   SMTP_SECURE: bool({ default: false, desc: 'Whether to use implicit TLS (typically true for port 465)' }),
   ADMIN_INTERNAL_BEARER: str({
     default: '',

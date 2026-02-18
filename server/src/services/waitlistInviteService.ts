@@ -9,6 +9,7 @@ interface WaitlistRow {
   email: string;
   status: 'PENDING' | 'INVITED' | 'ONBOARDED';
   created_at: string;
+  referral_code?: string | null;
 }
 
 export interface InviteResult {
@@ -22,6 +23,14 @@ export interface BatchInviteResult {
   sent: number;
   failed: number;
   failures: Array<{ id: string; email: string; error: string }>;
+}
+
+export interface ManualInviteResult {
+  id: string;
+  email: string;
+  name: string;
+  status: 'INVITED';
+  created: boolean;
 }
 
 export interface NetlifyWaitlistSyncResult {
@@ -66,6 +75,9 @@ export class WaitlistInviteError extends Error {
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
 const trimToString = (value: unknown) => String(value || '').trim();
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const resolveWaitlistDisplayName = (email: string) => trimToString(email.split('@')[0] || 'User').slice(0, 150) || 'User';
+const WAITLIST_SELECT_FIELDS = 'id,name,email,status,created_at,referral_code';
 
 const NETLIFY_API_BASE_URL = 'https://api.netlify.com/api/v1';
 const MAX_NETLIFY_SYNC_PAGES = 50;
@@ -96,11 +108,14 @@ const getTransporter = () => {
   }
 
   if (!transporter) {
+    const secure = Boolean(config.smtp.secure || Number(config.smtp.port) === 465);
+    const requireTLS = !secure && Number(config.smtp.port) === 587;
+
     transporter = nodemailer.createTransport({
       host: config.smtp.host,
       port: config.smtp.port,
-      secure: config.smtp.secure,
-      requireTLS: true,
+      secure,
+      requireTLS,
       auth: {
         user: config.smtp.user,
         pass: config.smtp.pass,
@@ -383,7 +398,7 @@ const syncWaitlistFromNetlifyInternal = async (): Promise<NetlifyWaitlistSyncRes
 const getWaitlistEntry = async (waitlistId: string): Promise<WaitlistRow> => {
   const { data, error } = await supabase
     .from('waitlist')
-    .select('id,name,email,status,created_at')
+    .select(WAITLIST_SELECT_FIELDS)
     .eq('id', waitlistId)
     .single();
 
@@ -397,7 +412,7 @@ const getWaitlistEntry = async (waitlistId: string): Promise<WaitlistRow> => {
 const getPendingWaitlistEntries = async (count: number): Promise<WaitlistRow[]> => {
   const { data, error } = await supabase
     .from('waitlist')
-    .select('id,name,email,status,created_at')
+    .select(WAITLIST_SELECT_FIELDS)
     .eq('status', 'PENDING')
     .order('created_at', { ascending: true })
     .limit(count);
@@ -410,6 +425,111 @@ const getPendingWaitlistEntries = async (count: number): Promise<WaitlistRow[]> 
   }
 
   return (data || []) as WaitlistRow[];
+};
+
+const getWaitlistRowsByNormalizedEmail = async (
+  normalizedEmail: string
+): Promise<WaitlistRow[]> => {
+  const { data, error } = await supabase
+    .from('waitlist')
+    .select(WAITLIST_SELECT_FIELDS)
+    .ilike('email', normalizedEmail)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw new WaitlistInviteError(
+      500,
+      `Failed to fetch waitlist row by email: ${error.message}`
+    );
+  }
+
+  return (data || []) as WaitlistRow[];
+};
+
+const updateWaitlistName = async (
+  waitlistId: string,
+  name: string
+): Promise<WaitlistRow> => {
+  const nextName = trimToString(name).slice(0, 150);
+  const { data, error } = await supabase
+    .from('waitlist')
+    .update({ name: nextName })
+    .eq('id', waitlistId)
+    .select(WAITLIST_SELECT_FIELDS)
+    .single();
+
+  if (error || !data) {
+    throw new WaitlistInviteError(
+      500,
+      `Failed to update waitlist name: ${error?.message || 'Unknown error'}`
+    );
+  }
+
+  return data as WaitlistRow;
+};
+
+const insertWaitlistRow = async (
+  normalizedEmail: string,
+  name: string
+): Promise<WaitlistRow> => {
+  const { data, error } = await supabase
+    .from('waitlist')
+    .insert({
+      email: normalizedEmail,
+      name,
+      status: 'PENDING',
+    })
+    .select(WAITLIST_SELECT_FIELDS)
+    .single();
+
+  if (error || !data) {
+    throw new WaitlistInviteError(
+      500,
+      `Failed to create waitlist entry: ${error?.message || 'Unknown error'}`
+    );
+  }
+
+  return data as WaitlistRow;
+};
+
+const resolveManualInviteRow = async (payload: {
+  normalizedEmail: string;
+  preferredName: string;
+}): Promise<{ row: WaitlistRow; created: boolean }> => {
+  const existingRows = await getWaitlistRowsByNormalizedEmail(payload.normalizedEmail);
+  if (existingRows.length > 1) {
+    logger.warn(
+      { duplicateCount: existingRows.length },
+      'Multiple waitlist rows detected for a normalized email; using oldest entry.'
+    );
+  }
+
+  if (existingRows.length > 0) {
+    let row = existingRows[0];
+    if (payload.preferredName && payload.preferredName !== trimToString(row.name)) {
+      row = await updateWaitlistName(row.id, payload.preferredName);
+    }
+    return { row, created: false };
+  }
+
+  try {
+    const row = await insertWaitlistRow(payload.normalizedEmail, payload.preferredName);
+    return { row, created: true };
+  } catch (error: any) {
+    if (String(error?.code || '') === '23505' || /duplicate/i.test(String(error?.message || ''))) {
+      const rows = await getWaitlistRowsByNormalizedEmail(payload.normalizedEmail);
+      if (rows.length > 0) {
+        if (rows.length > 1) {
+          logger.warn(
+            { duplicateCount: rows.length },
+            'Duplicate waitlist rows detected after insert conflict; using oldest entry.'
+          );
+        }
+        return { row: rows[0], created: false };
+      }
+    }
+    throw error;
+  }
 };
 
 const markInvited = async (waitlistId: string) => {
@@ -441,7 +561,9 @@ const sendInviteEmail = async (
 
   const greetingName = row.name?.trim() || 'there';
   const senderName = adminName?.trim() || 'P3 Lending Team';
-  const fromAddress = config.smtp.from || config.smtp.user;
+  const fromEmail = trimToString(config.smtp.from || config.smtp.user);
+  const fromName = trimToString(config.smtp.fromName);
+  const fromAddress = fromName && fromEmail ? `${fromName} <${fromEmail}>` : fromEmail;
   const subject = 'You are invited to P3 Lending Beta';
   const text = [
     `Hi ${greetingName},`,
@@ -474,27 +596,46 @@ const sendInviteEmail = async (
     subject,
     text,
     html,
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : 'Unknown SMTP delivery error';
+    throw new WaitlistInviteError(
+      503,
+      `Invite email delivery failed: ${message}`
+    );
   });
 };
 
-const buildInviteUrl = (waitlistId: string) =>
-  `${normalizeUrl(config.frontendUrl)}/?waitlist_invite=${encodeURIComponent(waitlistId)}`;
+const buildInviteUrlForRow = (row: WaitlistRow) => {
+  const query = new URLSearchParams();
+  query.set('waitlist_invite', String(row.id || ''));
+  query.set('email', normalizeEmail(row.email));
+
+  const referralCode = trimToString(row.referral_code || '');
+  if (referralCode) {
+    query.set('ref', referralCode);
+  }
+
+  return `${normalizeUrl(config.frontendUrl)}/?${query.toString()}`;
+};
 
 const sendSingleInviteInternal = async (
   row: WaitlistRow,
   adminEmail: string,
   adminName: string
 ): Promise<InviteResult> => {
-  if (row.status === 'ONBOARDED') {
+  const normalizedStatus = String(row.status || 'PENDING').toUpperCase();
+  if (normalizedStatus === 'ONBOARDED') {
     throw new WaitlistInviteError(
       409,
       'This user is already onboarded and does not need an invite.'
     );
   }
 
-  const inviteUrl = buildInviteUrl(row.id);
+  const inviteUrl = buildInviteUrlForRow(row);
   await sendInviteEmail(row, inviteUrl, adminName);
-  await markInvited(row.id);
+  if (normalizedStatus === 'PENDING') {
+    await markInvited(row.id);
+  }
 
   logger.info(
     { waitlistId: row.id, email: row.email, adminEmail, inviteUrl },
@@ -590,5 +731,49 @@ export const WaitlistInviteService = {
     );
 
     return result;
+  },
+
+  sendManualInvite: async (payload: {
+    adminEmail: string;
+    adminName: string;
+    email: string;
+    name?: string;
+  }): Promise<ManualInviteResult> => {
+    const adminEmail = trimToString(payload.adminEmail);
+    const adminName = trimToString(payload.adminName);
+    const normalizedEmail = normalizeEmail(payload.email || '');
+    const preferredName = trimToString(payload.name || '').slice(0, 150);
+
+    if (!adminEmail) {
+      throw new WaitlistInviteError(400, 'adminEmail is required.');
+    }
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+      throw new WaitlistInviteError(400, 'A valid invite email is required.');
+    }
+
+    await assertAdminCanInvite(adminEmail);
+
+    const resolvedName = preferredName || resolveWaitlistDisplayName(normalizedEmail);
+    const { row, created } = await resolveManualInviteRow({
+      normalizedEmail,
+      preferredName: resolvedName,
+    });
+
+    if (String(row.status || '').toUpperCase() === 'ONBOARDED') {
+      throw new WaitlistInviteError(
+        409,
+        'This user is already onboarded and does not need an invite.'
+      );
+    }
+
+    await sendSingleInviteInternal(row, adminEmail, adminName);
+
+    return {
+      id: row.id,
+      email: normalizeEmail(row.email),
+      name: trimToString(row.name) || resolvedName,
+      status: 'INVITED',
+      created,
+    };
   },
 };

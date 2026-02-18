@@ -14,6 +14,7 @@ export const config = {
         user: validatedEnv.SMTP_USER,
         pass: validatedEnv.SMTP_PASS,
         from: validatedEnv.SMTP_FROM,
+        fromName: validatedEnv.SMTP_FROM_NAME,
         secure: validatedEnv.SMTP_SECURE,
     },
     admin: {

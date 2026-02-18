@@ -173,6 +173,43 @@ export const AdminController = {
     },
 
     /**
+     * POST /api/admin/waitlist/manual-invite
+     */
+    manualInviteWaitlist: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const adminEmail =
+                asString(req.body?.adminEmail) ||
+                asString(req.header('x-admin-email')) ||
+                asString(req.auth?.email);
+            const adminName = asString(req.body?.adminName);
+            const email = asString(req.body?.email);
+            const name = asString(req.body?.name);
+
+            const result = await WaitlistAdminService.manualInviteWaitlist({
+                adminEmail,
+                adminName,
+                authorizationHeader: req.header('authorization') || '',
+                email,
+                name,
+            });
+
+            return res.status(200).json({
+                success: true,
+                data: result,
+            });
+        } catch (error) {
+            const status = resolveWaitlistErrorStatus(error);
+            if (status >= 500) {
+                return next(error);
+            }
+            return res.status(status).json({
+                success: false,
+                error: resolveWaitlistErrorMessage(error),
+            });
+        }
+    },
+
+    /**
      * GET /api/admin/stats
      */
     getStats: async (req: Request, res: Response, next: NextFunction) => {

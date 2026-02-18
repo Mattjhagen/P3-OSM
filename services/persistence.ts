@@ -39,6 +39,7 @@ const getBackendBaseUrl = () =>
   normalizeBackendBaseUrl(
     RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
   );
+const ADMIN_WAITLIST_PROXY_PATH = '/.netlify/functions/admin_waitlist_proxy';
 const truncate = (value: string, max = 400) => (value.length > max ? `${value.slice(0, max - 3)}...` : value);
 
 const getWaitlistDisplayName = (email: string) => email.split('@')[0] || 'User';
@@ -237,6 +238,14 @@ export interface AdminWaitlistInviteResult {
   rows: WaitlistEntry[];
 }
 
+export interface AdminWaitlistManualInviteResult {
+  id: string;
+  email: string;
+  name: string;
+  status: 'INVITED';
+  created: boolean;
+}
+
 export interface WaitlistSignupResult {
   id: string;
   name: string;
@@ -251,6 +260,7 @@ export interface WaitlistSignupResult {
 
 const requestAdminWaitlistApi = async <T>(payload: {
   path: string;
+  query?: Record<string, string | number | boolean | undefined>;
   method?: 'GET' | 'POST';
   adminEmail: string;
   body?: Record<string, unknown>;
@@ -261,13 +271,29 @@ const requestAdminWaitlistApi = async <T>(payload: {
   }
 
   const method = payload.method || 'GET';
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Authenticated admin session is required for waitlist admin actions.');
+  }
+
+  const params = new URLSearchParams();
+  params.set('path', payload.path);
+  for (const [key, value] of Object.entries(payload.query || {})) {
+    if (value === undefined || value === null) continue;
+    params.set(key, String(value));
+  }
+
+  const proxyUrl = `${ADMIN_WAITLIST_PROXY_PATH}?${params.toString()}`;
   let response: Response;
 
   try {
-    response = await fetch(`${getBackendBaseUrl()}${payload.path}`, {
+    response = await fetch(proxyUrl, {
       method,
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
         'x-admin-email': normalizedAdminEmail,
       },
       ...(method === 'POST'
@@ -470,14 +496,13 @@ export const PersistenceService = {
   ): Promise<WaitlistEntry[]> => {
     const safePage = Math.max(1, Math.floor(page || 1));
     const safePageSize = Math.max(1, Math.min(500, Math.floor(pageSize || 500)));
-    const params = new URLSearchParams({
-      adminEmail: normalizeAdminEmail(adminEmail),
-      page: String(safePage),
-      pageSize: String(safePageSize),
-    });
 
     const rows = await requestAdminWaitlistApi<any[]>({
-      path: `/api/admin/waitlist?${params.toString()}`,
+      path: '/api/admin/waitlist',
+      query: {
+        page: safePage,
+        pageSize: safePageSize,
+      },
       method: 'GET',
       adminEmail,
     });
@@ -540,6 +565,23 @@ export const PersistenceService = {
       rows: (response.rows || []).map((row) => toWaitlistEntry(row)),
     };
   },
+
+  manualInviteAdminWaitlist: async (
+    adminEmail: string,
+    adminName: string,
+    email: string,
+    name?: string
+  ): Promise<AdminWaitlistManualInviteResult> =>
+    requestAdminWaitlistApi<AdminWaitlistManualInviteResult>({
+      path: '/api/admin/waitlist/manual-invite',
+      method: 'POST',
+      adminEmail,
+      body: {
+        adminName: String(adminName || '').trim(),
+        email: String(email || '').trim().toLowerCase(),
+        name: String(name || '').trim(),
+      },
+    }),
 
   syncWaitlistFromNetlify: async (
     adminEmail: string,
