@@ -4,7 +4,7 @@ create extension if not exists "pgcrypto";
 
 create table if not exists public.audit_events (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id text not null references public.users(id) on delete cascade,
   event_type text not null,
   payload jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
@@ -18,7 +18,7 @@ create index if not exists idx_audit_events_type_created_at
 
 create table if not exists public.notification_outbox (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id text not null references public.users(id) on delete cascade,
   to_email text not null,
   channel text not null default 'email',
   template_key text not null,
@@ -46,7 +46,7 @@ before update on public.notification_outbox
 for each row execute procedure public.update_updated_at_column();
 
 create or replace function public.enqueue_notification(
-  p_user_id uuid,
+  p_user_id text,
   p_to_email text,
   p_template_key text,
   p_template_data jsonb,
@@ -117,7 +117,7 @@ end;
 $$;
 
 grant execute on function public.enqueue_notification(
-  uuid,
+  text,
   text,
   text,
   jsonb,

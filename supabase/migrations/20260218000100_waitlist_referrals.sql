@@ -65,7 +65,9 @@ $$;
 create unique index if not exists idx_waitlist_referral_code on public.waitlist(referral_code);
 alter table public.waitlist alter column referral_code set not null;
 
-create or replace function public.waitlist_position(email_input text)
+drop function if exists public.waitlist_position(text);
+
+create function public.waitlist_position(email_input text)
 returns table(
   queue_position bigint,
   name text,
