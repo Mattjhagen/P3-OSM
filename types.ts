@@ -108,6 +108,10 @@ export interface WaitlistEntry {
   email: string;
   status: 'PENDING' | 'INVITED' | 'ONBOARDED';
   created_at: string;
+  referral_code?: string;
+  referred_by?: string | null;
+  referral_count?: number;
+  waitlist_score?: number;
 }
 
 export interface LoanRequest {

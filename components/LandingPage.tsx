@@ -5,6 +5,8 @@ import { Footer } from './Footer';
 import { LegalDocType } from './LegalModal';
 import { PersistenceService } from '../services/persistence';
 
+const WAITLIST_REF_STORAGE_KEY = 'p3_ref';
+
 interface Props {
   onLaunch: () => void;
   onDevAdminLogin: () => void;
@@ -93,21 +95,21 @@ const WaitlistModal = ({ isOpen, onClose, onLaunchApp }: { isOpen: boolean; onCl
     setIsSubmitting(true);
     
     try {
-      // 1. Add to DB
-      await PersistenceService.addToWaitlist(name, email);
-      
-      // 2. Fetch Calculated Position
-      const result = await PersistenceService.getWaitlistPosition(email);
-      
-      if (result) {
-        setPosition(result.position);
-        generateLink(email);
-        setMode('RESULT');
-      } else {
-        // Fallback if fetch fails right after insert (rare)
-        setPosition(4292); 
-        setMode('RESULT');
+      const signup = await PersistenceService.addToWaitlist(
+        name,
+        email,
+        getActiveReferralCode()
+      );
+
+      if (!signup) {
+        setErrorMsg('Something went wrong. Please try again.');
+        return;
       }
+
+      setName(signup.name);
+      setPosition(signup.position);
+      generateLink(signup.referralCode);
+      setMode('RESULT');
     } catch (err) {
       console.error("Failed to join waitlist", err);
       setErrorMsg("Something went wrong. Please try again.");
@@ -127,7 +129,7 @@ const WaitlistModal = ({ isOpen, onClose, onLaunchApp }: { isOpen: boolean; onCl
       if (result) {
         setPosition(result.position);
         setName(result.name); // Set name from DB
-        generateLink(email);
+        generateLink(result.referralCode || '');
         setMode('RESULT');
       } else {
         setErrorMsg("Email not found on the waitlist.");
@@ -139,18 +141,39 @@ const WaitlistModal = ({ isOpen, onClose, onLaunchApp }: { isOpen: boolean; onCl
     }
   };
 
-  const generateLink = (userEmail: string) => {
-    const mockCode = btoa(userEmail).substring(0, 8).toUpperCase();
-    setReferralLink(`https://p3lending.space?ref=${mockCode}`);
+  const getActiveReferralCode = () => {
+    if (typeof window === 'undefined') return null;
+
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = params.get('ref')?.trim();
+    if (fromQuery) {
+      const normalized = fromQuery.toUpperCase();
+      localStorage.setItem(WAITLIST_REF_STORAGE_KEY, normalized);
+      return normalized;
+    }
+
+    const fromStorage = localStorage.getItem(WAITLIST_REF_STORAGE_KEY)?.trim();
+    return fromStorage ? fromStorage.toUpperCase() : null;
+  };
+
+  const generateLink = (refCode: string) => {
+    if (!refCode) {
+      setReferralLink('');
+      return;
+    }
+
+    setReferralLink(`${window.location.origin}/?ref=${encodeURIComponent(refCode)}`);
   };
 
   const handleCopyLink = () => {
+    if (!referralLink) return;
     navigator.clipboard.writeText(referralLink);
     setHasCopied(true);
     setTimeout(() => setHasCopied(false), 2000);
   };
 
   const handleShareTwitter = () => {
+    if (!referralLink) return;
     const text = `I'm skipping the credit check and building my financial reputation on @P3Securities. Join me and ditch the FICO score: ${referralLink}`;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -280,11 +303,11 @@ const WaitlistModal = ({ isOpen, onClose, onLaunchApp }: { isOpen: boolean; onCl
                    <span className="text-xs font-bold text-white uppercase tracking-wider">Boost your position</span>
                 </div>
                 <p className="text-xs text-zinc-400 mb-3">
-                   Share your unique link. Each sign-up bumps you up <strong className="text-[#00e599]">100 spots</strong> in line.
+                   Share your unique link. Each successful sign-up increases your <strong className="text-[#00e599]">waitlist score</strong> and moves you up.
                 </p>
                 <div className="flex gap-2 mb-3">
                    <div className="flex-1 bg-black border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-300 font-mono truncate">
-                      {referralLink}
+                      {referralLink || 'Referral link unavailable'}
                    </div>
                    <button 
                      onClick={handleCopyLink}
@@ -322,6 +345,11 @@ export const LandingPage: React.FC<Props> = ({ onLaunch, onDevAdminLogin, onOpen
   const [totalWaitlist, setTotalWaitlist] = useState(4291);
 
   useEffect(() => {
+    const refCode = new URLSearchParams(window.location.search).get('ref');
+    if (refCode) {
+      localStorage.setItem(WAITLIST_REF_STORAGE_KEY, refCode.trim().toUpperCase());
+    }
+
     // Fetch live waitlist count for the ticker
     PersistenceService.getWaitlistCount().then(count => {
       setTotalWaitlist(count);

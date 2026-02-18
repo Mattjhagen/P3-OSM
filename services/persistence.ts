@@ -103,22 +103,13 @@ const markUserWaitlistOnboarded = async (payload: {
     return;
   }
 
-  const { error: insertError } = await supabase.from('waitlist').insert({
-    name: displayName,
-    email: normalizedEmail,
-    status: 'ONBOARDED',
-    created_at: new Date().toISOString(),
-  });
-
-  if (insertError) {
-    const normalizedMessage = String((insertError as any)?.message || '').toLowerCase();
-    if (
-      !normalizedMessage.includes('duplicate key') &&
-      !normalizedMessage.includes('unique constraint')
-    ) {
-      console.warn('Unable to seed waitlist row for authenticated Netlify user', insertError);
-    }
+  const signup = await PersistenceService.addToWaitlist(displayName, normalizedEmail);
+  if (!signup?.id) {
+    console.warn('Unable to seed waitlist row for authenticated Netlify user');
+    return;
   }
+
+  await PersistenceService.updateWaitlistStatus(signup.id, 'ONBOARDED');
 };
 
 export interface NetlifyWaitlistSyncResult {
@@ -132,57 +123,112 @@ export interface NetlifyWaitlistSyncResult {
   syncedAt: string;
 }
 
+export interface WaitlistSignupResult {
+  id: string;
+  name: string;
+  email: string;
+  position: number;
+  referralCode: string;
+  referredBy: string | null;
+  referralCount: number;
+  waitlistScore: number;
+  isExisting: boolean;
+}
+
 // NOTE: All methods are now ASYNC because they hit the database.
 export const PersistenceService = {
   
   // --- Waitlist Management ---
 
-  addToWaitlist: async (name: string, email: string) => {
-    try {
-      // Check if exists first to prevent unique constraint errors if not handled by DB
-      const existing = await PersistenceService.getWaitlistPosition(email);
-      if (existing) return; // Already in list
+  addToWaitlist: async (
+    name: string,
+    email: string,
+    referralCode?: string | null
+  ): Promise<WaitlistSignupResult | null> => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedName = name.trim();
+    const normalizedRef = (referralCode || '').trim().toUpperCase();
 
-      await supabase.from('waitlist').insert({
-        name,
-        email,
-        status: 'PENDING',
-        created_at: new Date().toISOString()
+    try {
+      const { data, error } = await supabase.rpc('create_waitlist_signup', {
+        name_input: normalizedName,
+        email_input: normalizedEmail,
+        ref_code_input: normalizedRef || null,
       });
+
+      if (error) throw error;
+
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return null;
+
+      const rank = Number(row.queue_position ?? row.position);
+      const resolvedPosition = Number.isFinite(rank)
+        ? BASE_WAITLIST_COUNT + rank
+        : BASE_WAITLIST_COUNT + 1;
+
+      return {
+        id: String(row.signup_id || row.id || ''),
+        name: String(row.name || normalizedName || normalizedEmail.split('@')[0] || 'User'),
+        email: String(row.email || normalizedEmail),
+        position: resolvedPosition,
+        referralCode: String(row.referral_code || ''),
+        referredBy: row.referred_by ? String(row.referred_by) : null,
+        referralCount: Number(row.referral_count || 0),
+        waitlistScore: Number(row.waitlist_score || 0),
+        isExisting: Boolean(row.is_existing),
+      };
     } catch (e) {
       console.error("Failed to add to waitlist", e);
+      return null;
     }
   },
 
   getWaitlist: async (): Promise<WaitlistEntry[]> => {
-    // Return oldest first to visualize the "Line"
-    const { data } = await supabase.from('waitlist').select('*').order('created_at', { ascending: true });
+    // Queue ranking is score-first, then FIFO for deterministic ties.
+    const { data } = await supabase
+      .from('waitlist')
+      .select('*')
+      .order('waitlist_score', { ascending: false })
+      .order('created_at', { ascending: true });
+
     return data ? data.map((r: any) => ({
       id: r.id,
       name: r.name,
       email: r.email,
       status: r.status,
-      created_at: r.created_at
+      created_at: r.created_at,
+      referral_code: r.referral_code || undefined,
+      referred_by: r.referred_by || undefined,
+      referral_count: Number(r.referral_count || 0),
+      waitlist_score: Number(r.waitlist_score || 0),
     })) : [];
   },
 
   // Returns the user's specific position and name if found
-  getWaitlistPosition: async (email: string): Promise<{ position: number; name: string } | null> => {
+  getWaitlistPosition: async (
+    email: string
+  ): Promise<{
+    position: number;
+    name: string;
+    referralCode?: string;
+    referralCount?: number;
+    waitlistScore?: number;
+  } | null> => {
     try {
-      // Fetch all emails/names ordered by date to calculate rank
-      const { data } = await supabase
-        .from('waitlist')
-        .select('email, name')
-        .order('created_at', { ascending: true });
+      const { data, error } = await supabase.rpc('waitlist_position', {
+        email_input: email.trim().toLowerCase(),
+      });
+      if (error || !data || data.length === 0) return null;
 
-      if (!data) return null;
-
-      const index = data.findIndex((e: any) => e.email.toLowerCase() === email.trim().toLowerCase());
-      if (index === -1) return null;
-
+      const row = data[0];
+      const rank = Number(row.queue_position ?? row.position);
+      if (!Number.isFinite(rank)) return null;
       return {
-        position: BASE_WAITLIST_COUNT + index + 1,
-        name: data[index].name
+        position: BASE_WAITLIST_COUNT + rank,
+        name: row.name,
+        referralCode: row.referral_code || undefined,
+        referralCount: Number(row.referral_count || 0),
+        waitlistScore: Number(row.waitlist_score || 0),
       };
     } catch (e) {
       console.error("Error fetching position", e);
@@ -192,8 +238,9 @@ export const PersistenceService = {
 
   getWaitlistCount: async (): Promise<number> => {
     try {
-      const { count } = await supabase.from('waitlist').select('*', { count: 'exact', head: true });
-      return BASE_WAITLIST_COUNT + (count || 0);
+      const { data, error } = await supabase.rpc('waitlist_count');
+      if (error || data === null || data === undefined) return BASE_WAITLIST_COUNT;
+      return BASE_WAITLIST_COUNT + Number(data);
     } catch (e) {
       return BASE_WAITLIST_COUNT;
     }

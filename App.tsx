@@ -235,7 +235,9 @@ const App: React.FC = () => {
       thankYouMode === 'investor';
 
     if (refCode) {
-      localStorage.setItem('p3_pending_ref', refCode);
+      const normalizedRef = refCode.trim().toUpperCase();
+      localStorage.setItem('p3_pending_ref', normalizedRef);
+      localStorage.setItem('p3_ref', normalizedRef);
       params.delete('ref');
     }
 
