@@ -10,6 +10,7 @@ interface Props {
 }
 
 const CALENDLY_MEETING_URL = 'https://calendly.com/admin-p3lending/new-meeting';
+const GO_TO_MARKET_STRATEGY_URL = 'https://github.com/Mattjhagen/P3-Lending-Protocol/blob/main/Go-to-Markey-Strategy.MD';
 
 interface DonationCheckoutButtonProps {
   className: string;
@@ -431,6 +432,16 @@ const SLIDES = [
              >
                Donate Now via Stripe
              </DonationCheckoutButton>
+           </div>
+           <div className="mt-4">
+             <a
+               href={GO_TO_MARKET_STRATEGY_URL}
+               target="_blank"
+               rel="noopener noreferrer"
+               className="text-sm text-zinc-300 underline decoration-zinc-600 underline-offset-4 transition-colors hover:text-[#00e599] hover:decoration-[#00e599]"
+             >
+               Go-To-Market Strategy
+             </a>
            </div>
         </div>
       </div>
