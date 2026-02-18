@@ -56,8 +56,6 @@ Server validation checks:
 Batch invite is DB-first and does not block on SendGrid/SMTP:
 
 - sets `status='INVITED'`
-- attempts to set `invite_status='queued'` and `invited_at=now()` when columns exist
-- falls back to status-only update if optional columns are not present
 
 This keeps onboarding flow unblocked while outbound email provider is unavailable.
 
@@ -71,4 +69,4 @@ This keeps onboarding flow unblocked while outbound email provider is unavailabl
 6. Click **Invite Next 10** (or lower batch).
 7. Confirm result alert shows updated/skipped counts.
 8. Refresh queue and confirm invited rows now have `INVITED` status.
-9. (Optional DB check) verify `status='INVITED'` and `invited_at`/`invite_status` if those columns exist.
+9. (Optional DB check) verify invited rows now have `status='INVITED'`.
