@@ -58,6 +58,13 @@ Notes:
 - Frontend env validation now requires `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 - Backend env validation now requires `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
 
+## Netlify Identity Invites
+
+If Netlify Identity dashboard invites fail (for example generic 500 errors), use:
+
+1. `docs/identity-invites.md`
+2. `scripts/identity-invite-smoke.sh`
+
 ---
 
 ## 🔐 Google OAuth Setup (Required for Login)
