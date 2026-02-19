@@ -3,6 +3,17 @@ import { handler } from '../../netlify/functions/admin_waitlist_proxy';
 describe('admin_waitlist_proxy', () => {
   const originalFetch = globalThis.fetch;
   const originalEnv = { ...process.env };
+  const toBase64Url = (value: string) =>
+    Buffer.from(value, 'utf8')
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
+  const buildJwtWithIssuer = (issuer: string) => {
+    const header = toBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const payload = toBase64Url(JSON.stringify({ iss: issuer, sub: 'test-user' }));
+    return `${header}.${payload}.signature`;
+  };
 
   const baseEvent = {
     httpMethod: 'POST',
@@ -67,7 +78,7 @@ describe('admin_waitlist_proxy', () => {
       success: false,
       error: 'Invalid/expired admin session token.',
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(0);
   });
 
   it('returns 200 when netlify context user has admin role', async () => {
@@ -158,7 +169,10 @@ describe('admin_waitlist_proxy', () => {
 
     const response = await handler({
       ...baseEvent,
-      headers: { Authorization: 'Bearer header.payload.signature', 'x-admin-email': 'admin@test.com' },
+      headers: {
+        Authorization: `Bearer ${buildJwtWithIssuer('https://supabase.example.co/auth/v1')}`,
+        'x-admin-email': 'admin@test.com',
+      },
     } as any);
 
     expect(response.statusCode).toBe(200);
@@ -170,6 +184,40 @@ describe('admin_waitlist_proxy', () => {
 
     const [, upstreamCall] = fetchMock.mock.calls;
     expect(upstreamCall[1].headers.Authorization).toBe('Bearer internal-secret');
+  });
+
+  it('forwards GET waitlist requests instead of returning health payload', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'admin-1',
+          email: 'admin@test.com',
+          app_metadata: { role: 'admin' },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        text: async () => JSON.stringify({ success: true, data: [] }),
+      });
+    globalThis.fetch = fetchMock as any;
+
+    const response = await handler({
+      httpMethod: 'GET',
+      headers: {
+        Authorization: `Bearer ${buildJwtWithIssuer('https://supabase.example.co/auth/v1')}`,
+        'x-admin-email': 'admin@test.com',
+      },
+      queryStringParameters: { path: '/api/admin/waitlist', page: '1', pageSize: '500' },
+      body: null,
+    } as any);
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({ success: true, data: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('returns GET health response without auth', async () => {

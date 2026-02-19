@@ -205,14 +205,16 @@ const isAdminFromEmployeesTable = async (userEmail) => {
 
 export const handler = async (event, context) => {
   const reqId = getReqId(event) || 'no-reqid';
-  if ((event?.httpMethod || 'GET').toUpperCase() === 'GET') {
+  const method = (event?.httpMethod || 'GET').toUpperCase();
+  const path = trim(event?.queryStringParameters?.path || '');
+
+  if (method === 'GET' && !path) {
     return toJsonResponse(200, {
       ok: true,
       name: PROXY_HEADER_VALUE,
     });
   }
 
-  const path = trim(event?.queryStringParameters?.path || '');
   if (!path || !path.startsWith('/')) {
     return toJsonResponse(400, {
       success: false,
@@ -376,7 +378,6 @@ export const handler = async (event, context) => {
   }
 
   const url = `${backendBase}${path}`;
-  const method = (event.httpMethod || 'GET').toUpperCase();
   const body = event.body || undefined;
   const headers = {
     'Content-Type': getHeader(event, 'Content-Type') || 'application/json',
