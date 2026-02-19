@@ -24,11 +24,36 @@ const getHeader = (event, name) => {
   return h[lower] || h[name] || '';
 };
 
+const getReqId = (event) =>
+  trim(getHeader(event, 'x-nf-request-id') || getHeader(event, 'x-nf-request-id'));
+
+const parseCookies = (cookieHeader) => {
+  const raw = trim(cookieHeader);
+  if (!raw) return {};
+  return raw.split(';').reduce((acc, pair) => {
+    const [key, ...valueParts] = pair.split('=');
+    const name = trim(key);
+    if (!name) return acc;
+    acc[name] = decodeURIComponent(trim(valueParts.join('=')));
+    return acc;
+  }, {});
+};
+
 const parseBearerToken = (authorizationHeader) => {
   const header = trim(authorizationHeader);
   const match = header.match(/^Bearer\s+(.+)$/i);
   return match ? trim(match[1]) : '';
 };
+
+const parseTokenFromRequest = (event) => {
+  const authHeader = getHeader(event, 'Authorization');
+  const bearer = parseBearerToken(authHeader);
+  if (bearer) return bearer;
+  const cookies = parseCookies(getHeader(event, 'cookie'));
+  return trim(cookies.nf_jwt || '');
+};
+
+const looksLikeJwt = (token) => /^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/.test(token);
 
 const getSupabaseConfig = () => {
   const url = trim(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL);
@@ -63,51 +88,6 @@ const getSupabaseUser = async (accessToken) => {
   if (!payload?.id) {
     return { ok: false, error: 'Invalid/expired Supabase session token.' };
   }
-  return { ok: true, user: payload };
-};
-
-const getRequestOrigin = (event) => {
-  const explicit =
-    trim(process.env.URL) ||
-    trim(process.env.DEPLOY_PRIME_URL) ||
-    trim(process.env.DEPLOY_URL);
-  if (explicit) return explicit.replace(/\/+$/, '');
-
-  const proto = trim(getHeader(event, 'x-forwarded-proto')) || 'https';
-  const host = trim(getHeader(event, 'host'));
-  if (!host) return '';
-  return `${proto}://${host}`.replace(/\/+$/, '');
-};
-
-const getNetlifyIdentityUser = async (accessToken, event) => {
-  const origin = getRequestOrigin(event);
-  if (!origin) {
-    return { ok: false, error: 'Unable to validate session token.' };
-  }
-
-  const res = await fetch(`${origin}/.netlify/identity/user`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-    },
-  });
-
-  if (!res.ok) {
-    return { ok: false, error: 'Invalid/expired admin session token.' };
-  }
-
-  let payload = null;
-  try {
-    payload = await res.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!payload?.id) {
-    return { ok: false, error: 'Invalid/expired admin session token.' };
-  }
-
   return { ok: true, user: payload };
 };
 
@@ -159,7 +139,8 @@ const isAdminFromEmployeesTable = async (userEmail) => {
   return Array.isArray(rows) && rows.length > 0;
 };
 
-export const handler = async (event) => {
+export const handler = async (event, context) => {
+  const reqId = getReqId(event) || 'no-reqid';
   if ((event?.httpMethod || 'GET').toUpperCase() === 'GET') {
     return toJsonResponse(200, {
       ok: true,
@@ -175,50 +156,112 @@ export const handler = async (event) => {
     });
   }
 
-  const authHeader = getHeader(event, 'Authorization');
-  const accessToken = parseBearerToken(authHeader);
-  const hasAuthHeader = Boolean(accessToken);
+  const hasCookie = Boolean(trim(getHeader(event, 'cookie')));
+  const contextUser = context?.clientContext?.user || null;
+  const contextUserPresent = Boolean(contextUser?.sub || contextUser?.id || contextUser?.email);
+  const accessToken = parseTokenFromRequest(event);
+  const hasAuthHeader = Boolean(parseBearerToken(getHeader(event, 'Authorization')));
   const tokenLength = accessToken.length;
-  if (!accessToken) {
+  console.info('[admin_waitlist_proxy] auth_probe', {
+    reqId,
+    hasAuthHeader,
+    hasCookie,
+    contextUserPresent,
+    path,
+  });
+
+  let authProvider = 'netlify_context';
+  let user = null;
+
+  if (contextUserPresent) {
+    user = {
+      id: trim(contextUser?.sub || contextUser?.id),
+      email: normalizeEmail(contextUser?.email),
+      app_metadata: contextUser?.app_metadata || {},
+    };
+  } else if (!accessToken) {
     console.warn('[admin_waitlist_proxy] unauthorized', {
+      reqId,
       reason: 'missing_token',
       hasAuthHeader,
+      hasCookie,
+      contextUserPresent,
       tokenLength,
       path,
     });
     return toJsonResponse(401, {
       success: false,
-      error: 'Missing Supabase session token.',
+      error: 'Missing session token.',
     });
+  } else {
+    authProvider = 'supabase';
+    if (!looksLikeJwt(accessToken)) {
+      console.warn('[admin_waitlist_proxy] unauthorized', {
+        reqId,
+        reason: 'invalid_token_format',
+        hasAuthHeader,
+        hasCookie,
+        tokenLength,
+        path,
+      });
+      return toJsonResponse(401, {
+        success: false,
+        error: 'Invalid session token.',
+      });
+    }
+
+    const authResult = await getSupabaseUser(accessToken);
+    console.info('[admin_waitlist_proxy] supabase_auth_result', {
+      reqId,
+      ok: authResult.ok,
+      path,
+    });
+    if (!authResult.ok) {
+      console.warn('[admin_waitlist_proxy] unauthorized', {
+        reqId,
+        reason: 'invalid_token',
+        hasAuthHeader,
+        hasCookie,
+        contextUserPresent,
+        tokenLength,
+        authProvider,
+        path,
+      });
+      return toJsonResponse(401, {
+        success: false,
+        error: 'Invalid/expired admin session token.',
+      });
+    }
+    user = authResult.user;
   }
 
-  let authResult = await getSupabaseUser(accessToken);
-  let authProvider = 'supabase';
-  if (!authResult.ok) {
-    authResult = await getNetlifyIdentityUser(accessToken, event);
-    authProvider = 'netlify_identity';
-  }
-  if (!authResult.ok) {
+  if (!user) {
     console.warn('[admin_waitlist_proxy] unauthorized', {
+      reqId,
       reason: 'invalid_token',
       hasAuthHeader,
+      hasCookie,
+      contextUserPresent,
       tokenLength,
       authProvider,
       path,
     });
     return toJsonResponse(401, {
       success: false,
-      error: authResult.error || 'Invalid/expired admin session token.',
+      error: 'Invalid/expired admin session token.',
     });
   }
-  const user = authResult.user;
+
   const userId = trim(user?.id);
   const userEmail = normalizeEmail(user?.email);
   const isAdmin = hasAdminClaim(user) || (await isAdminFromEmployeesTable(userEmail));
   if (!isAdmin) {
     console.warn('[admin_waitlist_proxy] forbidden', {
+      reqId,
       reason: 'not_admin',
       hasAuthHeader,
+      hasCookie,
+      contextUserPresent,
       tokenLength,
       authProvider,
       userId,
@@ -227,7 +270,7 @@ export const handler = async (event) => {
     });
     return toJsonResponse(403, {
       success: false,
-      error: 'Admin role required.',
+      error: 'Not authorized.',
     });
   }
 
@@ -244,6 +287,7 @@ export const handler = async (event) => {
   }
   if (!internalBearer) {
     console.error('[admin_waitlist_proxy] misconfigured', {
+      reqId,
       reason: 'missing_internal_bearer',
       userId,
       isAdmin,
@@ -272,6 +316,7 @@ export const handler = async (event) => {
       ...(body && method !== 'GET' ? { body } : {}),
     });
     console.info('[admin_waitlist_proxy] upstream_response', {
+      reqId,
       userId,
       isAdmin,
       authProvider,
@@ -295,6 +340,7 @@ export const handler = async (event) => {
     };
   } catch (err) {
     console.error('[admin_waitlist_proxy] upstream_error', {
+      reqId,
       userId,
       isAdmin,
       path,
