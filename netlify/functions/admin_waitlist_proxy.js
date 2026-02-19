@@ -66,17 +66,64 @@ const getSupabaseUser = async (accessToken) => {
   return { ok: true, user: payload };
 };
 
+const getRequestOrigin = (event) => {
+  const explicit =
+    trim(process.env.URL) ||
+    trim(process.env.DEPLOY_PRIME_URL) ||
+    trim(process.env.DEPLOY_URL);
+  if (explicit) return explicit.replace(/\/+$/, '');
+
+  const proto = trim(getHeader(event, 'x-forwarded-proto')) || 'https';
+  const host = trim(getHeader(event, 'host'));
+  if (!host) return '';
+  return `${proto}://${host}`.replace(/\/+$/, '');
+};
+
+const getNetlifyIdentityUser = async (accessToken, event) => {
+  const origin = getRequestOrigin(event);
+  if (!origin) {
+    return { ok: false, error: 'Unable to validate session token.' };
+  }
+
+  const res = await fetch(`${origin}/.netlify/identity/user`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    return { ok: false, error: 'Invalid/expired admin session token.' };
+  }
+
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!payload?.id) {
+    return { ok: false, error: 'Invalid/expired admin session token.' };
+  }
+
+  return { ok: true, user: payload };
+};
+
 const hasAdminClaim = (user) => {
   const appMetadata = user?.app_metadata || {};
   const directRole = String(appMetadata?.role || appMetadata?.p3_role || '').toLowerCase();
-  if (directRole === 'admin') return true;
+  if (['admin', 'risk_officer', 'support'].includes(directRole)) return true;
 
   const p3Roles = Array.isArray(appMetadata?.p3_roles)
     ? appMetadata.p3_roles
     : Array.isArray(appMetadata?.roles)
       ? appMetadata.roles
       : [];
-  return p3Roles.some((role) => String(role).toLowerCase() === 'admin');
+  return p3Roles.some((role) =>
+    ['admin', 'risk_officer', 'support'].includes(String(role).toLowerCase())
+  );
 };
 
 const isAdminFromEmployeesTable = async (userEmail) => {
@@ -89,7 +136,7 @@ const isAdminFromEmployeesTable = async (userEmail) => {
     select: 'id,email,role,is_active',
     email: `eq.${email}`,
     is_active: 'eq.true',
-    role: 'eq.ADMIN',
+    role: 'in.(ADMIN,RISK_OFFICER,SUPPORT)',
     limit: '1',
   });
 
@@ -145,17 +192,23 @@ export const handler = async (event) => {
     });
   }
 
-  const authResult = await getSupabaseUser(accessToken);
+  let authResult = await getSupabaseUser(accessToken);
+  let authProvider = 'supabase';
+  if (!authResult.ok) {
+    authResult = await getNetlifyIdentityUser(accessToken, event);
+    authProvider = 'netlify_identity';
+  }
   if (!authResult.ok) {
     console.warn('[admin_waitlist_proxy] unauthorized', {
       reason: 'invalid_token',
       hasAuthHeader,
       tokenLength,
+      authProvider,
       path,
     });
     return toJsonResponse(401, {
       success: false,
-      error: authResult.error || 'Invalid/expired Supabase session token.',
+      error: authResult.error || 'Invalid/expired admin session token.',
     });
   }
   const user = authResult.user;
@@ -167,6 +220,7 @@ export const handler = async (event) => {
       reason: 'not_admin',
       hasAuthHeader,
       tokenLength,
+      authProvider,
       userId,
       isAdmin,
       path,
@@ -220,6 +274,7 @@ export const handler = async (event) => {
     console.info('[admin_waitlist_proxy] upstream_response', {
       userId,
       isAdmin,
+      authProvider,
       path,
       upstreamStatus: res.status,
     });

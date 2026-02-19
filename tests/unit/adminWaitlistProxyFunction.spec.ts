@@ -62,9 +62,53 @@ describe('admin_waitlist_proxy', () => {
     expect(response.headers['X-P3-Proxy']).toBe('admin_waitlist_proxy');
     expect(JSON.parse(response.body)).toMatchObject({
       success: false,
-      error: 'Invalid/expired Supabase session token.',
+      error: 'Unable to validate session token.',
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts Netlify Identity token fallback when Supabase validation fails', async () => {
+    process.env.URL = 'https://p3lending.space';
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ message: 'invalid supabase token' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'netlify-user-1',
+          email: 'admin@test.com',
+          app_metadata: {},
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ id: 'emp-1', role: 'ADMIN', is_active: true }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        text: async () => JSON.stringify({ success: true, data: { synced: true } }),
+      });
+    globalThis.fetch = fetchMock as any;
+
+    const response = await handler({
+      ...baseEvent,
+      headers: { Authorization: 'Bearer netlify-token', 'x-admin-email': 'admin@test.com' },
+    } as any);
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      success: true,
+      data: { synced: true },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/.netlify/identity/user');
   });
 
   it('returns 403 when user is authenticated but not admin', async () => {

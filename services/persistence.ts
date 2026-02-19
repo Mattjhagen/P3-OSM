@@ -276,10 +276,38 @@ export interface SupportMessageResponse {
   messages: ChatMessage[];
 }
 
-const getSupabaseAccessToken = async (): Promise<string | null> => {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) return null;
-  return data.session?.access_token ?? null;
+const getNetlifyIdentityAccessToken = (): string | null => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    const raw = window.localStorage.getItem('gotrue.user');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const accessToken = String(parsed?.token?.access_token || '').trim();
+    return accessToken || null;
+  } catch {
+    return null;
+  }
+};
+
+const getAdminAccessToken = async (): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (!error && data?.session?.access_token) {
+      return data.session.access_token;
+    }
+  } catch {
+    // continue to refresh/fallback paths
+  }
+
+  try {
+    const refreshResult = await (supabase.auth as any)?.refreshSession?.();
+    const refreshedToken = String(refreshResult?.data?.session?.access_token || '').trim();
+    if (refreshedToken) return refreshedToken;
+  } catch {
+    // continue to Netlify Identity fallback
+  }
+
+  return getNetlifyIdentityAccessToken();
 };
 
 const requestAdminWaitlistApi = async <T>(payload: {
@@ -289,9 +317,9 @@ const requestAdminWaitlistApi = async <T>(payload: {
   adminEmail: string;
   body?: Record<string, unknown>;
 }): Promise<T> => {
-  const token = await getSupabaseAccessToken();
+  let token = await getAdminAccessToken();
   if (!token) {
-    throw new Error('Missing Supabase session token.');
+    throw new Error('Session expired, please sign in again.');
   }
 
   const normalizedAdminEmail = normalizeAdminEmail(payload.adminEmail);
@@ -312,6 +340,7 @@ const requestAdminWaitlistApi = async <T>(payload: {
   }
   let response: Response;
 
+  let retriedAfterRefresh = false;
   try {
     response = await fetch(proxyUrl, {
       method,
@@ -343,6 +372,35 @@ const requestAdminWaitlistApi = async <T>(payload: {
   const proxyMarker = response.headers.get('X-P3-Proxy');
   if ((import.meta as any)?.env?.MODE !== 'production' && proxyMarker) {
     console.log('[admin] waitlist proxy marker', proxyMarker);
+  }
+
+  if (response.status === 401 && !retriedAfterRefresh) {
+    retriedAfterRefresh = true;
+    const refreshedToken = await getAdminAccessToken();
+    if (refreshedToken && refreshedToken !== token) {
+      token = refreshedToken;
+      response = await fetch(proxyUrl, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-admin-email': normalizedAdminEmail,
+        },
+        ...(method === 'POST'
+          ? {
+              body: JSON.stringify({
+                adminEmail: normalizedAdminEmail,
+                ...(payload.body || {}),
+              }),
+            }
+          : {}),
+      });
+      try {
+        respJson = await response.json();
+      } catch {
+        respJson = null;
+      }
+    }
   }
 
   if (!response.ok || !respJson?.success) {

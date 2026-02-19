@@ -40,6 +40,7 @@ describe('PersistenceService admin waitlist proxy calls', () => {
   it('routes waitlist queue fetch through the Netlify admin proxy', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
+      headers: { get: () => null },
       json: async () => ({
         success: true,
         data: [
@@ -75,6 +76,7 @@ describe('PersistenceService admin waitlist proxy calls', () => {
   it('routes manual invite requests through proxy manual-invite path', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
+      headers: { get: () => null },
       json: async () => ({
         success: true,
         data: {
@@ -111,7 +113,7 @@ describe('PersistenceService admin waitlist proxy calls', () => {
 
     await expect(
       PersistenceService.syncAdminWaitlist('admin@test.com', 'Admin')
-    ).rejects.toThrow('Missing Supabase session token.');
+    ).rejects.toThrow('Session expired, please sign in again.');
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

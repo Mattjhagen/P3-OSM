@@ -19,7 +19,6 @@ import { ClientLogEntry, ClientLogService } from '../services/clientLogService';
 import { OpsAIAnalysis, OpsAIFixService } from '../services/opsAIFixService';
 import { AdminKpiService, AdminKpiSnapshot } from '../services/adminKpiService';
 import { AdminUserLogEntry, AdminUserLogService } from '../services/adminUserLogService';
-import { supabase } from '../supabaseClient';
 import { AdminPushService, AdminPushStatus } from '../services/adminPushService';
 
 // Extend window definition for Tawk.to
@@ -438,11 +437,6 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   };
 
   const handleWaitlistNetlifySync = async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session?.access_token) {
-      setWaitlistSyncError('Please sign in again to run admin actions.');
-      return;
-    }
     const syncProxyUrl = `/.netlify/functions/admin_waitlist_proxy?path=${encodeURIComponent('/api/admin/waitlist/sync')}`;
     if ((import.meta as any)?.env?.MODE !== 'production') {
       console.log('[admin] sync waitlist -> proxy', syncProxyUrl);
