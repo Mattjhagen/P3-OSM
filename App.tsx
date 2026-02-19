@@ -1014,14 +1014,14 @@ const App: React.FC = () => {
               <Button
                 onClick={() => handleSupabaseOAuth('google')}
                 isLoading={isAuthSubmitting}
-                className="w-full bg-zinc-900 border border-zinc-700 text-white hover:bg-zinc-800"
+                className="w-full bg-white border border-zinc-200 text-black hover:bg-zinc-100"
               >
                 Continue with Google
               </Button>
               <Button
                 onClick={() => handleSupabaseOAuth('apple')}
                 isLoading={isAuthSubmitting}
-                className="w-full bg-zinc-900 border border-zinc-700 text-white hover:bg-zinc-800"
+                className="w-full bg-white border border-zinc-200 text-black hover:bg-zinc-100"
               >
                 Continue with Apple
               </Button>
