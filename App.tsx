@@ -180,7 +180,21 @@ const App: React.FC = () => {
     } catch (e) { console.error("Admin check failed", e); }
     
     const pendingRef = localStorage.getItem('p3_pending_ref');
-    const p3User = await PersistenceService.loadUser(authUser, pendingRef);
+    let p3User: UserProfile;
+    try {
+      p3User = await PersistenceService.loadUser(authUser, pendingRef);
+    } catch (loadError: any) {
+      console.error('User profile load failed', loadError);
+      setAuthError(
+        String(
+          loadError?.message ||
+            'Unable to load your account. Please sign in with the account that completed KYC.'
+        )
+      );
+      clearAuthState(false);
+      await supabase.auth.signOut();
+      return;
+    }
     setUser(p3User);
     await AnalyticsService.identifyAuthenticatedUser({ userId: p3User.id, email });
     

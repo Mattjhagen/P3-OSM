@@ -59,7 +59,17 @@ Apple Developer checklist:
 
 ## Identity Linking Behavior
 
-Supabase links identities for the same user email by default when allowed by provider and project auth settings. This enables one account to sign in via passwordless email, Google, or Apple.
+P3 supports Supabase **manual identity linking (beta)** for signed-in users:
+
+- Go to `Profile Settings -> Sign-in Methods`.
+- Use `Link Google` or `Link Apple`.
+- The app redirects through `/auth/callback` and returns to `/dashboard?view=profile`.
+
+KYC safety enforcement:
+
+- Once an account is KYC verified, duplicate standalone accounts are blocked.
+- Stripe verified identity fingerprints are de-duplicated server-side; conflicts are forced into manual review.
+- Email-level DB guards also prevent new rows from being created when that email is already tied to a KYC-verified account.
 
 ## Deliverability Notes
 

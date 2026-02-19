@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { createHash } from 'crypto';
 import { config } from '../config/config';
 import { supabase } from '../config/supabase';
 import logger from '../utils/logger';
@@ -29,6 +30,11 @@ type KycComplianceProfile = {
   email?: string;
   ssnLast4?: string;
   annualSalaryUsd?: number;
+};
+
+type KycIdentityFingerprint = {
+  hash: string;
+  profile: Record<string, string>;
 };
 
 const KYC_TIER_LABEL_BY_NUMBER: Record<number, string> = {
@@ -102,6 +108,60 @@ const normalizeAnnualSalary = (value: unknown) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return undefined;
   return Math.round(parsed);
+};
+
+const normalizeNamePart = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+
+const normalizePostalCode = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+
+const normalizeDobString = (dob?: {
+  day?: number | null;
+  month?: number | null;
+  year?: number | null;
+}) => {
+  const year = Number(dob?.year || 0);
+  const month = Number(dob?.month || 0);
+  const day = Number(dob?.day || 0);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return '';
+  if (year <= 1900 || year >= 2200) return '';
+  if (month < 1 || month > 12) return '';
+  if (day < 1 || day > 31) return '';
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
+const buildKycIdentityFingerprint = (verifiedOutputs?: any): KycIdentityFingerprint | null => {
+  const firstName = normalizeNamePart(verifiedOutputs?.first_name);
+  const lastName = normalizeNamePart(verifiedOutputs?.last_name);
+  const dob = normalizeDobString(verifiedOutputs?.dob as any);
+  const country = String(verifiedOutputs?.address?.country || '')
+    .trim()
+    .toUpperCase();
+  const postalCode = normalizePostalCode(verifiedOutputs?.address?.postal_code);
+
+  // Name + DOB are the minimum reliable legal identity pair for de-dupe.
+  if (!firstName || !lastName || !dob) {
+    return null;
+  }
+
+  const profile = {
+    firstName,
+    lastName,
+    dob,
+    country,
+    postalCode,
+  };
+
+  const hashInput = [firstName, lastName, dob, country, postalCode].join('|');
+  const hash = createHash('sha256').update(hashInput).digest('hex');
+  return { hash, profile };
 };
 
 const normalizeReturnUrl = (value: unknown) => {
@@ -514,6 +574,125 @@ const maybeNotifyManualReview = async (payload: {
   });
 };
 
+const enforceVerifiedIdentityUniqueness = async (payload: {
+  userId: string;
+  session: Stripe.Identity.VerificationSession;
+  requestedTier: number;
+  status: StripeIdentityStatus;
+}) => {
+  if (payload.status !== 'verified') {
+    return {
+      requiresManualReview: false,
+      reasons: [] as string[],
+    };
+  }
+
+  const fingerprint = buildKycIdentityFingerprint(payload.session.verified_outputs);
+  if (!fingerprint) {
+    return {
+      requiresManualReview: true,
+      reasons: [
+        'Unable to derive a full legal identity fingerprint from Stripe outputs. Manual review required.',
+      ],
+    };
+  }
+
+  const { data: existingIdentity, error: existingIdentityError } = await supabase
+    .from('kyc_verified_identities')
+    .select('user_id')
+    .eq('identity_hash', fingerprint.hash)
+    .maybeSingle();
+
+  if (existingIdentityError) {
+    if (isMissingTableError(existingIdentityError.message, 'kyc_verified_identities')) {
+      logger.warn(
+        { userId: payload.userId, sessionId: payload.session.id },
+        'kyc_verified_identities table missing; skipping uniqueness guard'
+      );
+      return {
+        requiresManualReview: false,
+        reasons: [] as string[],
+      };
+    }
+
+    throw new Error(
+      `Failed to enforce verified identity uniqueness: ${existingIdentityError.message}`
+    );
+  }
+
+  const conflictingUserId = String(existingIdentity?.user_id || '').trim();
+  if (conflictingUserId && conflictingUserId !== payload.userId) {
+    await supabase.from('audit_log').insert({
+      actor_id: payload.userId,
+      action: 'kyc_duplicate_identity_blocked',
+      resource_type: 'kyc_verified_identities',
+      metadata: {
+        source_user_id: payload.userId,
+        conflicting_user_id: conflictingUserId,
+        stripe_session_id: payload.session.id,
+        requested_tier: payload.requestedTier,
+      },
+    });
+
+    return {
+      requiresManualReview: true,
+      reasons: [
+        'This legal identity is already verified on another account. Contact support to link sign-in methods.',
+      ],
+    };
+  }
+
+  const row = {
+    user_id: payload.userId,
+    identity_hash: fingerprint.hash,
+    provider: 'stripe_identity',
+    source_session_id: payload.session.id,
+    identity_profile: fingerprint.profile,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: upsertError } = await supabase
+    .from('kyc_verified_identities')
+    .upsert(row, { onConflict: 'user_id' });
+
+  if (upsertError) {
+    if (isMissingTableError(upsertError.message, 'kyc_verified_identities')) {
+      return {
+        requiresManualReview: false,
+        reasons: [] as string[],
+      };
+    }
+
+    const code = String((upsertError as any)?.code || '');
+    if (code === '23505') {
+      await supabase.from('audit_log').insert({
+        actor_id: payload.userId,
+        action: 'kyc_duplicate_identity_blocked_race',
+        resource_type: 'kyc_verified_identities',
+        metadata: {
+          source_user_id: payload.userId,
+          stripe_session_id: payload.session.id,
+          requested_tier: payload.requestedTier,
+        },
+      });
+
+      return {
+        requiresManualReview: true,
+        reasons: [
+          'Identity uniqueness conflict detected while finalizing KYC. Manual review has been requested.',
+        ],
+      };
+    }
+
+    throw new Error(`Failed to persist verified identity fingerprint: ${upsertError.message}`);
+  }
+
+  return {
+    requiresManualReview: false,
+    reasons: [] as string[],
+  };
+};
+
 const processStripeIdentitySession = async (payload: {
   session: Stripe.Identity.VerificationSession;
   source: 'webhook' | 'create' | 'refresh';
@@ -537,7 +716,16 @@ const processStripeIdentitySession = async (payload: {
   const requestedTier = normalizeRequestedTier(session.metadata?.requestedTier);
   const status = normalizeIdentityStatus(session.status);
   const risk = evaluateAmlRisk(session);
-  const kycStatus = deriveKycStatus(status, risk.requiresManualReview);
+  const identityGuard = await enforceVerifiedIdentityUniqueness({
+    userId,
+    session,
+    requestedTier,
+    status,
+  });
+  const combinedReasons = [...risk.reasons, ...identityGuard.reasons];
+  const requiresManualReview = risk.requiresManualReview || identityGuard.requiresManualReview;
+  const amlRiskScore = identityGuard.requiresManualReview ? Math.max(85, risk.riskScore) : risk.riskScore;
+  const kycStatus = deriveKycStatus(status, requiresManualReview);
 
   const { data: prior } = await supabase
     .from('stripe_identity_sessions')
@@ -550,9 +738,9 @@ const processStripeIdentitySession = async (payload: {
     session,
     requestedTier,
     status,
-    requiresManualReview: risk.requiresManualReview,
-    riskScore: risk.riskScore,
-    riskReasons: risk.reasons,
+    requiresManualReview,
+    riskScore: amlRiskScore,
+    riskReasons: combinedReasons,
     returnUrl: payload.returnUrl,
   });
 
@@ -560,13 +748,13 @@ const processStripeIdentitySession = async (payload: {
     userId,
     requestedTier,
     kycStatus,
-    requiresManualReview: risk.requiresManualReview,
+    requiresManualReview,
     status,
-    notes: risk.reasons,
+    notes: combinedReasons,
   });
 
   const shouldNotify =
-    risk.requiresManualReview &&
+    requiresManualReview &&
     (!prior || !prior.requires_manual_review || String(prior.status || '') !== status);
 
   if (shouldNotify) {
@@ -574,10 +762,10 @@ const processStripeIdentitySession = async (payload: {
       userId,
       session,
       requestedTier,
-      riskScore: risk.riskScore,
-      riskReasons: risk.reasons,
+      riskScore: amlRiskScore,
+      riskReasons: combinedReasons,
       status,
-      requiresManualReview: risk.requiresManualReview,
+      requiresManualReview,
     });
   }
 
@@ -593,9 +781,9 @@ const processStripeIdentitySession = async (payload: {
       stripe_status: status,
       requested_tier: requestedTier,
       kyc_status: kycStatus,
-      requires_manual_review: risk.requiresManualReview,
-      aml_risk_score: risk.riskScore,
-      aml_reasons: risk.reasons,
+      requires_manual_review: requiresManualReview,
+      aml_risk_score: amlRiskScore,
+      aml_reasons: combinedReasons,
     },
   });
 
@@ -606,9 +794,9 @@ const processStripeIdentitySession = async (payload: {
     status,
     requestedTier,
     kycStatus,
-    requiresManualReview: risk.requiresManualReview,
-    amlRiskScore: risk.riskScore,
-    amlReasons: risk.reasons,
+    requiresManualReview,
+    amlRiskScore,
+    amlReasons: combinedReasons,
   };
 };
 

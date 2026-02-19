@@ -7,6 +7,17 @@ type InviteMode = 'loading' | 'set_password' | 'invalid';
 
 const normalizePath = (value: string) => value.replace(/\/+$/, '');
 
+const toFriendlyInviteError = (error: unknown) => {
+  const message = String((error as any)?.message || 'Unable to set password from invite link.');
+  if (
+    message.includes('email_already_bound_to_verified_account') ||
+    message.includes('verified_account_requires_unique_email')
+  ) {
+    return 'This invite email is already associated with a KYC-verified account. Contact support to recover the original account.';
+  }
+  return message;
+};
+
 export const AuthInvitePage: React.FC = () => {
   const [mode, setMode] = useState<InviteMode>('loading');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,7 +96,7 @@ export const AuthInvitePage: React.FC = () => {
           ? { ...existingProfile.data }
           : {};
 
-      await supabase.from('users').upsert({
+      const { error: upsertError } = await supabase.from('users').upsert({
         id: userId,
         email: userEmail,
         data: {
@@ -95,10 +106,11 @@ export const AuthInvitePage: React.FC = () => {
           onboardingStartedAt: new Date().toISOString(),
         },
       });
+      if (upsertError) throw upsertError;
 
       window.location.assign(nextPath);
     } catch (updateErr: any) {
-      setError(String(updateErr?.message || 'Unable to set password from invite link.'));
+      setError(toFriendlyInviteError(updateErr));
     } finally {
       setIsSubmitting(false);
     }

@@ -36,6 +36,15 @@ const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 const normalizeBackendBaseUrl = (value: string) =>
   trimTrailingSlash(value).replace(/\/api$/i, '');
 const normalizeAdminEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const isVerifiedAccountGuardError = (value: unknown) => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+  return (
+    normalized.includes('email_already_bound_to_verified_account') ||
+    normalized.includes('verified_account_requires_unique_email')
+  );
+};
 const getBackendBaseUrl = () =>
   normalizeBackendBaseUrl(
     RuntimeConfigService.getEffectiveValue('BACKEND_URL', frontendEnv.VITE_BACKEND_URL)
@@ -858,11 +867,19 @@ export const PersistenceService = {
         }
 
         // Insert into DB
-        await supabase.from('users').insert({
+        const { error: insertError } = await supabase.from('users').insert({
           id: newUser.id,
           email: netlifyUser.email,
           data: newUser 
         });
+        if (insertError) {
+          if (isVerifiedAccountGuardError(insertError.message)) {
+            throw new Error(
+              'This identity is already associated with a KYC-verified account. Please sign in using your linked account.'
+            );
+          }
+          throw insertError;
+        }
 
         await markUserWaitlistOnboarded({
           email: netlifyUser.email,
@@ -872,6 +889,9 @@ export const PersistenceService = {
         return newUser;
       }
     } catch (e) {
+      if (isVerifiedAccountGuardError((e as any)?.message)) {
+        throw e;
+      }
       console.error("DB Load Error", e);
       return INITIAL_USER_TEMPLATE;
     }
