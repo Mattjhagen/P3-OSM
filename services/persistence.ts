@@ -392,19 +392,6 @@ export interface SupportMessageResponse {
   actionProposal?: SupportActionProposal;
 }
 
-const getNetlifyIdentityAccessToken = (): string | null => {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return null;
-    const raw = window.localStorage.getItem('gotrue.user');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const accessToken = String(parsed?.token?.access_token || '').trim();
-    return accessToken || null;
-  } catch {
-    return null;
-  }
-};
-
 const getAdminAccessToken = async (): Promise<string | null> => {
   try {
     const { data, error } = await supabase.auth.getSession();
@@ -420,10 +407,10 @@ const getAdminAccessToken = async (): Promise<string | null> => {
     const refreshedToken = String(refreshResult?.data?.session?.access_token || '').trim();
     if (refreshedToken) return refreshedToken;
   } catch {
-    // continue to Netlify Identity fallback
+    // continue to null (Supabase is canonical auth source)
   }
 
-  return getNetlifyIdentityAccessToken();
+  return null;
 };
 
 const requestAdminWaitlistApi = async <T>(payload: {

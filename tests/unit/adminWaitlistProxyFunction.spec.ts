@@ -76,12 +76,13 @@ describe('admin_waitlist_proxy', () => {
     expect(response.headers['X-P3-Proxy']).toBe('admin_waitlist_proxy');
     expect(JSON.parse(response.body)).toMatchObject({
       success: false,
-      error: 'Invalid/expired admin session token.',
+      error: 'Supabase session token required.',
     });
     expect(fetchMock).toHaveBeenCalledTimes(0);
   });
 
   it('returns 200 when netlify context user has admin role', async () => {
+    process.env.ENABLE_NETLIFY_IDENTITY_FALLBACK = 'true';
     const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -114,7 +115,8 @@ describe('admin_waitlist_proxy', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 403 when netlify context user is not admin and employees lookup misses', async () => {
+  it('returns 403 when netlify context user is not admin and allowlist lookup misses', async () => {
+    process.env.ENABLE_NETLIFY_IDENTITY_FALLBACK = 'true';
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -146,6 +148,8 @@ describe('admin_waitlist_proxy', () => {
       error: 'Not authorized.',
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [allowlistCallUrl] = fetchMock.mock.calls[0];
+    expect(String(allowlistCallUrl)).toContain('/rest/v1/admin_allowlist');
   });
 
   it('forwards with internal bearer when user is admin', async () => {

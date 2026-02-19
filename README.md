@@ -65,6 +65,66 @@ If Netlify Identity dashboard invites fail (for example generic 500 errors), use
 1. `docs/identity-invites.md`
 2. `scripts/identity-invite-smoke.sh`
 
+Invite-link routing and onboarding:
+
+- Invite links should target `https://p3lending.space/auth/invite` (not `/`).
+- Netlify template link format: `{{ .SiteURL }}/auth/invite#invite_token={{ .Token }}`
+- Waitlist manual invite links use: `/auth/invite?waitlist_invite=<id>&email=<email>&ref=<ref_code_optional>`
+- SPA route `/auth/invite` handles:
+  - Supabase invite sessions (password set via `supabase.auth.updateUser`)
+  - Netlify invite-token signup fallback via widget
+  - Invalid/expired links with a resend-invite support CTA
+
+Supabase URL configuration (if Supabase Auth invites are used):
+
+- Site URL: `https://p3lending.space`
+- Allowed Redirect URLs:
+  - `https://p3lending.space/auth/invite`
+  - `https://p3lending.space/auth/callback`
+  - `https://p3lending.space/auth/callback?next=*`
+  - `http://localhost:3000/auth/invite`
+  - `http://localhost:3000/auth/callback`
+- Pass `redirectTo` when creating invites:
+  - `redirectTo: "https://p3lending.space/auth/invite"`
+
+Supabase auth migration checklist:
+
+- `Authentication -> URL Configuration`
+  - `Site URL`: `https://p3lending.space`
+  - `Allowed Redirect URLs`:
+    - `https://p3lending.space/auth/invite`
+    - `https://p3lending.space/auth/callback`
+    - `http://localhost:3000/auth/invite`
+    - `http://localhost:3000/auth/callback`
+- Confirm server invite creation uses Supabase admin invite link generation with:
+  - `redirectTo: https://p3lending.space/auth/invite`
+- Verify frontend auth state comes from `supabase.auth.getSession()` plus `onAuthStateChange`.
+- After rollout validation, disable Netlify Identity in Netlify site settings (or keep disabled by feature flag only during transition).
+
+Admin allowlist seed (one-time):
+
+```sql
+update public.admin_allowlist
+set role = 'ADMIN', is_active = true
+where lower(btrim(email)) = 'mattjhagen@ymail.com';
+
+insert into public.admin_allowlist (email, role, is_active)
+select 'mattjhagen@ymail.com', 'ADMIN', true
+where not exists (
+  select 1
+  from public.admin_allowlist
+  where lower(btrim(email)) = 'mattjhagen@ymail.com'
+);
+```
+
+Invite deliverability checklist:
+
+- Prefer a transactional provider: SendGrid, Mailgun, Postmark, or SES.
+- Configure SPF, DKIM, and DMARC for `p3lending.space`.
+- Use an aligned sender like `no-reply@p3lending.space`.
+- Keep invite emails simple and include plain-text content.
+- If needed, use a dedicated mail subdomain (for example `mail.p3lending.space`).
+
 ## Admin PWA Push Notifications
 
 Admin push notifications are opt-in and device-specific.

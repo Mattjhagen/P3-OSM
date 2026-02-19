@@ -8,6 +8,8 @@ const trim = (value) => String(value || '').trim();
 const normalizeEmail = (value) => trim(value).toLowerCase();
 const PROXY_HEADER_NAME = 'X-P3-Proxy';
 const PROXY_HEADER_VALUE = 'admin_waitlist_proxy';
+const isNetlifyIdentityFallbackEnabled = () =>
+  trim(process.env.ENABLE_NETLIFY_IDENTITY_FALLBACK || '').toLowerCase() === 'true';
 
 const toJsonResponse = (statusCode, payload) => ({
   statusCode,
@@ -49,6 +51,7 @@ const parseTokenFromRequest = (event) => {
   const authHeader = getHeader(event, 'Authorization');
   const bearer = parseBearerToken(authHeader);
   if (bearer) return bearer;
+  if (!isNetlifyIdentityFallbackEnabled()) return '';
   const cookies = parseCookies(getHeader(event, 'cookie'));
   return trim(cookies.nf_jwt || '');
 };
@@ -170,7 +173,7 @@ const hasAdminClaim = (user) => {
   );
 };
 
-const isAdminFromEmployeesTable = async (userEmail) => {
+const isAdminFromAllowlist = async (userEmail) => {
   const email = normalizeEmail(userEmail);
   const { url, serviceRoleKey } = getSupabaseConfig();
   if (!url || !serviceRoleKey || !email) return false;
@@ -184,7 +187,7 @@ const isAdminFromEmployeesTable = async (userEmail) => {
     limit: '1',
   });
 
-  const res = await fetch(`${base}/rest/v1/employees?${params.toString()}`, {
+  const res = await fetch(`${base}/rest/v1/admin_allowlist?${params.toString()}`, {
     method: 'GET',
     headers: {
       apikey: serviceRoleKey,
@@ -236,10 +239,10 @@ export const handler = async (event, context) => {
     path,
   });
 
-  let authProvider = 'netlify_context';
+  let authProvider = 'supabase';
   let user = null;
 
-  if (contextUserPresent) {
+  if (contextUserPresent && isNetlifyIdentityFallbackEnabled()) {
     user = {
       id: trim(contextUser?.sub || contextUser?.id),
       email: normalizeEmail(contextUser?.email),
@@ -277,6 +280,12 @@ export const handler = async (event, context) => {
 
     const issuer = getJwtIssuer(accessToken);
     const treatAsSupabase = looksLikeSupabaseIssuer(issuer);
+    if (!treatAsSupabase && !isNetlifyIdentityFallbackEnabled()) {
+      return toJsonResponse(401, {
+        success: false,
+        error: 'Supabase session token required.',
+      });
+    }
 
     authProvider = treatAsSupabase ? 'supabase' : 'netlify_identity';
 
@@ -309,7 +318,7 @@ export const handler = async (event, context) => {
       });
     }
 
-    user = treatAsSupabase ? authResult.user : authResult.user;
+    user = authResult.user;
   }
 
   if (!user) {
@@ -331,7 +340,7 @@ export const handler = async (event, context) => {
 
   const userId = trim(user?.id);
   const userEmail = normalizeEmail(user?.email);
-  const isAdmin = hasAdminClaim(user) || (await isAdminFromEmployeesTable(userEmail));
+  const isAdmin = hasAdminClaim(user) || (await isAdminFromAllowlist(userEmail));
   if (!isAdmin) {
     console.warn('[admin_waitlist_proxy] forbidden', {
       reqId,

@@ -735,11 +735,25 @@ export const handler = async (event) => {
       userId,
       anonSessionId,
     });
-    const dek = await getOrCreateConversationDek({
-      keyRef,
-      userId,
-      anonSessionId,
-    });
+    let dek = '';
+    try {
+      dek = await getOrCreateConversationDek({
+        keyRef,
+        userId,
+        anonSessionId,
+      });
+    } catch (error) {
+      logSupportError(reqId, 'encryption_key_failed', error);
+      return await returnFallback({
+        reqId,
+        threadId,
+        userId,
+        senderName,
+        userMessage: rawUserMessage || 'support request',
+        errorCode: 'ticket_created',
+        conversationId,
+      });
+    }
 
     let userMessage = rawUserMessage;
     if (isEncryptedEnvelope(incomingEnvelope)) {

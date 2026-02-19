@@ -34,7 +34,7 @@ Copy and paste the HTML code below into your Authentication Provider's settings 
       <h1>You're Invited to the Future of Credit.</h1>
       <p>You have been selected to join the P3 Lending Protocol. We are building a financial system based on reputation and character, not FICO scores.</p>
       <p>Click the button below to accept your invitation and create your decentralized identity.</p>
-      <a href="{{ .SiteURL }}/#invite_token={{ .Token }}" class="btn">Accept Invitation</a>
+      <a href="{{ .SiteURL }}/auth/invite#invite_token={{ .Token }}" class="btn">Accept Invitation</a>
     </div>
     <div class="footer">
       <p>P3 Lending Protocol • Decentralized Social Finance<br/>

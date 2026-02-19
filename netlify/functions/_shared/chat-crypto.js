@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, webcrypto } from 'crypto';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -6,8 +6,9 @@ const decoder = new TextDecoder();
 const toBase64 = (bytes) => Buffer.from(bytes).toString('base64');
 const fromBase64 = (value) => new Uint8Array(Buffer.from(String(value || ''), 'base64'));
 
+const cryptoApi = globalThis.crypto || webcrypto;
 const importAesKey = async (rawBytes) =>
-  crypto.subtle.importKey('raw', rawBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  cryptoApi.subtle.importKey('raw', rawBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 
 const normalizeEscrowSecret = (secret) => {
   const normalized = String(secret || '').trim();
@@ -19,14 +20,14 @@ const normalizeEscrowSecret = (secret) => {
 const buildAdditionalData = (aadValue) => encoder.encode(String(aadValue || ''));
 
 export const generateDekB64 = () => {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(32));
   return toBase64(bytes);
 };
 
 export const encryptPlaintextWithDek = async (plaintext, dekB64, aadValue = '') => {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const iv = cryptoApi.getRandomValues(new Uint8Array(12));
   const key = await importAesKey(fromBase64(dekB64));
-  const encrypted = await crypto.subtle.encrypt(
+  const encrypted = await cryptoApi.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: buildAdditionalData(aadValue) },
     key,
     encoder.encode(String(plaintext || ''))
@@ -44,7 +45,7 @@ export const decryptEnvelopeWithDek = async (envelope, dekB64) => {
   const iv = fromBase64(envelope?.iv || '');
   const ciphertext = fromBase64(envelope?.ciphertext || '');
   const key = await importAesKey(fromBase64(dekB64));
-  const decrypted = await crypto.subtle.decrypt(
+  const decrypted = await cryptoApi.subtle.decrypt(
     {
       name: 'AES-GCM',
       iv,
@@ -57,9 +58,9 @@ export const decryptEnvelopeWithDek = async (envelope, dekB64) => {
 };
 
 export const wrapDekForEscrow = async (dekB64, escrowSecret) => {
-  const wrapIv = crypto.getRandomValues(new Uint8Array(12));
+  const wrapIv = cryptoApi.getRandomValues(new Uint8Array(12));
   const escrowKey = await importAesKey(normalizeEscrowSecret(escrowSecret));
-  const wrapped = await crypto.subtle.encrypt(
+  const wrapped = await cryptoApi.subtle.encrypt(
     { name: 'AES-GCM', iv: wrapIv, additionalData: encoder.encode('chat_escrow_v1') },
     escrowKey,
     fromBase64(dekB64)
@@ -73,7 +74,7 @@ export const wrapDekForEscrow = async (dekB64, escrowSecret) => {
 
 export const unwrapDekFromEscrow = async ({ wrappedDek, wrapIv }, escrowSecret) => {
   const escrowKey = await importAesKey(normalizeEscrowSecret(escrowSecret));
-  const decrypted = await crypto.subtle.decrypt(
+  const decrypted = await cryptoApi.subtle.decrypt(
     {
       name: 'AES-GCM',
       iv: fromBase64(wrapIv),

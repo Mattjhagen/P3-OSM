@@ -646,7 +646,42 @@ const buildInviteUrlForRow = (row: WaitlistRow) => {
     query.set('ref', referralCode);
   }
 
-  return `${normalizeUrl(config.frontendUrl)}/?${query.toString()}`;
+  return `${normalizeUrl(config.frontendUrl)}/auth/invite?${query.toString()}`;
+};
+
+const createSupabaseInviteLinkForRow = async (row: WaitlistRow): Promise<string> => {
+  const fallbackUrl = buildInviteUrlForRow(row);
+  const redirectTo = `${normalizeUrl(config.frontendUrl)}/auth/invite`;
+  const email = normalizeEmail(row.email);
+
+  const adminApi: any = (supabase as any)?.auth?.admin;
+  if (!adminApi) {
+    throw new WaitlistInviteError(500, 'Supabase auth admin client is not available for invites.');
+  }
+
+  const generated = await adminApi.generateLink({
+    type: 'invite',
+    email,
+    options: {
+      redirectTo,
+    },
+  });
+
+  const generatedError = generated?.error;
+  if (generatedError) {
+    throw new WaitlistInviteError(
+      503,
+      `Failed to generate Supabase invite link: ${generatedError.message || 'unknown error'}`
+    );
+  }
+
+  const actionLink = trimToString(generated?.data?.properties?.action_link);
+  if (actionLink) {
+    return actionLink;
+  }
+
+  // Fallback path for unexpected response shape.
+  return fallbackUrl;
 };
 
 const sendSingleInviteInternal = async (
@@ -662,7 +697,7 @@ const sendSingleInviteInternal = async (
     );
   }
 
-  const inviteUrl = buildInviteUrlForRow(row);
+  const inviteUrl = await createSupabaseInviteLinkForRow(row);
   await sendInviteEmail(row, inviteUrl, adminName);
   if (normalizedStatus === 'PENDING') {
     await markInvited(row.id);

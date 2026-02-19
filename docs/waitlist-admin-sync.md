@@ -96,7 +96,7 @@ Rules:
   - `ONBOARDED`: reject with `409`
 - SMTP failures return `503`; status is not mutated.
 - Invite URL format:
-  - `${frontendUrl}/?waitlist_invite=<id>&email=<encoded_email>&ref=<encoded_referral_code_optional>`
+- `${frontendUrl}/auth/invite?waitlist_invite=<id>&email=<encoded_email>&ref=<encoded_referral_code_optional>`
 
 ## 7) Smoke Test Checklist
 

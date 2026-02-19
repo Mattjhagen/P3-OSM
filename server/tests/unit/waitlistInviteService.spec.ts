@@ -1,5 +1,6 @@
 const {
   fromMock,
+  generateInviteLinkMock,
   sendMailMock,
   createTransportMock,
   loggerWarnMock,
@@ -7,6 +8,7 @@ const {
   waitlistState,
 } = vi.hoisted(() => ({
   fromMock: vi.fn(),
+  generateInviteLinkMock: vi.fn(),
   sendMailMock: vi.fn(),
   createTransportMock: vi.fn(() => ({
     sendMail: (...args: any[]) => sendMailMock(...args),
@@ -51,6 +53,11 @@ vi.mock('../../src/config/config', () => ({
 vi.mock('../../src/config/supabase', () => ({
   supabase: {
     from: fromMock,
+    auth: {
+      admin: {
+        generateLink: generateInviteLinkMock,
+      },
+    },
   },
 }));
 
@@ -77,10 +84,19 @@ describe('WaitlistInviteService.manualInvite', () => {
     waitlistState.nameUpdateCalls = 0;
     waitlistState.insertCalls = 0;
     fromMock.mockReset();
+    generateInviteLinkMock.mockReset();
     sendMailMock.mockReset();
     createTransportMock.mockClear();
     loggerWarnMock.mockReset();
     loggerInfoMock.mockReset();
+    generateInviteLinkMock.mockResolvedValue({
+      data: {
+        properties: {
+          action_link: 'https://p3lending.space/auth/invite#access_token=token',
+        },
+      },
+      error: null,
+    });
   };
 
   const installSupabaseMock = () => {
@@ -222,9 +238,7 @@ describe('WaitlistInviteService.manualInvite', () => {
     expect(String(sentPayload?.subject || '')).toBe('You have been invited to join the P3 Protocol');
     expect(String(sentPayload?.html || '')).toContain('P<span>3</span> Securities');
     expect(String(sentPayload?.html || '')).toContain('Accept Invitation');
-    expect(String(sentPayload?.text || '')).toContain('waitlist_invite=wait_1');
-    expect(String(sentPayload?.text || '')).toContain('email=alice%40example.com');
-    expect(String(sentPayload?.text || '')).toContain('ref=ALICE12345');
+    expect(String(sentPayload?.text || '')).toContain('/auth/invite');
   });
 
   it('returns 503 on SMTP failure and does not update status', async () => {

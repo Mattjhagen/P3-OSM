@@ -10,7 +10,7 @@ import { Logo } from './components/Logo';
 import { analyzeReputation, analyzeRiskProfile } from './services/geminiService';
 import { shortenAddress } from './services/walletService';
 import { PersistenceService } from './services/persistence';
-import { AuthService } from './services/netlifyAuth'; 
+import { supabase } from './supabaseClient';
 import { SecurityService } from './services/security';
 import { ContractService } from './services/contractService'; // Import ContractService
 import { KYCVerificationModal } from './components/KYCVerificationModal';
@@ -31,6 +31,7 @@ import { TradingDashboard } from './components/TradingDashboard';
 import { PitchDeck } from './components/PitchDeck';
 import { DonationThankYouPage } from './components/DonationThankYouPage';
 import { StatusPage } from './components/StatusPage';
+import { AuthInvitePage } from './components/AuthInvitePage';
 import { AnalyticsService } from './services/analyticsService';
 import { PaymentService } from './services/paymentService';
 import { TradingService as TradingApiService } from './services/tradingService';
@@ -71,6 +72,9 @@ const App: React.FC = () => {
   const isStatusRoute =
     typeof window !== 'undefined' &&
     window.location.pathname.replace(/\/+$/, '') === '/status';
+  const isAuthInviteRoute =
+    typeof window !== 'undefined' &&
+    window.location.pathname.replace(/\/+$/, '') === '/auth/invite';
   const [appReady, setAppReady] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -82,6 +86,10 @@ const App: React.FC = () => {
 
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [pendingAdminEmail, setPendingAdminEmail] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const [authError, setAuthError] = useState('');
   
   const [charities, setCharities] = useState<Charity[]>(MOCK_CHARITIES);
   const [activeView, setActiveView] = useState<AppView>('borrow');
@@ -143,14 +151,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogin = async (netlifyUser: any) => {
-    console.log("Logged in with Netlify:", netlifyUser);
+  const handleLogin = async (authUser: any) => {
+    console.log('Logged in with Supabase:', authUser);
     setIsVerifyingEmail(false); 
     setIsAuthenticated(true);
     setShowLanding(false);
     setIsQuickAdminSession(false);
     
-    const email = netlifyUser.email || '';
+    const email = authUser.email || '';
 
     // Check for Admin (using async DB call)
     try {
@@ -167,7 +175,7 @@ const App: React.FC = () => {
     } catch (e) { console.error("Admin check failed", e); }
     
     const pendingRef = localStorage.getItem('p3_pending_ref');
-    const p3User = await PersistenceService.loadUser(netlifyUser, pendingRef);
+    const p3User = await PersistenceService.loadUser(authUser, pendingRef);
     setUser(p3User);
     await AnalyticsService.identifyAuthenticatedUser({ userId: p3User.id, email });
     
@@ -194,36 +202,53 @@ const App: React.FC = () => {
     }
   };
 
+  const clearAuthState = (recordLogoutEvent = false) => {
+    setIsAuthenticated(false);
+    setShowLanding(true);
+    setUser(null);
+    setAdminUser(null);
+    setIsQuickAdminSession(false);
+    setMyRequests([]);
+    setMyOffers([]);
+    setShowAdminLogin(false);
+    setPendingAdminEmail('');
+    if (recordLogoutEvent) {
+      AnalyticsService.recordLogout();
+    }
+  };
+
   // Initialization Effect (Runs ONCE)
   useEffect(() => {
     const initApp = async () => {
       setAppReady(true);
       await AnalyticsService.startSessionTracking();
-      
-      // Initialize Netlify Auth
-      AuthService.init();
-
-      // Check if already logged in
-      const currentUser = AuthService.currentUser();
-      if (currentUser) {
-        handleLogin(currentUser);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        await handleLogin(session.user);
       }
-
-      // Listen for login events (e.g. from Modal)
-      AuthService.on('login', (user) => {
-        AuthService.close();
-        handleLogin(user);
-      });
-
-      // Listen for logout
-      AuthService.on('logout', () => {
-        handleLogout();
-      });
     };
-    initApp();
+    initApp().catch((error) => {
+      console.error('Supabase auth init failed', error);
+    });
+
+    const { data: authSubscription } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          clearAuthState(false);
+          return;
+        }
+        if (session?.user) {
+          await handleLogin(session.user);
+        }
+      }
+    );
     
     const params = new URLSearchParams(window.location.search);
     const refCode = params.get('ref');
+    const waitlistInviteId = params.get('waitlist_invite');
+    const invitedEmail = params.get('email');
     const deckMode = params.get('deck');
     const requestedView = params.get('view');
     const donationStatus = params.get('donation');
@@ -257,6 +282,7 @@ const App: React.FC = () => {
       params.delete('view');
     }
 
+    const isInviteFlow = Boolean(waitlistInviteId || invitedEmail);
     if (shouldShowDonationThankYou) {
       setShowDonationThankYou(true);
       params.delete('donation');
@@ -268,6 +294,15 @@ const App: React.FC = () => {
       }
     } else if (kycStatus === 'stripe-return') {
       setShowKYCModal(true);
+    } else if (isInviteFlow && !isAuthInviteRoute) {
+      // Legacy invite links are routed to dedicated auth invite onboarding.
+      localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
+      const inviteParams = new URLSearchParams();
+      if (waitlistInviteId) inviteParams.set('waitlist_invite', waitlistInviteId);
+      if (invitedEmail) inviteParams.set('email', invitedEmail);
+      if (refCode) inviteParams.set('ref', refCode);
+      window.location.replace(`/auth/invite${inviteParams.toString() ? `?${inviteParams.toString()}` : ''}`);
+      return;
     } else if (deckMode === 'true') {
       setShowPitchDeck(true);
       localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
@@ -278,7 +313,16 @@ const App: React.FC = () => {
       localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
     }
 
-    if (refCode || deckMode || requestedView || donationStatus || thankYouMode || sessionId) {
+    if (
+      refCode ||
+      deckMode ||
+      requestedView ||
+      donationStatus ||
+      thankYouMode ||
+      sessionId ||
+      waitlistInviteId ||
+      invitedEmail
+    ) {
       const nextQuery = params.toString();
       const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
       window.history.replaceState({}, document.title, nextUrl);
@@ -288,6 +332,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      authSubscription.subscription.unsubscribe();
       window.removeEventListener('beforeunload', handleBeforeUnload);
       AnalyticsService.flushAndStop();
     };
@@ -306,18 +351,55 @@ const App: React.FC = () => {
     setIsUserNavOpen(false);
   }, [activeView]);
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setShowLanding(true);
-    setUser(null);
-    setAdminUser(null);
-    setIsQuickAdminSession(false);
-    setMyRequests([]);
-    setMyOffers([]);
-    setShowAdminLogin(false);
-    setPendingAdminEmail('');
-    AnalyticsService.recordLogout();
-    AuthService.logout();
+  const handleLogout = async () => {
+    clearAuthState(true);
+    await supabase.auth.signOut();
+  };
+
+  const handleSupabaseSignIn = async () => {
+    setAuthError('');
+    const email = authEmail.trim().toLowerCase();
+    const password = authPassword;
+    if (!email || !password) {
+      setAuthError('Email and password are required.');
+      return;
+    }
+    setIsAuthSubmitting(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      setAuthError(String(error?.message || 'Unable to sign in.'));
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleSupabaseMagicLink = async () => {
+    setAuthError('');
+    const email = authEmail.trim().toLowerCase();
+    if (!email) {
+      setAuthError('Enter your email to receive a magic link.');
+      return;
+    }
+    setIsAuthSubmitting(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/invite`,
+        },
+      });
+      if (error) throw error;
+      setAuthError('Check your email for a secure sign-in link.');
+    } catch (error: any) {
+      setAuthError(String(error?.message || 'Unable to send magic link.'));
+    } finally {
+      setIsAuthSubmitting(false);
+    }
   };
 
   const handleOpenAdminConsoleQuickSwitch = async () => {
@@ -751,6 +833,7 @@ const App: React.FC = () => {
   };
 
   if (isStatusRoute) return <StatusPage />;
+  if (isAuthInviteRoute) return <AuthInvitePage />;
 
   if (!appReady) return <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
 
@@ -813,21 +896,40 @@ const App: React.FC = () => {
              <h1 className="text-4xl font-bold text-white tracking-tighter">P<span className="text-[#00e599]">3</span> Securities Dashboard</h1>
              <p className="text-zinc-400 max-w-md mx-auto">The future of reputation-based finance. Sign in to access your dashboard.</p>
              
-             {/* Netlify Identity Login Container */}
-             <div className="flex flex-col gap-4 items-center min-h-[100px] justify-center mt-8">
-                <Button 
-                  size="lg" 
-                  onClick={() => AuthService.open('login')}
-                  className="w-64 py-4 text-base bg-[#00e599] text-black hover:bg-[#00cc88] shadow-[0_0_20px_rgba(0,229,153,0.3)] border-none"
-                >
-                  Log In / Sign Up
-                </Button>
-                <div className="text-xs text-zinc-600 flex gap-1">
-                  <span>Secured by</span>
-                  <span className="font-bold text-zinc-500">Netlify Identity</span>
-                </div>
-                <p className="text-xs text-zinc-600 mt-2">Employee Login enabled via @p3lending.space email</p>
-                <button onClick={() => setShowPitchDeck(true)} className="text-xs text-zinc-600 hover:text-white mt-4 underline">View Investor Deck</button>
+             <div className="flex flex-col gap-3 items-center min-h-[100px] justify-center mt-8 w-full max-w-sm mx-auto">
+               <input
+                 type="email"
+                 value={authEmail}
+                 onChange={(event) => setAuthEmail(event.target.value)}
+                 placeholder="you@example.com"
+                 className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-white outline-none focus:border-[#00e599]"
+               />
+               <input
+                 type="password"
+                 value={authPassword}
+                 onChange={(event) => setAuthPassword(event.target.value)}
+                 placeholder="Password"
+                 className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-white outline-none focus:border-[#00e599]"
+               />
+               <Button
+                 size="lg"
+                 onClick={handleSupabaseSignIn}
+                 isLoading={isAuthSubmitting}
+                 className="w-full py-4 text-base bg-[#00e599] text-black hover:bg-[#00cc88] shadow-[0_0_20px_rgba(0,229,153,0.3)] border-none"
+               >
+                 Sign In
+               </Button>
+               <button
+                 onClick={handleSupabaseMagicLink}
+                 disabled={isAuthSubmitting}
+                 className="text-xs text-zinc-400 hover:text-white underline disabled:opacity-50"
+               >
+                 Send Magic Link
+               </button>
+               {authError ? <p className="text-xs text-zinc-400 text-center">{authError}</p> : null}
+               <p className="text-xs text-zinc-600 mt-1">Auth is powered by Supabase.</p>
+               <p className="text-xs text-zinc-600">Employee Login enabled via @p3lending.space email</p>
+               <button onClick={() => setShowPitchDeck(true)} className="text-xs text-zinc-600 hover:text-white mt-2 underline">View Investor Deck</button>
              </div>
            </>
          </div>

@@ -98,7 +98,7 @@ After updating `site_url` and template paths in Netlify UI:
 4. Confirm all three:
    - No `500` error in the Netlify UI
    - Invite email is received
-   - Email link opens your app on `https://p3lending.space` with token fragment (for example `#invite_token=...`)
+   - Email link opens your app on `https://p3lending.space/auth/invite` with token fragment (for example `#invite_token=...`)
 5. If any error occurs, capture and store:
    - `error_id` shown in Netlify UI
    - timestamp (with timezone)
