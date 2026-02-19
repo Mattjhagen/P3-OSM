@@ -9,9 +9,9 @@ Supabase Dashboard -> Authentication -> URL Configuration:
 - Site URL: `https://p3lending.space`
 - Allowed Redirect URLs:
   - `https://p3lending.space/auth/callback`
-  - `https://p3lending.space/auth/invite`
+  - `https://p3lending.space/auth/invite` (if invite flow is enabled)
   - `http://localhost:3000/auth/callback`
-  - `http://localhost:3000/auth/invite`
+  - `http://localhost:3000/auth/invite` (if invite flow is enabled)
 
 These redirects must match the `redirectTo`/`emailRedirectTo` values sent by the app.
 
@@ -37,12 +37,23 @@ Supabase Dashboard -> Authentication -> Providers -> Google:
 1. Copy the callback URL shown by Supabase.
 2. In Google Cloud Console OAuth client, add that callback URL as an Authorized redirect URI.
 3. Copy Google Client ID and Client Secret into Supabase Google provider settings.
+4. Ensure Google provider is enabled in Supabase.
 
 ## Apple Provider Setup (Web)
 
+Supabase Dashboard -> Authentication -> Providers -> Apple:
+
+1. Enable Apple provider.
+2. Client ID (Services ID): `com.p3lending.web`
+3. Secret: Apple client-secret JWT (generated in Apple Developer).
+
+Apple Developer checklist:
+
 1. In Apple Developer, enable Sign in with Apple.
 2. Create a Services ID for web sign-in.
-3. Configure domain/return URL using the callback URL shown in Supabase Apple provider settings.
+3. Configure Services ID:
+   - Domain: `p3lending.space`
+   - Return URL: `https://mxwousrkbdttlgsfqjsk.supabase.co/auth/v1/callback`
 4. Create a Sign in with Apple private key (`.p8`).
 5. Enter Client ID (Services ID), Team ID, Key ID, and private key in Supabase Apple provider settings.
 

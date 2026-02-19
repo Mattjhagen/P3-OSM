@@ -33,3 +33,7 @@ server/.env.local
 
 # Playwright output
 test-results/
+
+scripts/generate-apple-secret.cjs
+scripts/AuthKey_*.p8
+AuthKey_*.p8

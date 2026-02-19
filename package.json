@@ -30,6 +30,7 @@
     "@supabase/supabase-js": "^2.39.0",
     "ethers": "^6.11.1",
     "events": "^3.3.0",
+    "jsonwebtoken": "^9.0.3",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.344.0",

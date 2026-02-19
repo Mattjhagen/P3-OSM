@@ -12,6 +12,16 @@ const isOnboardingComplete = (data: Record<string, unknown>) => {
   return false;
 };
 
+export const resolveAuthDestination = (options: {
+  next: string | null;
+  onboardingCompleted: boolean;
+}) => {
+  if (options.next) {
+    return normalizePath(options.next);
+  }
+  return options.onboardingCompleted ? '/dashboard' : '/onboarding';
+};
+
 export const AuthCallbackPage: React.FC = () => {
   const [error, setError] = useState('');
 
@@ -63,14 +73,14 @@ export const AuthCallbackPage: React.FC = () => {
           },
         });
 
-        const destination = next
-          ? normalizePath(next)
-          : completed
-            ? '/dashboard'
-            : '/onboarding';
+        const destination = resolveAuthDestination({
+          next,
+          onboardingCompleted: completed,
+        });
 
         window.location.replace(destination);
       } catch (authError: any) {
+        console.error('[auth/callback] finalize_failed', authError);
         if (!active) return;
         setError(String(authError?.message || 'Sign-in failed or was cancelled.'));
       }
