@@ -258,6 +258,21 @@ export interface WaitlistSignupResult {
   isExisting: boolean;
 }
 
+export interface SupportMessageRequest {
+  threadId: string;
+  userId: string;
+  senderName: string;
+  message: string;
+  clientMessageId: string;
+}
+
+export interface SupportMessageResponse {
+  conversationId: string;
+  ticketId?: string;
+  ticketStatus?: 'none' | 'pending_human';
+  messages: ChatMessage[];
+}
+
 const getSupabaseAccessToken = async (): Promise<string | null> => {
   const { data, error } = await supabase.auth.getSession();
   if (error) return null;
@@ -869,6 +884,45 @@ export const PersistenceService = {
 
     if (parsed.length <= 200) return parsed;
     return parsed.slice(parsed.length - 200);
+  },
+
+  sendSupportMessage: async (payload: SupportMessageRequest): Promise<SupportMessageResponse> => {
+    let response: Response;
+    try {
+      response = await fetch('/.netlify/functions/support_message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown support network error';
+      throw new Error(`Unable to reach support agent: ${message}`);
+    }
+
+    let body: any = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+
+    if (!response.ok || !body?.success) {
+      const message = String(body?.error || '').trim() || `Support request failed with status ${response.status}.`;
+      throw new Error(message);
+    }
+
+    const messages = Array.isArray(body?.data?.messages)
+      ? body.data.messages.map((row: any) => toChatMessage({ ...row, data: row })).filter(Boolean)
+      : [];
+
+    return {
+      conversationId: String(body?.data?.conversationId || payload.threadId),
+      ticketId: body?.data?.ticketId ? String(body.data.ticketId) : undefined,
+      ticketStatus: body?.data?.ticketStatus || 'none',
+      messages: messages as ChatMessage[],
+    };
   },
 
   addChatMessage: async (msg: ChatMessage) => {

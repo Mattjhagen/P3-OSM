@@ -16,6 +16,11 @@ export const AdminChatWidget: React.FC<{
   const previousMsgCount = useRef(0);
 
   const { messages, sendMessage, isConnected } = useChat({ userId: currentUser.id, isAdmin: true });
+  const latestCustomerThreadId =
+    [...messages]
+      .reverse()
+      .find((msg) => msg.type === 'CUSTOMER_SUPPORT' && msg.senderId !== currentUser.id && msg.threadId)
+      ?.threadId || null;
 
   // Scroll to bottom when opening or new messages
   useEffect(() => { 
@@ -49,7 +54,14 @@ export const AdminChatWidget: React.FC<{
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
-    await sendMessage(newMessage, replyToThread || undefined, replyToThread ? 'CUSTOMER_SUPPORT' : 'INTERNAL', currentUser.name, currentUser.role);
+    const activeThreadId = replyToThread || latestCustomerThreadId || undefined;
+    await sendMessage(
+      newMessage,
+      activeThreadId,
+      activeThreadId ? 'CUSTOMER_SUPPORT' : 'INTERNAL',
+      currentUser.name,
+      currentUser.role
+    );
     setNewMessage('');
   };
 

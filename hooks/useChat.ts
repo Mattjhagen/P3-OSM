@@ -64,9 +64,15 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
       .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, (payload) => {
         const newMsg = normalizeIncomingMessage(payload.new);
-        if (!newMsg) return;
+        if (!newMsg) {
+          console.warn('Dropped malformed chat payload');
+          return;
+        }
 
-        const isRelevant = isAdmin || newMsg.threadId === threadId;
+        const isRelevant =
+          isAdmin ||
+          newMsg.threadId === threadId ||
+          (!newMsg.threadId && newMsg.type === 'CUSTOMER_SUPPORT');
         if (isRelevant) {
           setMessages(prev => {
             if (prev.some(m => m.id === newMsg.id)) return prev;
@@ -74,7 +80,12 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
           });
         }
       })
-      .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
+      .subscribe((status) => {
+        setIsConnected(status === 'SUBSCRIBED');
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('Chat realtime subscription issue:', status);
+        }
+      });
 
     return () => { supabase.removeChannel(channel); };
   }, [userId, threadId, isAdmin]);
@@ -91,6 +102,38 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
       threadId: targetThreadId || threadId
     };
     setMessages(prev => [...prev, msg]);
+    if (!isAdmin && type === 'CUSTOMER_SUPPORT') {
+      try {
+        const supportResult = await PersistenceService.sendSupportMessage({
+          threadId: msg.threadId || userId || 'anon',
+          userId: userId || 'anon',
+          senderName: msg.senderName,
+          message: msg.message,
+          clientMessageId: msg.id,
+        });
+        if (supportResult.messages?.length) {
+          setMessages(prev => {
+            const byId = new Map<string, ChatMessage>(prev.map((item) => [item.id, item]));
+            supportResult.messages.forEach((item) => byId.set(item.id, item));
+            return Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp);
+          });
+        }
+      } catch (error) {
+        const fallbackMsg: ChatMessage = {
+          id: `sys_${Date.now()}`,
+          senderId: 'system',
+          senderName: 'P3 Support',
+          role: 'SUPPORT',
+          message: 'We could not reach the AI agent right now. A human support ticket is being created.',
+          timestamp: Date.now(),
+          type: 'CUSTOMER_SUPPORT',
+          threadId: msg.threadId,
+        };
+        setMessages(prev => [...prev, fallbackMsg]);
+        console.error('Support message delivery failed', error);
+      }
+      return;
+    }
     await PersistenceService.addChatMessage(msg);
   };
 
