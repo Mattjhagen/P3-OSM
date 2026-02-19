@@ -11,6 +11,9 @@ describe('support_message function', () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
     process.env.OPENAI_API_KEY = 'openai-key';
     process.env.OPENAI_MODEL = 'gpt-4o-mini';
+    process.env.PUSH_NOTIFY_SECRET = '';
+    process.env.URL = '';
+    process.env.DEPLOY_PRIME_URL = '';
   });
 
   afterEach(() => {
@@ -75,7 +78,7 @@ describe('support_message function', () => {
         threadId: 'thread-2',
         userId: 'user-2',
         senderName: 'Bob',
-        message: 'I need help from a human.',
+        message: 'Can you explain lending fees?',
         clientMessageId: 'msg_client_2',
       }),
     } as any);

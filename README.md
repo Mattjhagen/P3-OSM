@@ -65,6 +65,44 @@ If Netlify Identity dashboard invites fail (for example generic 500 errors), use
 1. `docs/identity-invites.md`
 2. `scripts/identity-invite-smoke.sh`
 
+## Admin PWA Push Notifications
+
+Admin push notifications are opt-in and device-specific.
+
+- Android: supported in Chrome with standard web push.
+- iOS: requires iOS 16.4+ and the app installed to Home Screen (standalone PWA mode).
+
+Required environment variables:
+
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT` (example: `mailto:admin@p3lending.space`)
+- `PUSH_NOTIFY_SECRET`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+One-time VAPID key generation:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Set keys in Netlify site environment. Do not expose `VAPID_PRIVATE_KEY` or `PUSH_NOTIFY_SECRET` to the client.
+
+## Public Status Page
+
+A public status view is available at `/status`.
+
+- Data source: `/.netlify/functions/status_check`
+- Poll interval: 20 seconds
+- Includes service checks for:
+  - Frontend (`FRONTEND_STATUS_URL`, defaults to `https://p3lending.space`)
+  - Netlify Functions (`/.netlify/functions/ping`)
+  - Supabase REST (`SUPABASE_URL` + `SUPABASE_ANON_KEY`, or `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`)
+  - Optional backend (`BACKEND_URL` or `VITE_BACKEND_URL` or `RENDER_API_BASE`)
+
+If Supabase env vars are missing, status returns a degraded `supabaseRest` entry with `error: "missing_env"` instead of failing the whole status payload.
+
 ---
 
 ## 🔐 Google OAuth Setup (Required for Login)

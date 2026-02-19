@@ -30,6 +30,7 @@ import { CustomerChatWidget } from './components/CustomerChatWidget';
 import { TradingDashboard } from './components/TradingDashboard'; 
 import { PitchDeck } from './components/PitchDeck';
 import { DonationThankYouPage } from './components/DonationThankYouPage';
+import { StatusPage } from './components/StatusPage';
 import { AnalyticsService } from './services/analyticsService';
 import { PaymentService } from './services/paymentService';
 import { TradingService as TradingApiService } from './services/tradingService';
@@ -67,6 +68,9 @@ const isFinanciallyRestricted = (profile: UserProfile | null) => {
 };
 
 const App: React.FC = () => {
+  const isStatusRoute =
+    typeof window !== 'undefined' &&
+    window.location.pathname.replace(/\/+$/, '') === '/status';
   const [appReady, setAppReady] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -745,6 +749,8 @@ const App: React.FC = () => {
       `Withdrawal submitted via ${result.method}.\nFee: $${result.feeUsd.toFixed(2)}\nPayout: $${result.payoutAmountUsd.toFixed(2)}\nNew Balance: $${result.balanceUsd.toFixed(2)}`
     );
   };
+
+  if (isStatusRoute) return <StatusPage />;
 
   if (!appReady) return <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
 

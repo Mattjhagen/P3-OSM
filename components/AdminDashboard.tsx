@@ -20,6 +20,7 @@ import { OpsAIAnalysis, OpsAIFixService } from '../services/opsAIFixService';
 import { AdminKpiService, AdminKpiSnapshot } from '../services/adminKpiService';
 import { AdminUserLogEntry, AdminUserLogService } from '../services/adminUserLogService';
 import { supabase } from '../supabaseClient';
+import { AdminPushService, AdminPushStatus } from '../services/adminPushService';
 
 // Extend window definition for Tawk.to
 declare global {
@@ -101,6 +102,14 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   const [userLogSearchTerm, setUserLogSearchTerm] = useState('');
   const [kpiSnapshot, setKpiSnapshot] = useState<AdminKpiSnapshot | null>(null);
   const [isKpiLoading, setIsKpiLoading] = useState(false);
+  const [pushStatus, setPushStatus] = useState<AdminPushStatus>({
+    supported: false,
+    permission: 'unsupported',
+    subscribed: false,
+    isIos: false,
+    standalone: false,
+  });
+  const [isPushUpdating, setIsPushUpdating] = useState(false);
 
   const loadOpsSnapshot = useCallback(async () => {
     setIsOpsLoading(true);
@@ -112,6 +121,16 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
       setOpsMessage('Could not refresh operations status. Check console logs.');
     } finally {
       setIsOpsLoading(false);
+    }
+  }, []);
+
+  const refreshPushStatus = useCallback(async () => {
+    try {
+      const status = await AdminPushService.getStatus();
+      setPushStatus(status);
+    } catch (error) {
+      console.error('Failed to load push status', error);
+      setOpsMessage('Unable to read notification status.');
     }
   }, []);
 
@@ -231,12 +250,13 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
 
   useEffect(() => {
     if (activeTab !== 'OPERATIONS') return;
+    refreshPushStatus();
     loadRemoteUserLogs();
     const interval = setInterval(() => {
       loadRemoteUserLogs();
     }, 15000);
     return () => clearInterval(interval);
-  }, [activeTab, loadRemoteUserLogs]);
+  }, [activeTab, loadRemoteUserLogs, refreshPushStatus]);
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -570,6 +590,34 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     ClientLogService.clearLogs();
     refreshClientLogs();
     setOpsMessage('Client logs cleared.');
+  };
+
+  const handleEnablePushNotifications = async () => {
+    setIsPushUpdating(true);
+    try {
+      await AdminPushService.enable();
+      await refreshPushStatus();
+      setOpsMessage('Push notifications enabled for this admin device.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to enable notifications.';
+      setOpsMessage(message);
+    } finally {
+      setIsPushUpdating(false);
+    }
+  };
+
+  const handleDisablePushNotifications = async () => {
+    setIsPushUpdating(true);
+    try {
+      await AdminPushService.disable();
+      await refreshPushStatus();
+      setOpsMessage('Push notifications disabled for this admin device.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to disable notifications.';
+      setOpsMessage(message);
+    } finally {
+      setIsPushUpdating(false);
+    }
   };
 
   const downloadUserLogsCsv = () => {
@@ -1249,6 +1297,44 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
                   {opsMessage}
                 </div>
               )}
+
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-white font-bold">Mobile Push Notifications</h4>
+                    <p className="text-xs text-zinc-500">
+                      Receive support chat alerts when the admin portal is not open.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                        pushStatus.subscribed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {pushStatus.subscribed ? 'Subscribed' : 'Not Subscribed'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-xs text-zinc-400">
+                  Permission: {pushStatus.permission} · Platform: {pushStatus.isIos ? 'iOS' : 'Desktop/Android'}
+                  {pushStatus.isIos && !pushStatus.standalone ? ' · Install this PWA to Home Screen for iOS push support.' : ''}
+                </div>
+                {!pushStatus.supported ? (
+                  <div className="text-xs text-amber-400">
+                    Push is not supported in this browser/session. Try Android Chrome or installed iOS PWA.
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={handleEnablePushNotifications} isLoading={isPushUpdating}>
+                      Enable Notifications
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleDisablePushNotifications} isLoading={isPushUpdating}>
+                      Disable Notifications
+                    </Button>
+                  </div>
+                )}
+              </div>
 
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-4">

@@ -133,5 +133,4 @@ root.render(
   </React.StrictMode>
 );
 
-// Unregister the service worker to avoid "document in invalid state" errors
-serviceWorkerRegistration.unregister();
+serviceWorkerRegistration.register();

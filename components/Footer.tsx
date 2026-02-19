@@ -59,15 +59,28 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
                 <li><a href="#" onClick={handleOpenDeck} className="hover:text-[#00e599] transition-colors">Investor Pitch Deck</a></li>
                 <li><a href="https://github.com/Mattjhagen/P3-Lending-Protocol/blob/main/Go-to-Markey-Strategy.MD" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">For Investors</a></li>
                 <li><a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Sitemap.xml</a></li>
+                <li><a href="/status" className="hover:text-[#00e599] transition-colors">System Status</a></li>
              </ul>
           </div>
         </div>
 
         <div className="pt-8 border-t border-zinc-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-zinc-600">
            <span>© 2024 P3 Securities. All rights reserved.</span>
-           <div className="flex gap-4">
+           <div className="flex flex-wrap items-center justify-center gap-4">
              <span>NMLS ID: 123456 (Pending)</span>
              <span>v2.4.0-beta</span>
+             <a
+               href="https://app.netlify.com/projects/p3-lending-protocol/deploys"
+               target="_blank"
+               rel="noopener noreferrer"
+               className="inline-flex items-center"
+             >
+               <img
+                 src="https://api.netlify.com/api/v1/badges/ebfbace1-b5fa-40d8-baa9-f631ff3dcf89/deploy-status"
+                 alt="Netlify deploy status"
+                 className="h-5 w-auto"
+               />
+             </a>
            </div>
         </div>
       </div>

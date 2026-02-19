@@ -29,6 +29,33 @@ const getSupabaseConfig = () => ({
   serviceRoleKey: trim(process.env.SUPABASE_SERVICE_ROLE_KEY),
 });
 
+const notifyAdminsForSupportMessage = async ({ threadId, messageId, senderName, message }) => {
+  const notifySecret = trim(process.env.PUSH_NOTIFY_SECRET);
+  const siteBaseUrl = trim(process.env.URL || process.env.DEPLOY_PRIME_URL);
+  if (!notifySecret || !siteBaseUrl) return;
+
+  const notifyUrl = `${siteBaseUrl.replace(/\/+$/, '')}/.netlify/functions/push_notify_admins`;
+  const shortMessage = trim(message).slice(0, 140);
+  try {
+    await fetch(notifyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-push-secret': notifySecret,
+      },
+      body: JSON.stringify({
+        title: 'New P3 support message',
+        body: `${senderName || 'Customer'}: ${shortMessage || 'New customer message'}`,
+        url: `/?tab=OPERATIONS&thread=${encodeURIComponent(threadId)}`,
+        threadId,
+        messageId,
+      }),
+    });
+  } catch {
+    // Best effort only; chat flow must continue.
+  }
+};
+
 const buildSystemMessage = ({ threadId, ticketId, text }) => ({
   id: `msg_${Date.now()}_system`,
   senderId: 'system',
@@ -351,6 +378,12 @@ export const handler = async (event) => {
         });
       }
       await supabaseInsert('chats', buildChatMessageRow(userMsg));
+      await notifyAdminsForSupportMessage({
+        threadId,
+        messageId: userMsg.id,
+        senderName,
+        message: userMessage,
+      });
     } catch (error) {
       logSupportError(reqId, 'user_message_insert_failed', error);
       return await returnFallback({
