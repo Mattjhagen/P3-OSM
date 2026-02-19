@@ -219,6 +219,9 @@ describe('WaitlistInviteService.manualInvite', () => {
     expect(waitlistState.statusUpdateCalls).toBe(0);
     expect(sendMailMock).toHaveBeenCalledTimes(1);
     const sentPayload = sendMailMock.mock.calls[0]?.[0];
+    expect(String(sentPayload?.subject || '')).toBe('You have been invited to join the P3 Protocol');
+    expect(String(sentPayload?.html || '')).toContain('P<span>3</span> Securities');
+    expect(String(sentPayload?.html || '')).toContain('Accept Invitation');
     expect(String(sentPayload?.text || '')).toContain('waitlist_invite=wait_1');
     expect(String(sentPayload?.text || '')).toContain('email=alice%40example.com');
     expect(String(sentPayload?.text || '')).toContain('ref=ALICE12345');

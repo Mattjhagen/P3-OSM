@@ -243,6 +243,14 @@ const parseBodyData = (body: string): Record<string, string> => {
   return result;
 };
 
+const escapeHtml = (value: string) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 const extractWaitlistCandidate = (
   submission: NetlifySubmission
 ): WaitlistCandidate | null => {
@@ -564,31 +572,54 @@ const sendInviteEmail = async (
   const fromEmail = trimToString(config.smtp.from || config.smtp.user);
   const fromName = trimToString(config.smtp.fromName);
   const fromAddress = fromName && fromEmail ? `${fromName} <${fromEmail}>` : fromEmail;
-  const subject = 'You are invited to P3 Lending Beta';
+  const subject = 'You have been invited to join the P3 Protocol';
   const text = [
     `Hi ${greetingName},`,
     '',
-    `${senderName} invited you to early access on P3 Lending.`,
+    `${senderName} invited you to early access on P3 Securities.`,
     `Open your invite link to get started: ${inviteUrl}`,
     '',
     'If you were not expecting this email, you can safely ignore it.',
     '',
-    'P3 Lending Team',
+    'P3 Securities',
   ].join('\n');
 
-  const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111;">
-      <p>Hi ${greetingName},</p>
-      <p><strong>${senderName}</strong> invited you to early access on P3 Lending.</p>
-      <p>
-        <a href="${inviteUrl}" style="display:inline-block;padding:10px 14px;background:#00e599;color:#000;text-decoration:none;border-radius:6px;font-weight:700;">
-          Open Your Invite
-        </a>
-      </p>
-      <p style="font-size:12px;color:#666;">If you were not expecting this email, you can safely ignore it.</p>
-      <p>P3 Lending Team</p>
+  const escapedName = escapeHtml(greetingName);
+  const escapedSender = escapeHtml(senderName);
+  const escapedInviteUrl = escapeHtml(inviteUrl);
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #050505; margin: 0; padding: 0; color: #e4e4e7; }
+    .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
+    .card { background-color: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 40px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5); }
+    .logo { font-size: 24px; font-weight: bold; color: #ffffff; letter-spacing: -1px; margin-bottom: 30px; display: inline-block; }
+    .logo span { color: #00e599; }
+    h1 { color: #ffffff; font-size: 24px; margin-bottom: 16px; letter-spacing: -0.5px; }
+    p { font-size: 16px; line-height: 1.6; color: #a1a1aa; margin-bottom: 20px; }
+    .btn { background-color: #00e599; color: #000000; font-weight: bold; text-decoration: none; padding: 14px 32px; border-radius: 8px; display: inline-block; text-transform: uppercase; font-size: 14px; letter-spacing: 1px; }
+    .footer { margin-top: 32px; font-size: 12px; color: #52525b; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="logo">P<span>3</span> Securities</div>
+      <h1>You're Invited to the Future of Credit.</h1>
+      <p>Hi ${escapedName},</p>
+      <p><strong>${escapedSender}</strong> invited you to join the P3 Lending Protocol beta.</p>
+      <p>Click the button below to accept your invitation and create your decentralized identity.</p>
+      <a href="${escapedInviteUrl}" class="btn">Accept Invitation</a>
     </div>
-  `;
+    <div class="footer">
+      <p>P3 Lending Protocol • Decentralized Social Finance<br/>
+      If you did not expect this invitation, you can safely ignore this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
 
   await smtpTransporter.sendMail({
     from: fromAddress,
