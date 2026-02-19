@@ -265,27 +265,28 @@ const requestAdminWaitlistApi = async <T>(payload: {
   adminEmail: string;
   body?: Record<string, unknown>;
 }): Promise<T> => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error('Missing Supabase session token.');
+  }
+
   const normalizedAdminEmail = normalizeAdminEmail(payload.adminEmail);
   if (!normalizedAdminEmail) {
     throw new Error('Admin email is required for waitlist admin actions.');
   }
 
   const method = payload.method || 'GET';
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('Authenticated admin session is required for waitlist admin actions.');
-  }
-
   const params = new URLSearchParams();
   params.set('path', payload.path);
   for (const [key, value] of Object.entries(payload.query || {})) {
     if (value === undefined || value === null) continue;
     params.set(key, String(value));
   }
-
   const proxyUrl = `${ADMIN_WAITLIST_PROXY_PATH}?${params.toString()}`;
+  if (!proxyUrl.startsWith('/.netlify/functions/')) {
+    throw new Error(`Admin waitlist proxy URL invalid: ${proxyUrl}`);
+  }
   let response: Response;
 
   try {
@@ -293,7 +294,7 @@ const requestAdminWaitlistApi = async <T>(payload: {
       method,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${token}`,
         'x-admin-email': normalizedAdminEmail,
       },
       ...(method === 'POST'
@@ -316,12 +317,16 @@ const requestAdminWaitlistApi = async <T>(payload: {
   } catch {
     data = null;
   }
+  const proxyMarker = response.headers.get('X-P3-Proxy');
+  if ((import.meta as any)?.env?.MODE !== 'production' && proxyMarker) {
+    console.log('[admin] waitlist proxy marker', proxyMarker);
+  }
 
   if (!response.ok || !data?.success) {
     const message =
       String(data?.error || '').trim() ||
       `Waitlist admin request failed with status ${response.status}.`;
-    throw new Error(message);
+    throw new Error(proxyMarker ? `${message} (via ${proxyMarker})` : message);
   }
 
   return data.data as T;
@@ -597,7 +602,7 @@ export const PersistenceService = {
     } = await supabase.auth.getSession();
 
     if (!session?.access_token) {
-      throw new Error('Authenticated admin session is required for Netlify waitlist sync.');
+      throw new Error('Missing Supabase session token.');
     }
 
     let response: Response;

@@ -105,4 +105,14 @@ describe('PersistenceService admin waitlist proxy calls', () => {
     expect(payload.email).toBe('manual@example.com');
     expect(payload.name).toBe('Manual User');
   });
+
+  it('throws without making request when no Supabase session', async () => {
+    getSessionMock.mockResolvedValueOnce({ data: { session: null } });
+
+    await expect(
+      PersistenceService.syncAdminWaitlist('admin@test.com', 'Admin')
+    ).rejects.toThrow('Missing Supabase session token.');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

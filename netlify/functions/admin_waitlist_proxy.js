@@ -1,223 +1,254 @@
+/**
+ * Admin waitlist proxy: validates client Supabase session, then forwards
+ * to Render backend with internal bearer. Browser must not call Render admin
+ * endpoints directly when ADMIN_INTERNAL_BEARER is used.
+ */
+
 const trim = (value) => String(value || '').trim();
 const normalizeEmail = (value) => trim(value).toLowerCase();
-const normalizeBaseUrl = (value) => trim(value).replace(/\/+$/, '');
+const PROXY_HEADER_NAME = 'X-P3-Proxy';
+const PROXY_HEADER_VALUE = 'admin_waitlist_proxy';
 
 const toJsonResponse = (statusCode, payload) => ({
   statusCode,
   headers: {
     'Content-Type': 'application/json',
+    [PROXY_HEADER_NAME]: PROXY_HEADER_VALUE,
   },
   body: JSON.stringify(payload),
 });
 
+const getHeader = (event, name) => {
+  const h = event.headers || {};
+  const lower = name.toLowerCase();
+  return h[lower] || h[name] || '';
+};
+
 const parseBearerToken = (authorizationHeader) => {
-  const raw = trim(authorizationHeader);
-  const match = raw.match(/^Bearer\s+(.+)$/i);
+  const header = trim(authorizationHeader);
+  const match = header.match(/^Bearer\s+(.+)$/i);
   return match ? trim(match[1]) : '';
 };
 
-const isAllowedMethod = (method) => method === 'GET' || method === 'POST';
-
-const parseAllowedEmails = () =>
-  trim(process.env.ADMIN_ALLOWED_EMAILS)
-    .split(',')
-    .map((item) => normalizeEmail(item))
-    .filter(Boolean);
-
-const decodeBody = (event) => {
-  if (!event?.body) return '';
-  if (event.isBase64Encoded) {
-    return Buffer.from(event.body, 'base64').toString('utf8');
-  }
-  return event.body;
+const getSupabaseConfig = () => {
+  const url = trim(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL);
+  const anonKey = trim(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY);
+  const serviceRoleKey = trim(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return { url, anonKey, serviceRoleKey };
 };
 
-const extractPath = (event) => {
-  const path = trim(event?.queryStringParameters?.path);
-  if (!path) {
-    throw Object.assign(new Error("Missing required query parameter 'path'."), {
-      statusCode: 400,
-    });
+const getSupabaseUser = async (accessToken) => {
+  const { url, anonKey } = getSupabaseConfig();
+  if (!url || !anonKey) {
+    return { ok: false, error: 'Proxy misconfiguration: missing Supabase env.' };
   }
-  if (path.includes('://')) {
-    throw Object.assign(new Error('Invalid proxy path.'), { statusCode: 400 });
-  }
-  if (path.includes('?')) {
-    throw Object.assign(
-      new Error("Path must not contain '?' - provide query params separately."),
-      { statusCode: 400 }
-    );
-  }
-  if (!path.startsWith('/api/admin/waitlist')) {
-    throw Object.assign(new Error('Not found.'), { statusCode: 404 });
-  }
-  return path;
-};
-
-const appendForwardQueryParams = (url, event, authenticatedEmail) => {
-  const params = event?.queryStringParameters || {};
-  for (const [key, value] of Object.entries(params)) {
-    if (key === 'path' || key === 'adminEmail') continue;
-    if (value === undefined || value === null) continue;
-    url.searchParams.append(key, String(value));
-  }
-  url.searchParams.set('adminEmail', authenticatedEmail);
-};
-
-const buildForwardPostBody = (event, authenticatedEmail) => {
-  const raw = decodeBody(event) || '{}';
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw Object.assign(new Error('POST body must be valid JSON.'), { statusCode: 400 });
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw Object.assign(new Error('POST body must be a JSON object.'), { statusCode: 400 });
-  }
-  return JSON.stringify({
-    ...parsed,
-    adminEmail: authenticatedEmail,
-  });
-};
-
-const resolveSupabaseUser = async (accessToken) => {
-  const supabaseUrl = normalizeBaseUrl(process.env.SUPABASE_URL);
-  const supabaseAnonKey = trim(process.env.SUPABASE_ANON_KEY);
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw Object.assign(
-      new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY for admin proxy auth.'),
-      { statusCode: 500 }
-    );
-  }
-
-  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+  const base = url.replace(/\/+$/, '');
+  const res = await fetch(`${base}/auth/v1/user`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      apikey: supabaseAnonKey,
+      apikey: anonKey,
+      Accept: 'application/json',
+    },
+  });
+  if (!res.ok) {
+    return { ok: false, error: 'Invalid/expired Supabase session token.' };
+  }
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
+  }
+  if (!payload?.id) {
+    return { ok: false, error: 'Invalid/expired Supabase session token.' };
+  }
+  return { ok: true, user: payload };
+};
+
+const hasAdminClaim = (user) => {
+  const appMetadata = user?.app_metadata || {};
+  const directRole = String(appMetadata?.role || appMetadata?.p3_role || '').toLowerCase();
+  if (directRole === 'admin') return true;
+
+  const p3Roles = Array.isArray(appMetadata?.p3_roles)
+    ? appMetadata.p3_roles
+    : Array.isArray(appMetadata?.roles)
+      ? appMetadata.roles
+      : [];
+  return p3Roles.some((role) => String(role).toLowerCase() === 'admin');
+};
+
+const isAdminFromEmployeesTable = async (userEmail) => {
+  const email = normalizeEmail(userEmail);
+  const { url, serviceRoleKey } = getSupabaseConfig();
+  if (!url || !serviceRoleKey || !email) return false;
+
+  const base = url.replace(/\/+$/, '');
+  const params = new URLSearchParams({
+    select: 'id,email,role,is_active',
+    email: `eq.${email}`,
+    is_active: 'eq.true',
+    role: 'eq.ADMIN',
+    limit: '1',
+  });
+
+  const res = await fetch(`${base}/rest/v1/employees?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
       Accept: 'application/json',
     },
   });
 
-  if (!response.ok) {
-    throw Object.assign(new Error('Invalid or expired admin auth token.'), {
-      statusCode: 401,
-    });
+  if (!res.ok) return false;
+  let rows = [];
+  try {
+    rows = await res.json();
+  } catch {
+    rows = [];
   }
-
-  const data = await response.json();
-  const email = normalizeEmail(data?.email);
-  if (!email) {
-    throw Object.assign(new Error('Authenticated admin email is missing.'), {
-      statusCode: 401,
-    });
-  }
-
-  return { email };
+  return Array.isArray(rows) && rows.length > 0;
 };
 
 export const handler = async (event) => {
-  const method = trim(event?.httpMethod || 'GET').toUpperCase();
-  if (!isAllowedMethod(method)) {
-    return toJsonResponse(405, { success: false, error: 'Method not allowed.' });
+  if ((event?.httpMethod || 'GET').toUpperCase() === 'GET') {
+    return toJsonResponse(200, {
+      ok: true,
+      name: PROXY_HEADER_VALUE,
+    });
   }
 
-  try {
-    const renderBase = normalizeBaseUrl(process.env.RENDER_API_BASE);
-    const internalBearer = trim(process.env.ADMIN_INTERNAL_BEARER);
-    const allowedEmails = parseAllowedEmails();
-
-    if (!renderBase || !internalBearer) {
-      return toJsonResponse(500, {
-        success: false,
-        error: 'Missing RENDER_API_BASE or ADMIN_INTERNAL_BEARER.',
-      });
-    }
-    if (allowedEmails.length === 0) {
-      return toJsonResponse(500, {
-        success: false,
-        error: 'ADMIN_ALLOWED_EMAILS is not configured.',
-      });
-    }
-
-    const path = extractPath(event);
-
-    if (method === 'POST') {
-      const contentType = trim(
-        event?.headers?.['content-type'] || event?.headers?.['Content-Type']
-      ).toLowerCase();
-      if (!contentType.includes('application/json')) {
-        return toJsonResponse(400, {
-          success: false,
-          error: 'POST requests must use application/json content type.',
-        });
-      }
-    }
-
-    const clientBearer = parseBearerToken(
-      event?.headers?.authorization || event?.headers?.Authorization
-    );
-    if (!clientBearer) {
-      return toJsonResponse(401, {
-        success: false,
-        error: 'Missing admin bearer token.',
-      });
-    }
-
-    const { email: authenticatedEmail } = await resolveSupabaseUser(clientBearer);
-    if (!allowedEmails.includes(authenticatedEmail)) {
-      return toJsonResponse(403, {
-        success: false,
-        error: 'Authenticated user is not allowed to perform admin waitlist actions.',
-      });
-    }
-
-    const claimedAdminEmail = normalizeEmail(
-      event?.headers?.['x-admin-email'] || event?.headers?.['X-Admin-Email']
-    );
-    if (claimedAdminEmail && claimedAdminEmail !== authenticatedEmail) {
-      return toJsonResponse(403, {
-        success: false,
-        error: 'Admin email header does not match authenticated token email.',
-      });
-    }
-
-    const forwardUrl = new URL(`${renderBase}${path}`);
-    appendForwardQueryParams(forwardUrl, event, authenticatedEmail);
-    const forwardBody =
-      method === 'POST' ? buildForwardPostBody(event, authenticatedEmail) : undefined;
-
-    const response = await fetch(forwardUrl.toString(), {
-      method,
-      headers: {
-        Authorization: `Bearer ${internalBearer}`,
-        'Content-Type': 'application/json',
-        'x-admin-email': authenticatedEmail,
-      },
-      body: forwardBody,
-    });
-
-    const responseBody = await response.text();
-
-    console.info(
-      `[admin_waitlist_proxy] admin=${authenticatedEmail} method=${method} path=${path} status=${response.status}`
-    );
-
-    return {
-      statusCode: response.status,
-      headers: {
-        'Content-Type': response.headers.get('content-type') || 'application/json',
-      },
-      body: responseBody || '',
-    };
-  } catch (error) {
-    const statusCode = Number(error?.statusCode || 500);
-    const message = error instanceof Error ? error.message : 'Unexpected admin proxy error.';
-    return toJsonResponse(statusCode, {
+  const path = trim(event?.queryStringParameters?.path || '');
+  if (!path || !path.startsWith('/')) {
+    return toJsonResponse(400, {
       success: false,
-      error: message,
+      error: 'Query parameter path is required and must start with /.',
+    });
+  }
+
+  const authHeader = getHeader(event, 'Authorization');
+  const accessToken = parseBearerToken(authHeader);
+  const hasAuthHeader = Boolean(accessToken);
+  const tokenLength = accessToken.length;
+  if (!accessToken) {
+    console.warn('[admin_waitlist_proxy] unauthorized', {
+      reason: 'missing_token',
+      hasAuthHeader,
+      tokenLength,
+      path,
+    });
+    return toJsonResponse(401, {
+      success: false,
+      error: 'Missing Supabase session token.',
+    });
+  }
+
+  const authResult = await getSupabaseUser(accessToken);
+  if (!authResult.ok) {
+    console.warn('[admin_waitlist_proxy] unauthorized', {
+      reason: 'invalid_token',
+      hasAuthHeader,
+      tokenLength,
+      path,
+    });
+    return toJsonResponse(401, {
+      success: false,
+      error: authResult.error || 'Invalid/expired Supabase session token.',
+    });
+  }
+  const user = authResult.user;
+  const userId = trim(user?.id);
+  const userEmail = normalizeEmail(user?.email);
+  const isAdmin = hasAdminClaim(user) || (await isAdminFromEmployeesTable(userEmail));
+  if (!isAdmin) {
+    console.warn('[admin_waitlist_proxy] forbidden', {
+      reason: 'not_admin',
+      hasAuthHeader,
+      tokenLength,
+      userId,
+      isAdmin,
+      path,
+    });
+    return toJsonResponse(403, {
+      success: false,
+      error: 'Admin role required.',
+    });
+  }
+
+  const backendBase = trim(
+    process.env.VITE_BACKEND_URL || process.env.BACKEND_URL || ''
+  ).replace(/\/api\/?$/i, '');
+  const internalBearer = trim(process.env.ADMIN_INTERNAL_BEARER || '');
+
+  if (!backendBase) {
+    return toJsonResponse(500, {
+      success: false,
+      error: 'Proxy misconfiguration: missing backend URL.',
+    });
+  }
+  if (!internalBearer) {
+    console.error('[admin_waitlist_proxy] misconfigured', {
+      reason: 'missing_internal_bearer',
+      userId,
+      isAdmin,
+      path,
+    });
+    return toJsonResponse(500, {
+      success: false,
+      error: 'Proxy misconfiguration: missing internal admin bearer.',
+    });
+  }
+
+  const url = `${backendBase}${path}`;
+  const method = (event.httpMethod || 'GET').toUpperCase();
+  const body = event.body || undefined;
+  const headers = {
+    'Content-Type': getHeader(event, 'Content-Type') || 'application/json',
+    Authorization: `Bearer ${internalBearer}`,
+  };
+  const xAdminEmail = getHeader(event, 'x-admin-email');
+  if (xAdminEmail) headers['x-admin-email'] = xAdminEmail;
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers,
+      ...(body && method !== 'GET' ? { body } : {}),
+    });
+    console.info('[admin_waitlist_proxy] upstream_response', {
+      userId,
+      isAdmin,
+      path,
+      upstreamStatus: res.status,
+    });
+    const text = await res.text();
+    let parsed = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      parsed = null;
+    }
+    return {
+      statusCode: res.status,
+      headers: {
+        'Content-Type': res.headers.get('Content-Type') || 'application/json',
+        [PROXY_HEADER_NAME]: PROXY_HEADER_VALUE,
+      },
+      body: parsed ? JSON.stringify(parsed) : text || '{}',
+    };
+  } catch (err) {
+    console.error('[admin_waitlist_proxy] upstream_error', {
+      userId,
+      isAdmin,
+      path,
+      upstreamStatus: 502,
+    });
+    const message = err instanceof Error ? err.message : 'Backend request failed.';
+    return toJsonResponse(502, {
+      success: false,
+      error: `Unable to reach backend: ${message}`,
     });
   }
 };

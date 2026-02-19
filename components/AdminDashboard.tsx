@@ -417,6 +417,10 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   };
 
   const handleWaitlistNetlifySync = async () => {
+    const syncProxyUrl = `/.netlify/functions/admin_waitlist_proxy?path=${encodeURIComponent('/api/admin/waitlist/sync')}`;
+    if ((import.meta as any)?.env?.MODE !== 'production') {
+      console.log('[admin] sync waitlist -> proxy', syncProxyUrl);
+    }
     await refreshWaitlist(true);
   };
 
