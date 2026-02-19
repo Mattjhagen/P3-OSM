@@ -248,25 +248,43 @@ export const PersistenceService = {
   // --- Internal Tickets ---
 
   getInternalTickets: async (): Promise<InternalTicket[]> => {
-    const { data } = await supabase.from('internal_tickets').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('type', 'internal')
+      .order('created_at', { ascending: false });
     return data ? data.map((r: any) => r.data) : [];
   },
 
   addInternalTicket: async (ticket: InternalTicket): Promise<InternalTicket[]> => {
-    await supabase.from('internal_tickets').insert({
+    const createdBy =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        String(ticket.authorId || '')
+      )
+        ? ticket.authorId
+        : null;
+    await supabase.from('tickets').insert({
       id: ticket.id,
       status: ticket.status,
+      type: 'internal',
+      source: 'admin_dashboard',
+      created_by: createdBy,
       data: ticket
     });
     return PersistenceService.getInternalTickets();
   },
 
   resolveInternalTicket: async (id: string): Promise<InternalTicket[]> => {
-    const { data } = await supabase.from('internal_tickets').select('*').eq('id', id).single();
+    const { data } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('id', id)
+      .eq('type', 'internal')
+      .single();
     if (data) {
       const ticket = data.data as InternalTicket;
       ticket.status = 'RESOLVED';
-      await supabase.from('internal_tickets').update({
+      await supabase.from('tickets').update({
         status: 'RESOLVED',
         data: ticket
       }).eq('id', id);

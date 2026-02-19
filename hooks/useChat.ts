@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { ChatMessage } from '../types';
 import { PersistenceService } from '../services/persistence';
+import type { SupportActionProposal } from '../services/persistence';
 
 interface UseChatProps {
   userId?: string;
@@ -12,6 +13,18 @@ interface UseChatProps {
 export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
+  const [actionProposal, setActionProposal] = useState<SupportActionProposal | null>(null);
+
+  const getAnonSessionId = (): string | undefined => {
+    if (typeof window === 'undefined') return undefined;
+    const key = 'p3_support_anon_session_id';
+    const existing = String(window.localStorage.getItem(key) || '').trim();
+    if (existing) return existing;
+    const generated = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    window.localStorage.setItem(key, generated);
+    return generated;
+  };
 
   const normalizeIncomingMessage = (row: any): ChatMessage | null => {
     const payload = row?.data && typeof row.data === 'object' ? row.data : {};
@@ -106,11 +119,21 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
       try {
         const supportResult = await PersistenceService.sendSupportMessage({
           threadId: msg.threadId || userId || 'anon',
-          userId: userId || 'anon',
+          userId: userId || undefined,
           senderName: msg.senderName,
           message: msg.message,
           clientMessageId: msg.id,
+          conversationId,
+          anonSessionId: userId ? undefined : getAnonSessionId(),
         });
+        if (supportResult.conversationId) {
+          setConversationId(supportResult.conversationId);
+        }
+        if (supportResult.actionProposal?.actionId) {
+          setActionProposal(supportResult.actionProposal);
+        } else {
+          setActionProposal(null);
+        }
         if (supportResult.messages?.length) {
           setMessages(prev => {
             const byId = new Map<string, ChatMessage>(prev.map((item) => [item.id, item]));
@@ -137,5 +160,22 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
     await PersistenceService.addChatMessage(msg);
   };
 
-  return { messages, sendMessage, isConnected };
+  const resolveActionProposal = async (confirm: boolean) => {
+    if (!actionProposal?.actionId) return;
+    try {
+      const result = await PersistenceService.confirmSupportAction(actionProposal.actionId, confirm);
+      if (result.messages?.length) {
+        setMessages((prev) => {
+          const byId = new Map<string, ChatMessage>(prev.map((item) => [item.id, item]));
+          result.messages.forEach((item) => byId.set(item.id, item));
+          return Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp);
+        });
+      }
+      setActionProposal(null);
+    } catch (error) {
+      console.error('Failed to resolve support action proposal', error);
+    }
+  };
+
+  return { messages, sendMessage, isConnected, actionProposal, resolveActionProposal };
 };

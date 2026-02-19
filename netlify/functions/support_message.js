@@ -1,4 +1,10 @@
 const trim = (value) => String(value || '').trim();
+const asNowIso = () => new Date().toISOString();
+const newId = () =>
+  globalThis.crypto?.randomUUID?.() ||
+  `00000000-0000-4000-8000-${String(Date.now()).padStart(12, '0').slice(-12)}`;
+const isUuid = (value) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trim(value));
 
 const CORS_HEADERS = {
   'content-type': 'application/json',
@@ -13,6 +19,23 @@ const toJsonResponse = (statusCode, payload) => ({
   body: JSON.stringify(payload),
 });
 
+const getSupabaseConfig = () => ({
+  url: trim(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL).replace(/\/+$/, ''),
+  anonKey: trim(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY),
+  serviceRoleKey: trim(process.env.SUPABASE_SERVICE_ROLE_KEY),
+});
+
+const parseBearerToken = (authorizationHeader) => {
+  const header = trim(authorizationHeader);
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? trim(match[1]) : '';
+};
+
+const getHeader = (event, name) => {
+  const headers = event?.headers || {};
+  return headers[name] || headers[name.toLowerCase()] || '';
+};
+
 const buildChatMessageRow = (payload) => ({
   id: payload.id,
   thread_id: payload.threadId,
@@ -24,10 +47,78 @@ const buildChatMessageRow = (payload) => ({
   data: payload,
 });
 
-const getSupabaseConfig = () => ({
-  url: trim(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL).replace(/\/+$/, ''),
-  serviceRoleKey: trim(process.env.SUPABASE_SERVICE_ROLE_KEY),
-});
+const supabaseRequest = async ({ path, method = 'GET', body = null, query = '', prefer = '' }) => {
+  const { url, serviceRoleKey } = getSupabaseConfig();
+  if (!url || !serviceRoleKey) throw new Error('missing_supabase_env');
+  const requestUrl = `${url}/rest/v1/${path}${query ? `?${query}` : ''}`;
+  const response = await fetch(requestUrl, {
+    method,
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      ...(prefer ? { Prefer: prefer } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  return response;
+};
+
+const supabaseInsert = async (table, row) => {
+  const response = await supabaseRequest({
+    path: table,
+    method: 'POST',
+    body: [row],
+    prefer: 'return=representation',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Supabase insert failed (${table}): ${text || response.status}`);
+  }
+  let payload = [];
+  try {
+    payload = await response.json();
+  } catch {
+    payload = [];
+  }
+  return Array.isArray(payload) ? payload[0] || null : null;
+};
+
+const supabaseUpdate = async ({ table, query, patch }) => {
+  const response = await supabaseRequest({
+    path: table,
+    method: 'PATCH',
+    query,
+    body: patch,
+    prefer: 'return=representation',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Supabase update failed (${table}): ${text || response.status}`);
+  }
+  let payload = [];
+  try {
+    payload = await response.json();
+  } catch {
+    payload = [];
+  }
+  return Array.isArray(payload) ? payload : [];
+};
+
+const supabaseSelect = async ({ table, query }) => {
+  const response = await supabaseRequest({ path: table, method: 'GET', query });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Supabase select failed (${table}): ${text || response.status}`);
+  }
+  let payload = [];
+  try {
+    payload = await response.json();
+  } catch {
+    payload = [];
+  }
+  return Array.isArray(payload) ? payload : [];
+};
 
 const notifyAdminsForSupportMessage = async ({ threadId, messageId, senderName, message }) => {
   const notifySecret = trim(process.env.PUSH_NOTIFY_SECRET);
@@ -71,37 +162,36 @@ const buildSystemMessage = ({ threadId, ticketId, text }) => ({
   threadId,
 });
 
-const supabaseInsert = async (table, row) => {
-  const { url, serviceRoleKey } = getSupabaseConfig();
-  if (!url || !serviceRoleKey) {
-    throw new Error('Support function misconfigured: missing Supabase service credentials.');
-  }
-
-  const response = await fetch(`${url}/rest/v1/${table}`, {
-    method: 'POST',
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation',
-    },
-    body: JSON.stringify([row]),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Supabase insert failed (${table}): ${text || response.status}`);
-  }
-};
-
-const SUPPORT_KB_PROMPT = `
-You are the P3 Support assistant for the P3 Lending Protocol.
-Answer only using this product knowledge:
-- P3 is a lending/investing platform with borrower and lender workflows.
-- Core topics: borrowing, investing/marketplace, KYC tiers and verification, waitlist status, onboarding, fees and repayment basics.
-- If asked for legal/compliance certainty, account-specific decisions, payouts, or anything requiring staff review, respond with exactly HANDOFF_REQUIRED.
-- Keep answers short and actionable.
+const P3_FAQ_CONTEXT = `
+P3 Lending Protocol quick FAQ:
+- P3 helps users access borrowing and investing flows with transparent status tracking.
+- Borrowing flow: join waitlist, complete onboarding/KYC checks, submit request, receive matching and repayment terms.
+- Investing flow: browse opportunities, review risk and terms, and monitor repayments from active positions.
+- Fees: shown before confirmation and vary by product/workflow; users should check current in-app disclosures.
+- Waitlist: users can join and move through pending/invited/onboarded states.
+- Security: account access and sensitive actions require authenticated sessions and server-side validation.
 `;
+
+const SUPPORT_SYSTEM_PROMPT = `
+You are P3 Support. Keep answers short, factual, and non-speculative.
+Rules:
+1) Use only provided P3 context and user message.
+2) Never claim account changes are completed unless confirmed by server execution.
+3) If request asks for prohibited operations (money movement, loan approvals, credit-limit/trust-score overrides, payout address changes, KYC decisions), refuse and suggest ticket handoff.
+4) If asked to change profile name, phone, or notification preferences, return concise guidance and tell the user to confirm when prompted.
+5) If unsure, say you will create a support ticket.
+`;
+
+const FORBIDDEN_KEYWORDS = [
+  'move money',
+  'transfer',
+  'approve loan',
+  'credit limit',
+  'trust score',
+  'payout address',
+  'kyc decision',
+  'wallet address',
+];
 
 const shouldForceHandoff = (text) => {
   const q = trim(text).toLowerCase();
@@ -118,6 +208,60 @@ const shouldForceHandoff = (text) => {
     'escalate',
   ];
   return humanKeywords.some((keyword) => q.includes(keyword));
+};
+
+const containsForbiddenRequest = (text) => {
+  const normalized = trim(text).toLowerCase();
+  return FORBIDDEN_KEYWORDS.some((keyword) => normalized.includes(keyword));
+};
+
+const detectToolIntent = (text) => {
+  const normalized = trim(text).toLowerCase();
+  if (!normalized) return { tool: 'answer_only' };
+
+  const asksNameUpdate =
+    (normalized.includes('display name') || normalized.includes('name')) &&
+    /(change|update|set)/.test(normalized);
+  const asksPhoneUpdate = normalized.includes('phone') && /(change|update|set)/.test(normalized);
+  const asksNotificationUpdate =
+    /(notification|notifications|email alerts|sms alerts|text alerts)/.test(normalized) &&
+    /(change|update|set|turn on|turn off|enable|disable)/.test(normalized);
+
+  if (asksNameUpdate || asksPhoneUpdate) {
+    const quotedName = text.match(/name\s+(?:to|as)\s+["']?([a-zA-Z0-9 .,'-]{2,80})["']?/i);
+    const phoneMatch = text.match(/(\+?[0-9][0-9()\-\s]{7,20}[0-9])/);
+    const displayName = trim(quotedName?.[1] || '');
+    const phone = trim(phoneMatch?.[1] || '');
+    const fields = {};
+    if (displayName) fields.display_name = displayName;
+    if (phone) fields.phone = phone;
+    if (!Object.keys(fields).length) return { tool: 'answer_only' };
+    return {
+      tool: 'propose_update_profile',
+      fields,
+      summary: 'Update your profile details',
+    };
+  }
+
+  if (asksNotificationUpdate) {
+    const wantsEmailOn = /(email).*(enable|turn on|opt in)/.test(normalized);
+    const wantsEmailOff = /(email).*(disable|turn off|opt out)/.test(normalized);
+    const wantsSmsOn = /(sms|text).*(enable|turn on|opt in)/.test(normalized);
+    const wantsSmsOff = /(sms|text).*(disable|turn off|opt out)/.test(normalized);
+    const fields = {};
+    if (wantsEmailOn) fields.email_opt_in = true;
+    if (wantsEmailOff) fields.email_opt_in = false;
+    if (wantsSmsOn) fields.sms_opt_in = true;
+    if (wantsSmsOff) fields.sms_opt_in = false;
+    if (!Object.keys(fields).length) return { tool: 'answer_only' };
+    return {
+      tool: 'propose_set_notifications',
+      fields,
+      summary: 'Update your notification preferences',
+    };
+  }
+
+  return { tool: 'answer_only' };
 };
 
 const resolveAiProvider = () => {
@@ -144,7 +288,55 @@ const resolveAiProvider = () => {
   return null;
 };
 
-const generateAiReply = async (userMessage) => {
+const fetchAuthUserFromToken = async (token) => {
+  const { url, anonKey } = getSupabaseConfig();
+  if (!url || !anonKey || !token) return null;
+  const response = await fetch(`${url}/auth/v1/user`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      Accept: 'application/json',
+    },
+  });
+  if (!response.ok) return null;
+  try {
+    const user = await response.json();
+    if (!user?.id) return null;
+    return user;
+  } catch {
+    return null;
+  }
+};
+
+const getMinimalAccountContext = async (userId) => {
+  if (!trim(userId)) return null;
+  try {
+    const rows = await supabaseSelect({
+      table: 'users',
+      query: `select=id,email,data&id=eq.${encodeURIComponent(userId)}&limit=1`,
+    });
+    const row = rows[0];
+    if (!row) return null;
+    const data = row.data && typeof row.data === 'object' ? row.data : {};
+    const notificationPrefs =
+      data.notification_preferences && typeof data.notification_preferences === 'object'
+        ? data.notification_preferences
+        : {};
+    return {
+      userId: row.id,
+      displayName: trim(data.name || ''),
+      hasPhone: Boolean(trim(data.phone || '')),
+      emailOptIn: typeof notificationPrefs.email_opt_in === 'boolean' ? notificationPrefs.email_opt_in : null,
+      smsOptIn: typeof notificationPrefs.sms_opt_in === 'boolean' ? notificationPrefs.sms_opt_in : null,
+      onboardingState: trim(data.kycStatus || ''),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const generateAiReply = async ({ userMessage, accountContext }) => {
   const providerConfig = resolveAiProvider();
   if (!providerConfig) {
     throw new Error('AI provider unavailable.');
@@ -167,8 +359,14 @@ const generateAiReply = async (userMessage) => {
           temperature: 0.2,
           max_tokens: 180,
           messages: [
-            { role: 'system', content: SUPPORT_KB_PROMPT },
-            { role: 'user', content: userMessage },
+            {
+              role: 'system',
+              content: `${SUPPORT_SYSTEM_PROMPT}\n\nKnowledge base:\n${P3_FAQ_CONTEXT}`,
+            },
+            {
+              role: 'user',
+              content: `User message: ${userMessage}\n\nAccount context: ${JSON.stringify(accountContext || {})}`,
+            },
           ],
         }),
       });
@@ -201,7 +399,9 @@ const generateAiReply = async (userMessage) => {
               role: 'user',
               parts: [
                 {
-                  text: `${SUPPORT_KB_PROMPT}\n\nUser question: ${userMessage}`,
+                  text: `${SUPPORT_SYSTEM_PROMPT}\n\n${P3_FAQ_CONTEXT}\n\nUser question: ${userMessage}\nAccount context: ${JSON.stringify(
+                    accountContext || {}
+                  )}`,
                 },
               ],
             },
@@ -230,7 +430,7 @@ const generateAiReply = async (userMessage) => {
 };
 
 const createSupportTicket = async ({ threadId, userId, userName, message }) => {
-  const ticketId = `tick_support_${Date.now()}`;
+  const ticketId = newId();
   const ticketData = {
     id: ticketId,
     authorId: userId,
@@ -242,9 +442,12 @@ const createSupportTicket = async ({ threadId, userId, userName, message }) => {
     createdAt: Date.now(),
   };
 
-  await supabaseInsert('internal_tickets', {
+  await supabaseInsert('tickets', {
     id: ticketData.id,
     status: ticketData.status,
+    type: 'support',
+    source: 'support_message',
+    created_by: isUuid(userId) ? userId : null,
     data: ticketData,
   });
 
@@ -256,7 +459,53 @@ const logSupportError = (reqId, code, error) => {
   console.error(`[support_message] reqId=${reqId || ''} code=${code} error=${errorName}`);
 };
 
-const returnFallback = async ({ reqId, threadId, userId, senderName, userMessage, errorCode }) => {
+const upsertConversation = async ({ conversationId, userId, anonSessionId }) => {
+  const id = isUuid(conversationId) ? conversationId : newId();
+  const row = {
+    id,
+    user_id: trim(userId) || null,
+    anon_session_id: trim(userId) ? null : trim(anonSessionId || '') || `anon_${Date.now()}`,
+    status: 'open',
+    updated_at: asNowIso(),
+  };
+  const response = await supabaseRequest({
+    path: `support_conversations?on_conflict=id`,
+    method: 'POST',
+    body: [row],
+    prefer: 'resolution=merge-duplicates,return=representation',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`conversation_upsert_failed:${text || response.status}`);
+  }
+  let payload = [];
+  try {
+    payload = await response.json();
+  } catch {
+    payload = [];
+  }
+  const inserted = Array.isArray(payload) ? payload[0] || row : row;
+  return inserted.id;
+};
+
+const insertSupportMessage = async ({ conversationId, senderType, content, metadata = {} }) =>
+  supabaseInsert('support_messages', {
+    id: newId(),
+    conversation_id: conversationId,
+    sender_type: senderType,
+    content: String(content || ''),
+    metadata,
+  });
+
+const returnFallback = async ({
+  reqId,
+  threadId,
+  userId,
+  senderName,
+  userMessage,
+  errorCode,
+  conversationId,
+}) => {
   const systemMsg = buildSystemMessage({ threadId, ticketId: null });
   const missing = [];
   const { url, serviceRoleKey } = getSupabaseConfig();
@@ -272,6 +521,17 @@ const returnFallback = async ({ reqId, threadId, userId, senderName, userMessage
         userName: senderName,
         message: userMessage,
       });
+      if (conversationId && trim(userId)) {
+        await supabaseInsert('support_actions', {
+          id: newId(),
+          conversation_id: conversationId,
+          user_id: userId,
+          action_type: 'create_support_ticket',
+          status: 'executed',
+          request: { category: 'handoff', summary: 'AI fallback ticket', details: userMessage },
+          result: { ticketId, reason: errorCode },
+        });
+      }
       systemMsg.message = buildSystemMessage({ threadId, ticketId }).message;
     }
   } catch (ticketError) {
@@ -289,6 +549,19 @@ const returnFallback = async ({ reqId, threadId, userId, senderName, userMessage
   try {
     if (url && serviceRoleKey) {
       await supabaseInsert('chats', buildChatMessageRow(systemMsg));
+      if (conversationId) {
+        await insertSupportMessage({
+          conversationId,
+          senderType: 'system',
+          content: systemMsg.message,
+          metadata: { ticketId, fallback: true, reqId },
+        });
+        await supabaseUpdate({
+          table: 'support_conversations',
+          query: `id=eq.${conversationId}`,
+          patch: { status: 'pending_human' },
+        });
+      }
     }
   } catch (chatError) {
     logSupportError(reqId, 'chat_insert_failed', chatError);
@@ -349,10 +622,35 @@ export const handler = async (event) => {
       });
     }
 
-    const threadId = trim(body?.threadId || body?.userId || `anon_${Date.now()}`);
-    const userId = trim(body?.userId || `anon_${Date.now()}`);
-    const senderName = trim(body?.senderName || 'Customer');
+    const suppliedConversationId = trim(body?.conversationId);
+    const anonSessionId = trim(body?.anonSessionId || '');
+    const accessToken = parseBearerToken(getHeader(event, 'Authorization'));
+    const authUser = await fetchAuthUserFromToken(accessToken);
+    const bodyUserId = trim(body?.userId || '');
+    const userId = isUuid(authUser?.id) ? trim(authUser.id) : isUuid(bodyUserId) ? bodyUserId : '';
+    const threadId = trim(body?.threadId || userId || `anon_${Date.now()}`);
+    const senderName = trim(body?.senderName || authUser?.email || 'Customer');
     const clientMessageId = trim(body?.clientMessageId || `msg_${Date.now()}_user`);
+    const { url, serviceRoleKey } = getSupabaseConfig();
+    if (!url || !serviceRoleKey) {
+      return toJsonResponse(200, {
+        ok: false,
+        error: 'missing_env',
+        missing: [
+          ...(url ? [] : ['SUPABASE_URL']),
+          ...(serviceRoleKey ? [] : ['SUPABASE_SERVICE_ROLE_KEY']),
+        ],
+        fallback: 'ticket_created',
+        conversationId: suppliedConversationId || threadId,
+        messages: [buildSystemMessage({ threadId, ticketId: null })],
+        requestId: reqId,
+      });
+    }
+    const conversationId = await upsertConversation({
+      conversationId: suppliedConversationId,
+      userId,
+      anonSessionId,
+    });
 
     const userMsg = {
       id: clientMessageId,
@@ -366,18 +664,19 @@ export const handler = async (event) => {
     };
 
     try {
-      const { url, serviceRoleKey } = getSupabaseConfig();
-      if (!url || !serviceRoleKey) {
-        return await returnFallback({
-          reqId,
-          threadId,
-          userId,
-          senderName,
-          userMessage,
-          errorCode: 'missing_env',
-        });
-      }
       await supabaseInsert('chats', buildChatMessageRow(userMsg));
+      await insertSupportMessage({
+        conversationId,
+        senderType: 'user',
+        content: userMessage,
+        metadata: {
+          threadId,
+          senderName,
+          clientMessageId,
+          userId: userId || null,
+          anonSessionId: userId ? null : anonSessionId || null,
+        },
+      });
       await notifyAdminsForSupportMessage({
         threadId,
         messageId: userMsg.id,
@@ -393,25 +692,135 @@ export const handler = async (event) => {
         senderName,
         userMessage,
         errorCode: 'ticket_created',
+        conversationId,
+      });
+    }
+
+    if (containsForbiddenRequest(userMessage)) {
+      const refusalMsg = {
+        id: `msg_${Date.now()}_system`,
+        senderId: 'system',
+        senderName: 'P3 Support',
+        role: 'SUPPORT',
+        message:
+          'I cannot perform that action in chat. I can create a support ticket so an admin can review it safely.',
+        timestamp: Date.now(),
+        type: 'CUSTOMER_SUPPORT',
+        threadId,
+      };
+      await supabaseInsert('chats', buildChatMessageRow(refusalMsg));
+      await insertSupportMessage({
+        conversationId,
+        senderType: 'system',
+        content: refusalMsg.message,
+        metadata: { forbidden: true },
+      });
+      return await returnFallback({
+        reqId,
+        threadId,
+        userId,
+        senderName,
+        userMessage,
+        errorCode: 'forbidden_request',
+        conversationId,
+      });
+    }
+
+    const toolIntent = detectToolIntent(userMessage);
+    if (toolIntent.tool === 'propose_update_profile' || toolIntent.tool === 'propose_set_notifications') {
+      if (!userId) {
+        const msg = {
+          id: `msg_${Date.now()}_system`,
+          senderId: 'system',
+          senderName: 'P3 Support',
+          role: 'SUPPORT',
+          message: 'Please sign in to make account changes. I can still answer questions.',
+          timestamp: Date.now(),
+          type: 'CUSTOMER_SUPPORT',
+          threadId,
+        };
+        await supabaseInsert('chats', buildChatMessageRow(msg));
+        await insertSupportMessage({
+          conversationId,
+          senderType: 'system',
+          content: msg.message,
+          metadata: { deniedReason: 'auth_required' },
+        });
+        return toJsonResponse(200, {
+          ok: true,
+          conversationId,
+          messages: [msg],
+          requestId: reqId,
+        });
+      }
+
+      const proposedAction = await supabaseInsert('support_actions', {
+        id: newId(),
+        conversation_id: conversationId,
+        user_id: userId,
+        action_type: toolIntent.tool,
+        status: 'proposed',
+        request: {
+          fields: toolIntent.fields,
+          summary: toolIntent.summary,
+          source: 'support_message',
+          threadId,
+          userMessage,
+        },
+        result: { audit: 'proposal_created' },
+      });
+
+      const proposalMsg = {
+        id: `msg_${Date.now()}_system`,
+        senderId: 'system',
+        senderName: 'P3 Support',
+        role: 'SUPPORT',
+        message: `${toolIntent.summary}. Please confirm or cancel this change.`,
+        timestamp: Date.now(),
+        type: 'CUSTOMER_SUPPORT',
+        threadId,
+      };
+      await supabaseInsert('chats', buildChatMessageRow(proposalMsg));
+      await insertSupportMessage({
+        conversationId,
+        senderType: 'system',
+        content: proposalMsg.message,
+        metadata: {
+          actionId: proposedAction?.id || null,
+          actionType: toolIntent.tool,
+          fields: toolIntent.fields,
+          requiresConfirmation: true,
+        },
+      });
+
+      return toJsonResponse(200, {
+        ok: true,
+        conversationId,
+        requestId: reqId,
+        messages: [proposalMsg],
+        actionProposal: {
+          actionId: proposedAction?.id || '',
+          actionType: toolIntent.tool,
+          summary: toolIntent.summary,
+          fields: toolIntent.fields,
+          requiresConfirmation: true,
+        },
       });
     }
 
     let aiReply = '';
     let handoffRequired = shouldForceHandoff(userMessage);
-
+    const accountContext = userId ? await getMinimalAccountContext(userId) : null;
     if (!handoffRequired) {
       try {
-        aiReply = await generateAiReply(userMessage);
-        if (aiReply === 'HANDOFF_REQUIRED') {
-          handoffRequired = true;
-        }
+        aiReply = await generateAiReply({ userMessage, accountContext });
       } catch (error) {
         logSupportError(reqId, 'ai_failed', error);
         handoffRequired = true;
       }
     }
 
-    if (handoffRequired) {
+    if (handoffRequired || !trim(aiReply)) {
       return await returnFallback({
         reqId,
         threadId,
@@ -419,6 +828,7 @@ export const handler = async (event) => {
         senderName,
         userMessage,
         errorCode: resolveAiProvider() ? 'ai_failed' : 'missing_env',
+        conversationId,
       });
     }
 
@@ -435,6 +845,14 @@ export const handler = async (event) => {
 
     try {
       await supabaseInsert('chats', buildChatMessageRow(aiMsg));
+      await insertSupportMessage({
+        conversationId,
+        senderType: 'ai',
+        content: aiReply,
+        metadata: {
+          provider: resolveAiProvider()?.provider || 'unknown',
+        },
+      });
     } catch (error) {
       logSupportError(reqId, 'ai_message_insert_failed', error);
       return await returnFallback({
@@ -444,12 +862,13 @@ export const handler = async (event) => {
         senderName,
         userMessage,
         errorCode: 'ticket_created',
+        conversationId,
       });
     }
 
     return toJsonResponse(200, {
       ok: true,
-      conversationId: threadId,
+      conversationId,
       ticketId: null,
       messages: [aiMsg],
       requestId: reqId,

@@ -31,6 +31,10 @@ const getTransporter = () => {
 
 const truncate = (value: string, max = 4000) =>
   value.length > max ? `${value.slice(0, max - 3)}...` : value;
+const isUuid = (value?: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || '')
+  );
 
 export interface AdminNotificationPayload {
   category: 'chat_request' | 'manual_review' | 'ticket' | 'risk_alert';
@@ -58,9 +62,12 @@ export const AdminNotificationService = {
       category: payload.category,
     };
 
-    const { error } = await supabase.from('internal_tickets').insert({
+    const { error } = await supabase.from('tickets').insert({
       id: ticketData.id,
       status: ticketData.status,
+      type: 'internal',
+      source: 'admin_notification_service',
+      created_by: isUuid(payload.userId) ? payload.userId : null,
       data: ticketData,
     });
 
@@ -106,7 +113,7 @@ export const AdminNotificationService = {
     await supabase.from('audit_log').insert({
       actor_id: payload.userId || null,
       action: 'admin_notification_created',
-      resource_type: 'internal_tickets',
+      resource_type: 'tickets',
       resource_id: ticketId,
       metadata: {
         category: payload.category,

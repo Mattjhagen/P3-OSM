@@ -9,7 +9,7 @@ export const CustomerChatWidget: React.FC<{ user: UserProfile }> = ({ user }) =>
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { messages, sendMessage, isConnected } = useChat({
+  const { messages, sendMessage, isConnected, actionProposal, resolveActionProposal } = useChat({
     userId: user.id,
     threadId: user.id,
     isAdmin: false
@@ -53,6 +53,33 @@ export const CustomerChatWidget: React.FC<{ user: UserProfile }> = ({ user }) =>
            </div>
            
            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0a0a0a] custom-scrollbar">
+              {actionProposal && (
+                <div className="border border-orange-500/50 bg-zinc-900 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-orange-300 mb-1">Confirm account change</p>
+                  <p className="text-xs text-zinc-300 mb-2">{actionProposal.summary}</p>
+                  <p className="text-[10px] text-zinc-400 mb-3">
+                    {Object.entries(actionProposal.fields || {})
+                      .map(([k, v]) => `${k}: ${String(v)}`)
+                      .join(' | ')}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-500 border-none"
+                      onClick={() => resolveActionProposal(true)}
+                    >
+                      Confirm
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-zinc-700 hover:bg-zinc-600 border-none"
+                      onClick={() => resolveActionProposal(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
               {messages.length === 0 && (
                 <div className="text-center mt-10 opacity-50">
                    <div className="text-4xl mb-2">👋</div>

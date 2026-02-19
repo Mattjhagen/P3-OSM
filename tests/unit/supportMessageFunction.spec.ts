@@ -8,6 +8,7 @@ describe('support_message function', () => {
 
   beforeEach(() => {
     process.env.SUPABASE_URL = 'https://supabase.example.co';
+    process.env.SUPABASE_ANON_KEY = 'anon-key';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
     process.env.OPENAI_API_KEY = 'openai-key';
     process.env.OPENAI_MODEL = 'gpt-4o-mini';
@@ -22,74 +23,85 @@ describe('support_message function', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns ok:true with AI message for normal support questions', async () => {
-    const fetchMock = vi
-      .fn()
-      // Persist user message
-      .mockResolvedValueOnce({ ok: true, text: async () => '', json: async () => [] })
-      // OpenAI response
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: 'P3 lets users borrow and invest with KYC controls.' } }],
-        }),
-      })
-      // Persist AI message
-      .mockResolvedValueOnce({ ok: true, text: async () => '', json: async () => [] });
-
+  it('returns actionProposal for profile update requests', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const rawUrl = String(url);
+      if (rawUrl.includes('/auth/v1/user')) {
+        return {
+          ok: true,
+          json: async () => ({ id: '11111111-1111-4111-8111-111111111111', email: 'alice@example.com' }),
+        };
+      }
+      if (rawUrl.includes('/rest/v1/support_conversations')) {
+        return { ok: true, json: async () => [{ id: '22222222-2222-4222-8222-222222222222' }] };
+      }
+      if (rawUrl.includes('/rest/v1/support_actions')) {
+        return { ok: true, json: async () => [{ id: '33333333-3333-4333-8333-333333333333' }] };
+      }
+      if (rawUrl.includes('/rest/v1/chats') || rawUrl.includes('/rest/v1/support_messages')) {
+        return { ok: true, json: async () => [{}] };
+      }
+      return { ok: true, json: async () => [] };
+    });
     globalThis.fetch = fetchMock as any;
 
     const response = await handler({
       httpMethod: 'POST',
+      headers: { Authorization: 'Bearer token123' },
       body: JSON.stringify({
+        message: 'Please change my phone to 402-555-1234',
         threadId: 'thread-1',
-        userId: 'user-1',
-        senderName: 'Alice',
-        message: 'What is P3?',
-        clientMessageId: 'msg_client_1',
+        clientMessageId: 'client-msg-1',
       }),
     } as any);
 
     const body = JSON.parse(response.body);
     expect(response.statusCode).toBe(200);
     expect(body.ok).toBe(true);
-    expect(Array.isArray(body.messages)).toBe(true);
-    expect(body.messages[0].senderId).toBe('ai_support_agent');
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(body.actionProposal).toBeTruthy();
+    expect(body.actionProposal.actionType).toBe('propose_update_profile');
+    expect(body.actionProposal.fields.phone).toContain('402-555-1234');
   });
 
-  it('returns fallback ticket_created when AI request fails', async () => {
-    const fetchMock = vi
-      .fn()
-      // Persist user message
-      .mockResolvedValueOnce({ ok: true, text: async () => '', json: async () => [] })
-      // OpenAI fails
-      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) })
-      // Persist ticket
-      .mockResolvedValueOnce({ ok: true, text: async () => '', json: async () => [] })
-      // Persist system fallback message
-      .mockResolvedValueOnce({ ok: true, text: async () => '', json: async () => [] });
-
+  it('returns fallback ticket when AI fails', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const rawUrl = String(url);
+      if (rawUrl.includes('api.openai.com')) {
+        return { ok: false, status: 500, json: async () => ({}) };
+      }
+      if (rawUrl.includes('/rest/v1/support_conversations')) {
+        return { ok: true, json: async () => [{ id: '44444444-4444-4444-8444-444444444444' }] };
+      }
+      if (rawUrl.includes('/rest/v1/tickets')) {
+        return { ok: true, json: async () => [{ id: '55555555-5555-4555-8555-555555555555' }] };
+      }
+      if (
+        rawUrl.includes('/rest/v1/chats') ||
+        rawUrl.includes('/rest/v1/support_messages') ||
+        rawUrl.includes('/rest/v1/support_conversations?id=eq.')
+      ) {
+        return { ok: true, json: async () => [{}] };
+      }
+      return { ok: true, json: async () => [] };
+    });
     globalThis.fetch = fetchMock as any;
 
     const response = await handler({
       httpMethod: 'POST',
       body: JSON.stringify({
+        message: 'What fees are charged?',
         threadId: 'thread-2',
-        userId: 'user-2',
-        senderName: 'Bob',
-        message: 'Can you explain lending fees?',
-        clientMessageId: 'msg_client_2',
       }),
     } as any);
-
     const body = JSON.parse(response.body);
     expect(response.statusCode).toBe(200);
     expect(body.ok).toBe(false);
     expect(body.fallback).toBe('ticket_created');
-    expect(body.ticketId).toContain('tick_support_');
-    expect(body.messages[0].message).toContain('Ticket ID');
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(typeof body.ticketId).toBe('string');
+    expect(body.ticketId.length).toBeGreaterThan(10);
+    const calledUrls = fetchMock.mock.calls.map((args: any[]) => String(args[0]));
+    expect(calledUrls.some((url: string) => url.includes('/rest/v1/tickets'))).toBe(true);
+    expect(calledUrls.some((url: string) => url.includes('/rest/v1/internal_tickets'))).toBe(false);
   });
 
   it('returns missing_env fallback when Supabase credentials are absent', async () => {

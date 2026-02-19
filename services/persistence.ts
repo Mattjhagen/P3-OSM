@@ -259,11 +259,32 @@ export interface WaitlistSignupResult {
 }
 
 export interface SupportMessageRequest {
-  threadId: string;
-  userId: string;
-  senderName: string;
+  threadId?: string;
+  userId?: string;
+  senderName?: string;
   message: string;
-  clientMessageId: string;
+  clientMessageId?: string;
+  conversationId?: string;
+  anonSessionId?: string;
+}
+
+export interface SupportActionProposal {
+  actionId: string;
+  actionType: 'propose_update_profile' | 'propose_set_notifications' | string;
+  summary: string;
+  fields: Record<string, unknown>;
+  requiresConfirmation: true;
+}
+
+export interface SupportActionConfirmResponse {
+  ok: boolean;
+  error?: string;
+  messages: ChatMessage[];
+  action?: {
+    id: string;
+    status: 'cancelled' | 'executed' | 'failed' | string;
+    result?: Record<string, unknown>;
+  };
 }
 
 export interface SupportMessageResponse {
@@ -274,6 +295,7 @@ export interface SupportMessageResponse {
   ticketId?: string;
   ticketStatus?: 'none' | 'pending_human' | null;
   messages: ChatMessage[];
+  actionProposal?: SupportActionProposal;
 }
 
 const getNetlifyIdentityAccessToken = (): string | null => {
@@ -855,14 +877,27 @@ export const PersistenceService = {
   // --- Internal Tickets ---
 
   getInternalTickets: async (): Promise<InternalTicket[]> => {
-    const { data } = await supabase.from('internal_tickets').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('type', 'internal')
+      .order('created_at', { ascending: false });
     return data ? data.map((r: any) => r.data) : [];
   },
 
   addInternalTicket: async (ticket: InternalTicket): Promise<InternalTicket[]> => {
-    await supabase.from('internal_tickets').insert({
+    const createdBy =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        String(ticket.authorId || '')
+      )
+        ? ticket.authorId
+        : null;
+    await supabase.from('tickets').insert({
       id: ticket.id,
       status: ticket.status,
+      type: 'internal',
+      source: 'admin_dashboard',
+      created_by: createdBy,
       data: ticket
     });
 
@@ -886,11 +921,16 @@ export const PersistenceService = {
   },
 
   resolveInternalTicket: async (id: string): Promise<InternalTicket[]> => {
-    const { data } = await supabase.from('internal_tickets').select('*').eq('id', id).single();
+    const { data } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('id', id)
+      .eq('type', 'internal')
+      .single();
     if (data) {
       const ticket = data.data as InternalTicket;
       ticket.status = 'RESOLVED';
-      await supabase.from('internal_tickets').update({
+      await supabase.from('tickets').update({
         status: 'RESOLVED',
         data: ticket
       }).eq('id', id);
@@ -949,11 +989,23 @@ export const PersistenceService = {
 
   sendSupportMessage: async (payload: SupportMessageRequest): Promise<SupportMessageResponse> => {
     let response: Response | null = null;
+    let authHeader = '';
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        authHeader = `Bearer ${session.access_token}`;
+      }
+    } catch {
+      authHeader = '';
+    }
     try {
       response = await fetch('/.netlify/functions/support_message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(authHeader ? { Authorization: authHeader } : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -1023,6 +1075,64 @@ export const PersistenceService = {
           : undefined,
       ticketStatus: payloadBody?.ticketStatus || payloadBody?.data?.ticketStatus || null,
       messages: messages as ChatMessage[],
+      actionProposal: payloadBody?.actionProposal
+        ? {
+            actionId: String(payloadBody.actionProposal.actionId || ''),
+            actionType: String(payloadBody.actionProposal.actionType || ''),
+            summary: String(payloadBody.actionProposal.summary || ''),
+            fields:
+              payloadBody.actionProposal.fields && typeof payloadBody.actionProposal.fields === 'object'
+                ? payloadBody.actionProposal.fields
+                : {},
+            requiresConfirmation: true,
+          }
+        : undefined,
+    };
+  },
+
+  confirmSupportAction: async (actionId: string, confirm: boolean): Promise<SupportActionConfirmResponse> => {
+    let authHeader = '';
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        authHeader = `Bearer ${session.access_token}`;
+      }
+    } catch {
+      authHeader = '';
+    }
+
+    const response = await fetch('/.netlify/functions/support_action_confirm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+      body: JSON.stringify({ actionId, confirm }),
+    });
+    const raw = await response.text();
+    let body: any = {};
+    try {
+      body = raw ? JSON.parse(raw) : {};
+    } catch {
+      body = {};
+    }
+    const sourceMessages = Array.isArray(body.messages) ? body.messages : [];
+    const mappedMessages = sourceMessages
+      .map((row: any) => toChatMessage({ ...row, data: row }))
+      .filter(Boolean) as ChatMessage[];
+    return {
+      ok: Boolean(body.ok),
+      error: body?.error ? String(body.error) : undefined,
+      messages: mappedMessages,
+      action: body?.action
+        ? {
+            id: String(body.action.id || actionId),
+            status: String(body.action.status || ''),
+            result: body.action.result && typeof body.action.result === 'object' ? body.action.result : {},
+          }
+        : undefined,
     };
   },
 

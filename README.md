@@ -103,6 +103,23 @@ A public status view is available at `/status`.
 
 If Supabase env vars are missing, status returns a degraded `supabaseRest` entry with `error: "missing_env"` instead of failing the whole status payload.
 
+## Customer Support Chat v1
+
+Customer support chat now supports:
+
+- FAQ/context answers about P3 (borrowing, investing, fees, waitlist, security)
+- Safe account-change proposals with explicit user confirmation:
+  - `display_name`
+  - `phone`
+  - notification preferences (`email_opt_in`, `sms_opt_in`)
+- Automatic fallback ticket creation when AI is unavailable or handoff is required
+
+Safety restrictions:
+
+- Chat will not execute money movement, loan approvals, credit-limit changes, trust-score overrides, payout address changes, or KYC decisions.
+- Account changes execute server-side only after explicit `Confirm`.
+- Action proposals and execution results are audit logged in `support_actions`.
+
 ---
 
 ## 🔐 Google OAuth Setup (Required for Login)
