@@ -92,6 +92,7 @@ const App: React.FC = () => {
   const [pendingAdminEmail, setPendingAdminEmail] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [authError, setAuthError] = useState('');
   
@@ -389,6 +390,37 @@ const App: React.FC = () => {
       if (error) throw error;
     } catch (error: any) {
       setAuthError(String(error?.message || 'Unable to sign in.'));
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleSupabaseSignUp = async () => {
+    setAuthError('');
+    const email = authEmail.trim().toLowerCase();
+    const password = authPassword;
+    if (!email || !password) {
+      setAuthError('Email and password are required.');
+      return;
+    }
+    if (password.length < 8) {
+      setAuthError('Password must be at least 8 characters.');
+      return;
+    }
+    setIsAuthSubmitting(true);
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+      setAuthError('Check your email to confirm your account, then sign in.');
+      setAuthMode('login');
+    } catch (error: any) {
+      setAuthError(String(error?.message || 'Unable to create account.'));
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -952,12 +984,21 @@ const App: React.FC = () => {
                />
                <Button
                  size="lg"
-                 onClick={handleSupabaseSignIn}
+                onClick={authMode === 'login' ? handleSupabaseSignIn : handleSupabaseSignUp}
                  isLoading={isAuthSubmitting}
                  className="w-full py-4 text-base bg-[#00e599] text-black hover:bg-[#00cc88] shadow-[0_0_20px_rgba(0,229,153,0.3)] border-none"
                >
-                 Sign In
+                {authMode === 'login' ? 'Sign In' : 'Create Account'}
                </Button>
+              <button
+                onClick={() => setAuthMode((prev) => (prev === 'login' ? 'signup' : 'login'))}
+                disabled={isAuthSubmitting}
+                className="text-xs text-zinc-400 hover:text-white underline disabled:opacity-50"
+              >
+                {authMode === 'login'
+                  ? "Don't have an account? Create one"
+                  : 'Already have an account? Sign in'}
+              </button>
                <button
                  onClick={handleSupabaseMagicLink}
                  disabled={isAuthSubmitting}
