@@ -37,6 +37,7 @@ describe('admin_waitlist_proxy', () => {
     } as any);
 
     expect(response.statusCode).toBe(401);
+    expect(response.headers['X-P3-Proxy']).toBe('admin_waitlist_proxy');
     expect(JSON.parse(response.body)).toMatchObject({
       success: false,
       error: 'Missing Supabase session token.',
@@ -58,6 +59,7 @@ describe('admin_waitlist_proxy', () => {
     } as any);
 
     expect(response.statusCode).toBe(401);
+    expect(response.headers['X-P3-Proxy']).toBe('admin_waitlist_proxy');
     expect(JSON.parse(response.body)).toMatchObject({
       success: false,
       error: 'Invalid/expired Supabase session token.',
@@ -88,6 +90,7 @@ describe('admin_waitlist_proxy', () => {
     } as any);
 
     expect(response.statusCode).toBe(403);
+    expect(response.headers['X-P3-Proxy']).toBe('admin_waitlist_proxy');
     expect(JSON.parse(response.body)).toMatchObject({
       success: false,
       error: 'Admin role required.',
@@ -120,6 +123,7 @@ describe('admin_waitlist_proxy', () => {
     } as any);
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers['X-P3-Proxy']).toBe('admin_waitlist_proxy');
     expect(JSON.parse(response.body)).toMatchObject({
       success: true,
       data: { synced: true },
@@ -127,5 +131,25 @@ describe('admin_waitlist_proxy', () => {
 
     const [, upstreamCall] = fetchMock.mock.calls;
     expect(upstreamCall[1].headers.Authorization).toBe('Bearer internal-secret');
+  });
+
+  it('returns GET health response without auth', async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as any;
+
+    const response = await handler({
+      httpMethod: 'GET',
+      headers: {},
+      queryStringParameters: null,
+      body: null,
+    } as any);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['X-P3-Proxy']).toBe('admin_waitlist_proxy');
+    expect(JSON.parse(response.body)).toEqual({
+      ok: true,
+      name: 'admin_waitlist_proxy',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
