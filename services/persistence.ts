@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { AdminNotificationClient } from './adminNotificationClient';
 import { frontendEnv } from './env';
 import { RuntimeConfigService } from './runtimeConfigService';
+import { decryptWithDek, encryptWithDek, EncryptedEnvelope } from './chatCrypto';
 
 // INITIAL TEMPLATE REMAINING FOR FALLBACK
 const INITIAL_USER_TEMPLATE: UserProfile = {
@@ -167,6 +168,97 @@ const toChatMessage = (row: any): ChatMessage | null => {
   };
 };
 
+const getPersistedAnonSessionId = (): string | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  const key = 'p3_support_anon_session_id';
+  const existing = String(window.localStorage.getItem(key) || '').trim();
+  if (existing) return existing;
+  const generated = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  window.localStorage.setItem(key, generated);
+  return generated;
+};
+
+const conversationDekCache = new Map<string, string>();
+
+const isEncryptedEnvelope = (value: any): value is EncryptedEnvelope =>
+  value &&
+  typeof value === 'object' &&
+  value.enc_v === 1 &&
+  String(value.alg || '').toUpperCase() === 'AES-GCM' &&
+  typeof value.iv === 'string' &&
+  typeof value.ciphertext === 'string';
+
+const getSupportAuthHeader = async (): Promise<string> => {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ? `Bearer ${session.access_token}` : '';
+  } catch {
+    return '';
+  }
+};
+
+const fetchConversationDek = async (
+  keyRef: string,
+  options?: { anonSessionId?: string }
+): Promise<string> => {
+  const normalizedKeyRef = String(keyRef || '').trim();
+  if (!normalizedKeyRef) throw new Error('key_ref_required');
+  const cached = conversationDekCache.get(normalizedKeyRef);
+  if (cached) return cached;
+
+  const authHeader = await getSupportAuthHeader();
+  const anonSessionId = options?.anonSessionId;
+  const response = await fetch('/.netlify/functions/support_conversation_key', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authHeader ? { Authorization: authHeader } : {}),
+    },
+    body: JSON.stringify({
+      keyRef: normalizedKeyRef,
+      anonSessionId: authHeader ? undefined : anonSessionId,
+    }),
+  });
+  const raw = await response.text();
+  let body: any = {};
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    body = {};
+  }
+  const dek = String(body?.dek || '').trim();
+  if (!response.ok || !dek) {
+    throw new Error(String(body?.error || 'support_key_unavailable'));
+  }
+  conversationDekCache.set(normalizedKeyRef, dek);
+  return dek;
+};
+
+const resolveEncryptedPayload = async (row: any): Promise<ChatMessage | null> => {
+  const parsed = toChatMessage(row);
+  if (!parsed) return null;
+  const payload = row?.data && typeof row.data === 'object' ? row.data : {};
+  const envelope = payload?.encryptedEnvelope;
+  const keyRef = String(payload?.keyRef || parsed.threadId || '').trim();
+  if (!isEncryptedEnvelope(envelope) || !keyRef) return parsed;
+
+  try {
+    const dek = await fetchConversationDek(keyRef, { anonSessionId: getPersistedAnonSessionId() });
+    const plaintext = await decryptWithDek(envelope, dek);
+    return {
+      ...parsed,
+      message: plaintext,
+    };
+  } catch {
+    return {
+      ...parsed,
+      message: '[Encrypted message unavailable on this device.]',
+    };
+  }
+};
+
 const markUserWaitlistOnboarded = async (payload: {
   email?: string | null;
   name?: string | null;
@@ -266,6 +358,8 @@ export interface SupportMessageRequest {
   clientMessageId?: string;
   conversationId?: string;
   anonSessionId?: string;
+  keyRef?: string;
+  encryptedEnvelope?: EncryptedEnvelope;
 }
 
 export interface SupportActionProposal {
@@ -978,13 +1072,32 @@ export const PersistenceService = {
       throw new Error(`Failed to load chat history: ${error.message}`);
     }
 
-    const parsed = (data || [])
-      .map((row: any) => toChatMessage(row))
+    const mapped = await Promise.all((data || []).map((row: any) => resolveEncryptedPayload(row)));
+    const parsed = mapped
       .filter((msg): msg is ChatMessage => Boolean(msg))
       .sort((a, b) => a.timestamp - b.timestamp);
 
     if (parsed.length <= 200) return parsed;
     return parsed.slice(parsed.length - 200);
+  },
+
+  decodeIncomingChatRow: async (row: any): Promise<ChatMessage | null> => {
+    return resolveEncryptedPayload(row);
+  },
+
+  encryptSupportEnvelope: async (payload: {
+    threadId: string;
+    message: string;
+    anonSessionId?: string;
+  }): Promise<{ keyRef: string; encryptedEnvelope: EncryptedEnvelope }> => {
+    const keyRef = String(payload.threadId || '').trim();
+    if (!keyRef) throw new Error('thread_id_required');
+    const dek = await fetchConversationDek(keyRef, { anonSessionId: payload.anonSessionId });
+    const encryptedEnvelope = await encryptWithDek(payload.message, dek, {
+      keyRef,
+      scope: 'customer_support',
+    });
+    return { keyRef, encryptedEnvelope };
   },
 
   sendSupportMessage: async (payload: SupportMessageRequest): Promise<SupportMessageResponse> => {
@@ -1151,13 +1264,39 @@ export const PersistenceService = {
       isFirstSupportMessage = true;
     }
 
+    let dbMessage = msg.message;
+    let dbData: Record<string, unknown> = { ...msg };
+    if (msg.type === 'CUSTOMER_SUPPORT') {
+      const keyRef = String(msg.threadId || msg.senderId || '').trim();
+      if (keyRef) {
+        try {
+          const dek = await fetchConversationDek(keyRef);
+          const encryptedEnvelope = await encryptWithDek(msg.message, dek, {
+            keyRef,
+            scope: 'customer_support',
+          });
+          dbMessage = '[encrypted]';
+          dbData = {
+            ...msg,
+            message: dbMessage,
+            keyRef,
+            encryptedEnvelope,
+            enc_v: 1,
+          };
+        } catch {
+          dbMessage = '[encrypted-unavailable]';
+          dbData = { ...msg, message: dbMessage };
+        }
+      }
+    }
+
     await supabase.from('chats').insert({
       id: msg.id,
       thread_id: msg.threadId,
       sender_id: msg.senderId,
-      message: msg.message,
+      message: dbMessage,
       type: msg.type,
-      data: msg
+      data: dbData
     });
 
     if (shouldNotifyChatRequest && isFirstSupportMessage) {

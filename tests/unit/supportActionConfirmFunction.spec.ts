@@ -10,6 +10,7 @@ describe('support_action_confirm function', () => {
     process.env.SUPABASE_URL = 'https://supabase.example.co';
     process.env.SUPABASE_ANON_KEY = 'anon-key';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+    process.env.CHAT_ESCROW_SECRET = 'test-escrow-secret';
   });
 
   afterEach(() => {

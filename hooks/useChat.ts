@@ -26,34 +26,6 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
     return generated;
   };
 
-  const normalizeIncomingMessage = (row: any): ChatMessage | null => {
-    const payload = row?.data && typeof row.data === 'object' ? row.data : {};
-    const id = String(payload.id || row?.id || '').trim();
-    const senderId = String(payload.senderId || row?.sender_id || '').trim();
-    const message = String(payload.message || row?.message || '').trim();
-    if (!id || !senderId || !message) return null;
-
-    const rawTimestamp = payload.timestamp || row?.created_at;
-    const timestamp =
-      typeof rawTimestamp === 'number'
-        ? rawTimestamp
-        : new Date(String(rawTimestamp || '')).getTime() || Date.now();
-
-    return {
-      id,
-      senderId,
-      senderName: String(payload.senderName || row?.sender_name || 'User'),
-      role: (payload.role || row?.role || 'CUSTOMER') as ChatMessage['role'],
-      message,
-      timestamp,
-      type:
-        String(payload.type || row?.type || '').toUpperCase() === 'INTERNAL'
-          ? 'INTERNAL'
-          : 'CUSTOMER_SUPPORT',
-      threadId: String(payload.threadId || row?.thread_id || '').trim() || undefined,
-    };
-  };
-
   useEffect(() => {
     const loadHistory = async () => {
       try {
@@ -75,8 +47,8 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
     const channelName = isAdmin ? 'admin_global_chat' : `customer_chat_${threadId}`;
     const channel = supabase
       .channel(channelName)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, (payload) => {
-        const newMsg = normalizeIncomingMessage(payload.new);
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, async (payload) => {
+        const newMsg = await PersistenceService.decodeIncomingChatRow(payload.new);
         if (!newMsg) {
           console.warn('Dropped malformed chat payload');
           return;
@@ -117,6 +89,14 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
     setMessages(prev => [...prev, msg]);
     if (!isAdmin && type === 'CUSTOMER_SUPPORT') {
       try {
+        const encrypted =
+          msg.threadId
+            ? await PersistenceService.encryptSupportEnvelope({
+                threadId: msg.threadId,
+                message: msg.message,
+                anonSessionId: userId ? undefined : getAnonSessionId(),
+              })
+            : null;
         const supportResult = await PersistenceService.sendSupportMessage({
           threadId: msg.threadId || userId || 'anon',
           userId: userId || undefined,
@@ -125,6 +105,8 @@ export const useChat = ({ userId, threadId, isAdmin = false }: UseChatProps) => 
           clientMessageId: msg.id,
           conversationId,
           anonSessionId: userId ? undefined : getAnonSessionId(),
+          keyRef: encrypted?.keyRef,
+          encryptedEnvelope: encrypted?.encryptedEnvelope,
         });
         if (supportResult.conversationId) {
           setConversationId(supportResult.conversationId);

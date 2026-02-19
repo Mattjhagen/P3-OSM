@@ -1,3 +1,11 @@
+import {
+  decryptEnvelopeWithDek,
+  encryptPlaintextWithDek,
+  generateDekB64,
+  unwrapDekFromEscrow,
+  wrapDekForEscrow,
+} from './_shared/chat-crypto.js';
+
 const trim = (value) => String(value || '').trim();
 const asNowIso = () => new Date().toISOString();
 const newId = () =>
@@ -118,6 +126,55 @@ const supabaseSelect = async ({ table, query }) => {
     payload = [];
   }
   return Array.isArray(payload) ? payload : [];
+};
+
+const isEncryptedEnvelope = (value) =>
+  value &&
+  typeof value === 'object' &&
+  value.enc_v === 1 &&
+  String(value.alg || '').toUpperCase() === 'AES-GCM' &&
+  typeof value.iv === 'string' &&
+  typeof value.ciphertext === 'string';
+
+const getEscrowSecret = () => trim(process.env.CHAT_ESCROW_SECRET);
+
+const getOrCreateConversationDek = async ({ keyRef, userId = '', anonSessionId = '' }) => {
+  const normalizedKeyRef = trim(keyRef);
+  if (!normalizedKeyRef) throw new Error('key_ref_required');
+  const escrowSecret = getEscrowSecret();
+  if (!escrowSecret) throw new Error('missing_chat_escrow_secret');
+
+  const rows = await supabaseSelect({
+    table: 'chat_key_escrow',
+    query: `select=*&key_ref=eq.${encodeURIComponent(normalizedKeyRef)}&limit=1`,
+  });
+  const row = rows[0];
+  if (row?.wrapped_dek && row?.wrap_iv) {
+    return unwrapDekFromEscrow({ wrappedDek: row.wrapped_dek, wrapIv: row.wrap_iv }, escrowSecret);
+  }
+
+  const dek = generateDekB64();
+  const wrapped = await wrapDekForEscrow(dek, escrowSecret);
+  await supabaseInsert('chat_key_escrow', {
+    key_ref: normalizedKeyRef,
+    owner_user_id: trim(userId) || null,
+    anon_session_id: trim(userId) ? null : trim(anonSessionId) || null,
+    wrapped_dek: wrapped.wrappedDek,
+    wrap_iv: wrapped.wrapIv,
+    wrap_alg: wrapped.wrapAlg,
+  });
+  return dek;
+};
+
+const buildEncryptedChatPayload = async ({ msg, keyRef, dek }) => {
+  const envelope = await encryptPlaintextWithDek(msg.message, dek, JSON.stringify({ keyRef, msgId: msg.id }));
+  return {
+    ...msg,
+    message: '[encrypted]',
+    keyRef,
+    encryptedEnvelope: envelope,
+    enc_v: 1,
+  };
 };
 
 const notifyAdminsForSupportMessage = async ({ threadId, messageId, senderName, message }) => {
@@ -488,14 +545,35 @@ const upsertConversation = async ({ conversationId, userId, anonSessionId }) => 
   return inserted.id;
 };
 
-const insertSupportMessage = async ({ conversationId, senderType, content, metadata = {} }) =>
-  supabaseInsert('support_messages', {
+const insertSupportMessage = async ({
+  conversationId,
+  senderType,
+  content,
+  metadata = {},
+  keyRef = '',
+  dek = '',
+}) => {
+  const payloadMetadata = metadata && typeof metadata === 'object' ? { ...metadata } : {};
+  let storedContent = String(content || '');
+  if (keyRef && dek && storedContent) {
+    const encryptedEnvelope = await encryptPlaintextWithDek(
+      storedContent,
+      dek,
+      JSON.stringify({ keyRef, conversationId, senderType, kind: 'support_message' })
+    );
+    storedContent = '[encrypted]';
+    payloadMetadata.keyRef = keyRef;
+    payloadMetadata.encryptedEnvelope = encryptedEnvelope;
+    payloadMetadata.enc_v = 1;
+  }
+  return supabaseInsert('support_messages', {
     id: newId(),
     conversation_id: conversationId,
     sender_type: senderType,
-    content: String(content || ''),
-    metadata,
+    content: storedContent,
+    metadata: payloadMetadata,
   });
+};
 
 const returnFallback = async ({
   reqId,
@@ -505,6 +583,8 @@ const returnFallback = async ({
   userMessage,
   errorCode,
   conversationId,
+  keyRef,
+  dek,
 }) => {
   const systemMsg = buildSystemMessage({ threadId, ticketId: null });
   const missing = [];
@@ -548,13 +628,23 @@ const returnFallback = async ({
 
   try {
     if (url && serviceRoleKey) {
-      await supabaseInsert('chats', buildChatMessageRow(systemMsg));
+      const chatPayload =
+        keyRef && dek
+          ? await buildEncryptedChatPayload({
+              msg: systemMsg,
+              keyRef,
+              dek,
+            })
+          : systemMsg;
+      await supabaseInsert('chats', buildChatMessageRow(chatPayload));
       if (conversationId) {
         await insertSupportMessage({
           conversationId,
           senderType: 'system',
           content: systemMsg.message,
           metadata: { ticketId, fallback: true, reqId },
+          keyRef,
+          dek,
         });
         await supabaseUpdate({
           table: 'support_conversations',
@@ -612,15 +702,8 @@ export const handler = async (event) => {
       });
     }
 
-    const userMessage = trim(body?.message);
-    if (!userMessage) {
-      return toJsonResponse(200, {
-        ok: false,
-        error: 'message_required',
-        messages: [],
-        requestId: reqId,
-      });
-    }
+    const rawUserMessage = trim(body?.message);
+    const incomingEnvelope = body?.encryptedEnvelope;
 
     const suppliedConversationId = trim(body?.conversationId);
     const anonSessionId = trim(body?.anonSessionId || '');
@@ -631,6 +714,7 @@ export const handler = async (event) => {
     const threadId = trim(body?.threadId || userId || `anon_${Date.now()}`);
     const senderName = trim(body?.senderName || authUser?.email || 'Customer');
     const clientMessageId = trim(body?.clientMessageId || `msg_${Date.now()}_user`);
+    const keyRef = trim(body?.keyRef || threadId);
     const { url, serviceRoleKey } = getSupabaseConfig();
     if (!url || !serviceRoleKey) {
       return toJsonResponse(200, {
@@ -651,10 +735,37 @@ export const handler = async (event) => {
       userId,
       anonSessionId,
     });
+    const dek = await getOrCreateConversationDek({
+      keyRef,
+      userId,
+      anonSessionId,
+    });
+
+    let userMessage = rawUserMessage;
+    if (isEncryptedEnvelope(incomingEnvelope)) {
+      try {
+        userMessage = trim(await decryptEnvelopeWithDek(incomingEnvelope, dek));
+      } catch {
+        return toJsonResponse(200, {
+          ok: false,
+          error: 'invalid_encrypted_payload',
+          messages: [],
+          requestId: reqId,
+        });
+      }
+    }
+    if (!userMessage) {
+      return toJsonResponse(200, {
+        ok: false,
+        error: 'message_required',
+        messages: [],
+        requestId: reqId,
+      });
+    }
 
     const userMsg = {
       id: clientMessageId,
-      senderId: userId,
+      senderId: userId || anonSessionId || 'anon',
       senderName,
       role: 'CUSTOMER',
       message: userMessage,
@@ -664,7 +775,12 @@ export const handler = async (event) => {
     };
 
     try {
-      await supabaseInsert('chats', buildChatMessageRow(userMsg));
+      const encryptedUserMsg = await buildEncryptedChatPayload({
+        msg: userMsg,
+        keyRef,
+        dek,
+      });
+      await supabaseInsert('chats', buildChatMessageRow(encryptedUserMsg));
       await insertSupportMessage({
         conversationId,
         senderType: 'user',
@@ -673,9 +789,12 @@ export const handler = async (event) => {
           threadId,
           senderName,
           clientMessageId,
+          keyRef,
           userId: userId || null,
           anonSessionId: userId ? null : anonSessionId || null,
         },
+        keyRef,
+        dek,
       });
       await notifyAdminsForSupportMessage({
         threadId,
@@ -693,6 +812,8 @@ export const handler = async (event) => {
         userMessage,
         errorCode: 'ticket_created',
         conversationId,
+        keyRef,
+        dek,
       });
     }
 
@@ -708,12 +829,19 @@ export const handler = async (event) => {
         type: 'CUSTOMER_SUPPORT',
         threadId,
       };
-      await supabaseInsert('chats', buildChatMessageRow(refusalMsg));
+      const encryptedRefusalMsg = await buildEncryptedChatPayload({
+        msg: refusalMsg,
+        keyRef,
+        dek,
+      });
+      await supabaseInsert('chats', buildChatMessageRow(encryptedRefusalMsg));
       await insertSupportMessage({
         conversationId,
         senderType: 'system',
         content: refusalMsg.message,
         metadata: { forbidden: true },
+        keyRef,
+        dek,
       });
       return await returnFallback({
         reqId,
@@ -723,6 +851,8 @@ export const handler = async (event) => {
         userMessage,
         errorCode: 'forbidden_request',
         conversationId,
+        keyRef,
+        dek,
       });
     }
 
@@ -739,12 +869,19 @@ export const handler = async (event) => {
           type: 'CUSTOMER_SUPPORT',
           threadId,
         };
-        await supabaseInsert('chats', buildChatMessageRow(msg));
+        const encryptedMsg = await buildEncryptedChatPayload({
+          msg,
+          keyRef,
+          dek,
+        });
+        await supabaseInsert('chats', buildChatMessageRow(encryptedMsg));
         await insertSupportMessage({
           conversationId,
           senderType: 'system',
           content: msg.message,
           metadata: { deniedReason: 'auth_required' },
+          keyRef,
+          dek,
         });
         return toJsonResponse(200, {
           ok: true,
@@ -765,6 +902,7 @@ export const handler = async (event) => {
           summary: toolIntent.summary,
           source: 'support_message',
           threadId,
+          keyRef,
           userMessage,
         },
         result: { audit: 'proposal_created' },
@@ -780,7 +918,12 @@ export const handler = async (event) => {
         type: 'CUSTOMER_SUPPORT',
         threadId,
       };
-      await supabaseInsert('chats', buildChatMessageRow(proposalMsg));
+      const encryptedProposalMsg = await buildEncryptedChatPayload({
+        msg: proposalMsg,
+        keyRef,
+        dek,
+      });
+      await supabaseInsert('chats', buildChatMessageRow(encryptedProposalMsg));
       await insertSupportMessage({
         conversationId,
         senderType: 'system',
@@ -791,6 +934,8 @@ export const handler = async (event) => {
           fields: toolIntent.fields,
           requiresConfirmation: true,
         },
+        keyRef,
+        dek,
       });
 
       return toJsonResponse(200, {
@@ -829,6 +974,8 @@ export const handler = async (event) => {
         userMessage,
         errorCode: resolveAiProvider() ? 'ai_failed' : 'missing_env',
         conversationId,
+        keyRef,
+        dek,
       });
     }
 
@@ -844,7 +991,12 @@ export const handler = async (event) => {
     };
 
     try {
-      await supabaseInsert('chats', buildChatMessageRow(aiMsg));
+      const encryptedAiMsg = await buildEncryptedChatPayload({
+        msg: aiMsg,
+        keyRef,
+        dek,
+      });
+      await supabaseInsert('chats', buildChatMessageRow(encryptedAiMsg));
       await insertSupportMessage({
         conversationId,
         senderType: 'ai',
@@ -852,6 +1004,8 @@ export const handler = async (event) => {
         metadata: {
           provider: resolveAiProvider()?.provider || 'unknown',
         },
+        keyRef,
+        dek,
       });
     } catch (error) {
       logSupportError(reqId, 'ai_message_insert_failed', error);
@@ -863,6 +1017,8 @@ export const handler = async (event) => {
         userMessage,
         errorCode: 'ticket_created',
         conversationId,
+        keyRef,
+        dek,
       });
     }
 

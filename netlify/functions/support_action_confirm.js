@@ -1,3 +1,10 @@
+import {
+  encryptPlaintextWithDek,
+  generateDekB64,
+  unwrapDekFromEscrow,
+  wrapDekForEscrow,
+} from './_shared/chat-crypto.js';
+
 const trim = (value) => String(value || '').trim();
 const nowIso = () => new Date().toISOString();
 const newUuid = () => globalThis.crypto?.randomUUID?.() || '00000000-0000-4000-8000-000000000000';
@@ -118,6 +125,84 @@ const insertRow = async (table, row) => {
   }
 };
 
+const getOrCreateConversationDek = async ({ keyRef, userId }) => {
+  const normalizedKeyRef = trim(keyRef);
+  if (!normalizedKeyRef) throw new Error('key_ref_required');
+  const escrowSecret = trim(process.env.CHAT_ESCROW_SECRET);
+  if (!escrowSecret) throw new Error('missing_chat_escrow_secret');
+
+  const existing = await selectOne({
+    table: 'chat_key_escrow',
+    query: `select=*&key_ref=eq.${encodeURIComponent(normalizedKeyRef)}&limit=1`,
+  });
+  if (existing?.wrapped_dek && existing?.wrap_iv) {
+    return unwrapDekFromEscrow(
+      {
+        wrappedDek: existing.wrapped_dek,
+        wrapIv: existing.wrap_iv,
+      },
+      escrowSecret
+    );
+  }
+
+  const dek = generateDekB64();
+  const wrapped = await wrapDekForEscrow(dek, escrowSecret);
+  await insertRow('chat_key_escrow', {
+    key_ref: normalizedKeyRef,
+    owner_user_id: trim(userId) || null,
+    anon_session_id: null,
+    wrapped_dek: wrapped.wrappedDek,
+    wrap_iv: wrapped.wrapIv,
+    wrap_alg: wrapped.wrapAlg,
+  });
+  return dek;
+};
+
+const buildEncryptedChatRow = async (payload, keyRef, dek) => {
+  const envelope = await encryptPlaintextWithDek(
+    payload.message,
+    dek,
+    JSON.stringify({ keyRef, msgId: payload.id })
+  );
+  return buildChatRow({
+    ...payload,
+    message: '[encrypted]',
+    keyRef,
+    encryptedEnvelope: envelope,
+    enc_v: 1,
+  });
+};
+
+const buildEncryptedSupportMessageRow = async ({
+  conversationId,
+  senderType,
+  content,
+  metadata = {},
+  keyRef,
+  dek,
+}) => {
+  const payloadMetadata = metadata && typeof metadata === 'object' ? { ...metadata } : {};
+  let storedContent = String(content || '');
+  if (storedContent && keyRef && dek) {
+    const encryptedEnvelope = await encryptPlaintextWithDek(
+      storedContent,
+      dek,
+      JSON.stringify({ keyRef, conversationId, senderType, kind: 'support_action_confirm' })
+    );
+    storedContent = '[encrypted]';
+    payloadMetadata.keyRef = keyRef;
+    payloadMetadata.encryptedEnvelope = encryptedEnvelope;
+    payloadMetadata.enc_v = 1;
+  }
+  return {
+    id: newUuid(),
+    conversation_id: conversationId,
+    sender_type: senderType,
+    content: storedContent,
+    metadata: payloadMetadata,
+  };
+};
+
 const buildSystemMessage = ({ threadId, text }) => ({
   id: `msg_${Date.now()}_system`,
   senderId: 'system',
@@ -215,6 +300,8 @@ export const handler = async (event) => {
   const request = action.request && typeof action.request === 'object' ? action.request : {};
   const fields = request.fields && typeof request.fields === 'object' ? request.fields : {};
   const threadId = trim(request.threadId || authUser.id || 'support');
+  const keyRef = trim(request.keyRef || threadId);
+  const dek = await getOrCreateConversationDek({ keyRef, userId: authUser.id });
   const conversationId = trim(action.conversation_id);
 
   if (!confirm) {
@@ -224,14 +311,18 @@ export const handler = async (event) => {
       patch: { status: 'cancelled', result: { cancelled_at: nowIso() } },
     });
     const cancelledMsg = buildSystemMessage({ threadId, text: 'Cancelled. No account changes were made.' });
-    await insertRow('support_messages', {
-      id: newUuid(),
-      conversation_id: conversationId,
-      sender_type: 'system',
-      content: cancelledMsg.message,
-      metadata: { actionId, status: 'cancelled' },
-    });
-    await insertRow('chats', buildChatRow(cancelledMsg));
+    await insertRow(
+      'support_messages',
+      await buildEncryptedSupportMessageRow({
+        conversationId,
+        senderType: 'system',
+        content: cancelledMsg.message,
+        metadata: { actionId, status: 'cancelled' },
+        keyRef,
+        dek,
+      })
+    );
+    await insertRow('chats', await buildEncryptedChatRow(cancelledMsg, keyRef, dek));
     return toJsonResponse(200, {
       ok: true,
       messages: [cancelledMsg],
@@ -262,14 +353,18 @@ export const handler = async (event) => {
       threadId,
       text: 'Done. Your requested account change has been applied.',
     });
-    await insertRow('support_messages', {
-      id: newUuid(),
-      conversation_id: conversationId,
-      sender_type: 'system',
-      content: doneMsg.message,
-      metadata: { actionId, status: 'executed', result: executionResult },
-    });
-    await insertRow('chats', buildChatRow(doneMsg));
+    await insertRow(
+      'support_messages',
+      await buildEncryptedSupportMessageRow({
+        conversationId,
+        senderType: 'system',
+        content: doneMsg.message,
+        metadata: { actionId, status: 'executed', result: executionResult },
+        keyRef,
+        dek,
+      })
+    );
+    await insertRow('chats', await buildEncryptedChatRow(doneMsg, keyRef, dek));
 
     return toJsonResponse(200, {
       ok: true,
@@ -290,14 +385,18 @@ export const handler = async (event) => {
       threadId,
       text: 'We could not apply that change. A support ticket has been created for follow-up.',
     });
-    await insertRow('support_messages', {
-      id: newUuid(),
-      conversation_id: conversationId,
-      sender_type: 'system',
-      content: failMsg.message,
-      metadata: { actionId, status: 'failed' },
-    });
-    await insertRow('chats', buildChatRow(failMsg));
+    await insertRow(
+      'support_messages',
+      await buildEncryptedSupportMessageRow({
+        conversationId,
+        senderType: 'system',
+        content: failMsg.message,
+        metadata: { actionId, status: 'failed' },
+        keyRef,
+        dek,
+      })
+    );
+    await insertRow('chats', await buildEncryptedChatRow(failMsg, keyRef, dek));
     return toJsonResponse(200, {
       ok: false,
       messages: [failMsg],

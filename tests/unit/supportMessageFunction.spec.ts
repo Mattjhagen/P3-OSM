@@ -15,6 +15,7 @@ describe('support_message function', () => {
     process.env.PUSH_NOTIFY_SECRET = '';
     process.env.URL = '';
     process.env.DEPLOY_PRIME_URL = '';
+    process.env.CHAT_ESCROW_SECRET = 'test-escrow-secret';
   });
 
   afterEach(() => {
