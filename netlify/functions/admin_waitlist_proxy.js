@@ -53,7 +53,71 @@ const parseTokenFromRequest = (event) => {
   return trim(cookies.nf_jwt || '');
 };
 
+
 const looksLikeJwt = (token) => /^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/.test(token);
+
+const decodeJwtPayload = (token) => {
+  try {
+    const [, payload] = String(token || '').split('.');
+    if (!payload) return null;
+    const json = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
+const getJwtIssuer = (token) => {
+  const payload = decodeJwtPayload(token);
+  return trim(payload?.iss || '');
+};
+
+const looksLikeSupabaseIssuer = (issuer) => {
+  const { url } = getSupabaseConfig();
+  if (!issuer || !url) return false;
+  const base = url.replace(/\/+$/, '');
+  // Supabase issuer is typically the auth base URL.
+  return issuer.startsWith(base);
+};
+
+const getNetlifyIdentityUser = async (accessToken) => {
+  const siteUrl = trim(process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || '');
+  if (!siteUrl) return { ok: false, error: 'Proxy misconfiguration: missing site URL.' };
+
+  const base = siteUrl.replace(/\/+$/, '');
+  const res = await fetch(`${base}/.netlify/identity/user`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    return { ok: false, error: 'Invalid/expired Netlify Identity session token.' };
+  }
+
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!payload?.id && !payload?.sub) {
+    return { ok: false, error: 'Invalid/expired Netlify Identity session token.' };
+  }
+
+  // Normalize to the same shape we expect elsewhere
+  return {
+    ok: true,
+    user: {
+      id: trim(payload.sub || payload.id),
+      email: normalizeEmail(payload.email),
+      app_metadata: payload.app_metadata || {},
+    },
+  };
+};
 
 const getSupabaseConfig = () => {
   const url = trim(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL);
@@ -194,7 +258,6 @@ export const handler = async (event, context) => {
       error: 'Missing session token.',
     });
   } else {
-    authProvider = 'supabase';
     if (!looksLikeJwt(accessToken)) {
       console.warn('[admin_waitlist_proxy] unauthorized', {
         reqId,
@@ -210,12 +273,23 @@ export const handler = async (event, context) => {
       });
     }
 
-    const authResult = await getSupabaseUser(accessToken);
-    console.info('[admin_waitlist_proxy] supabase_auth_result', {
+    const issuer = getJwtIssuer(accessToken);
+    const treatAsSupabase = looksLikeSupabaseIssuer(issuer);
+
+    authProvider = treatAsSupabase ? 'supabase' : 'netlify_identity';
+
+    const authResult = treatAsSupabase
+      ? await getSupabaseUser(accessToken)
+      : await getNetlifyIdentityUser(accessToken);
+
+    console.info('[admin_waitlist_proxy] token_auth_result', {
       reqId,
       ok: authResult.ok,
+      authProvider,
+      hasIssuer: Boolean(issuer),
       path,
     });
+
     if (!authResult.ok) {
       console.warn('[admin_waitlist_proxy] unauthorized', {
         reqId,
@@ -232,7 +306,8 @@ export const handler = async (event, context) => {
         error: 'Invalid/expired admin session token.',
       });
     }
-    user = authResult.user;
+
+    user = treatAsSupabase ? authResult.user : authResult.user;
   }
 
   if (!user) {
@@ -265,6 +340,7 @@ export const handler = async (event, context) => {
       tokenLength,
       authProvider,
       userId,
+      userEmail,
       isAdmin,
       path,
     });
