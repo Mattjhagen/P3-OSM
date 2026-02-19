@@ -5,6 +5,11 @@ import { Button } from './Button';
 import { ComplianceService, DisclosureSummaryDto, StatementSummaryDto } from '../services/complianceService';
 import { FeatureFlagService } from '../services/featureFlagService';
 import { PlaidLinkService } from '../services/plaidLinkService';
+import {
+  IdentityLinkingService,
+  OAuthLinkProvider,
+  SupportedIdentityProvider,
+} from '../services/identityLinkingService';
 
 interface Props {
   user: UserProfile;
@@ -26,6 +31,11 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
   const [withdrawError, setWithdrawError] = useState('');
   const [isLinkingBank, setIsLinkingBank] = useState(false);
   const [bankLinkStatus, setBankLinkStatus] = useState('');
+  const [linkedProviders, setLinkedProviders] = useState<SupportedIdentityProvider[]>([]);
+  const [identityLinkError, setIdentityLinkError] = useState('');
+  const [identityLinkSuccess, setIdentityLinkSuccess] = useState('');
+  const [isLinkingIdentityProvider, setIsLinkingIdentityProvider] =
+    useState<OAuthLinkProvider | null>(null);
   const [statements, setStatements] = useState<StatementSummaryDto[]>([]);
   const [disclosures, setDisclosures] = useState<DisclosureSummaryDto[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
@@ -72,6 +82,56 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
       cancelled = true;
     };
   }, [user.id]);
+
+  const refreshLinkedProviders = async () => {
+    const providers = await IdentityLinkingService.getLinkedProviders();
+    setLinkedProviders(providers);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLinkedProviders = async () => {
+      try {
+        const providers = await IdentityLinkingService.getLinkedProviders();
+        if (cancelled) return;
+        setLinkedProviders(providers);
+      } catch (error: any) {
+        if (cancelled) return;
+        setIdentityLinkError(
+          error?.message || 'Unable to load linked sign-in providers right now.'
+        );
+      }
+    };
+
+    loadLinkedProviders();
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
+
+  useEffect(() => {
+    const result = IdentityLinkingService.consumeResult();
+    if (!result) return;
+
+    if (result.status === 'success') {
+      setIdentityLinkError('');
+      setIdentityLinkSuccess(
+        result.message ||
+          `${IdentityLinkingService.providerLabel(result.provider)} sign-in linked successfully.`
+      );
+      setLinkedProviders((prev) =>
+        Array.from(new Set([...prev, result.provider as SupportedIdentityProvider]))
+      );
+      refreshLinkedProviders().catch(() => {
+        // Best-effort refresh only.
+      });
+      return;
+    }
+
+    setIdentityLinkSuccess('');
+    setIdentityLinkError(result.message || 'Unable to link this sign-in method.');
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,6 +266,23 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
     }
   };
 
+  const isProviderLinked = (provider: SupportedIdentityProvider) => linkedProviders.includes(provider);
+
+  const handleLinkIdentityProvider = async (provider: OAuthLinkProvider) => {
+    setIdentityLinkError('');
+    setIdentityLinkSuccess('');
+    setIsLinkingIdentityProvider(provider);
+    try {
+      await IdentityLinkingService.startManualLink(provider);
+    } catch (error: any) {
+      setIdentityLinkError(error?.message || 'Unable to start identity linking flow.');
+    } finally {
+      setIsLinkingIdentityProvider(null);
+    }
+  };
+
+  const isKycVerified = String(user.kycStatus || '').toUpperCase() === 'VERIFIED';
+
   return (
     <div className="max-w-2xl mx-auto animate-fade-in space-y-8 pb-10">
       
@@ -257,6 +334,65 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
                )}
             </div>
           </div>
+        </div>
+
+        <div className="glass-panel p-8 rounded-2xl space-y-5 border border-zinc-800/50">
+          <h3 className="text-lg font-bold text-white border-b border-zinc-800 pb-4">
+            Sign-in Methods
+          </h3>
+          <p className="text-xs text-zinc-500">
+            Link OAuth providers to this same account so all sign-ins map to one profile.
+            {isKycVerified
+              ? ' Your account is KYC-verified, so duplicate standalone accounts are blocked.'
+              : ''}
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            {(['email', 'google', 'apple'] as SupportedIdentityProvider[]).map((provider) => (
+              <span
+                key={provider}
+                className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-wide ${
+                  isProviderLinked(provider)
+                    ? 'border-[#00e599]/40 bg-[#00e599]/10 text-[#00e599]'
+                    : 'border-zinc-700 bg-zinc-900/50 text-zinc-400'
+                }`}
+              >
+                {provider} {isProviderLinked(provider) ? 'linked' : 'not linked'}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isProviderLinked('google') || Boolean(isLinkingIdentityProvider)}
+              isLoading={isLinkingIdentityProvider === 'google'}
+              onClick={() => handleLinkIdentityProvider('google')}
+            >
+              {isProviderLinked('google') ? 'Google Linked' : 'Link Google'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isProviderLinked('apple') || Boolean(isLinkingIdentityProvider)}
+              isLoading={isLinkingIdentityProvider === 'apple'}
+              onClick={() => handleLinkIdentityProvider('apple')}
+            >
+              {isProviderLinked('apple') ? 'Apple Linked' : 'Link Apple'}
+            </Button>
+          </div>
+
+          {identityLinkSuccess && (
+            <p className="text-[11px] text-emerald-300 rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-3">
+              {identityLinkSuccess}
+            </p>
+          )}
+          {identityLinkError && (
+            <p className="text-[11px] text-red-300 rounded-lg border border-red-500/30 bg-red-950/20 p-3">
+              {identityLinkError}
+            </p>
+          )}
         </div>
 
         {/* Documents & Statements Section */}

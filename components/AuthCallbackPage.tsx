@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Logo } from './Logo';
 import { Button } from './Button';
 import { supabase } from '../supabaseClient';
+import { IdentityLinkingService } from '../services/identityLinkingService';
 
 const normalizePath = (value: string) => value.replace(/\/+$/, '') || '/';
 
@@ -10,6 +11,17 @@ const isOnboardingComplete = (data: Record<string, unknown>) => {
   const kycStatus = String(data.kycStatus || '').toUpperCase();
   if (kycStatus === 'VERIFIED') return true;
   return false;
+};
+
+const toFriendlyAuthError = (error: unknown) => {
+  const message = String((error as any)?.message || 'Sign-in failed or was cancelled.');
+  if (
+    message.includes('email_already_bound_to_verified_account') ||
+    message.includes('verified_account_requires_unique_email')
+  ) {
+    return 'This identity is already tied to a KYC-verified account. Sign in using a linked method from your original account.';
+  }
+  return message;
 };
 
 export const resolveAuthDestination = (options: {
@@ -33,6 +45,10 @@ export const AuthCallbackPage: React.FC = () => {
         const params = new URLSearchParams(window.location.search);
         const next = params.get('next');
         const code = params.get('code');
+        const intent = String(params.get('intent') || '').trim();
+        const linkedProvider = IdentityLinkingService.parseOAuthProvider(params.get('provider'));
+        const isManualLinkFlow =
+          intent === IdentityLinkingService.linkIntent && Boolean(linkedProvider);
 
         if (code) {
           await supabase.auth.exchangeCodeForSession(code);
@@ -63,7 +79,7 @@ export const AuthCallbackPage: React.FC = () => {
 
         const completed = isOnboardingComplete(currentData);
 
-        await supabase.from('users').upsert({
+        const { error: upsertError } = await supabase.from('users').upsert({
           id: userId,
           email: userEmail,
           data: {
@@ -72,17 +88,43 @@ export const AuthCallbackPage: React.FC = () => {
             last_auth_at: new Date().toISOString(),
           },
         });
+        if (upsertError) throw upsertError;
 
         const destination = resolveAuthDestination({
           next,
           onboardingCompleted: completed,
         });
 
+        if (isManualLinkFlow && linkedProvider) {
+          IdentityLinkingService.persistResult({
+            status: 'success',
+            provider: linkedProvider,
+            message: `${IdentityLinkingService.providerLabel(linkedProvider)} sign-in linked successfully.`,
+            at: new Date().toISOString(),
+          });
+        }
+
         window.location.replace(destination);
       } catch (authError: any) {
         console.error('[auth/callback] finalize_failed', authError);
         if (!active) return;
-        setError(String(authError?.message || 'Sign-in failed or was cancelled.'));
+        const params = new URLSearchParams(window.location.search);
+        const intent = String(params.get('intent') || '').trim();
+        const linkedProvider = IdentityLinkingService.parseOAuthProvider(params.get('provider'));
+        const isManualLinkFlow =
+          intent === IdentityLinkingService.linkIntent && Boolean(linkedProvider);
+
+        if (isManualLinkFlow && linkedProvider) {
+          IdentityLinkingService.persistResult({
+            status: 'error',
+            provider: linkedProvider,
+            message: String(authError?.message || 'Unable to link this sign-in method.'),
+            at: new Date().toISOString(),
+          });
+          window.location.replace('/dashboard?view=profile');
+          return;
+        }
+        setError(toFriendlyAuthError(authError));
       }
     };
 
