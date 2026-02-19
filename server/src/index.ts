@@ -51,23 +51,36 @@ export const createApp = () => {
     app.use('/api/compliance', complianceRoutes);
     app.get('/api/prices', publicApiLimiter, TradingController.getPrices);
 
-    // Health Check
+    const getProviderStatus = () => ({
+        stripePaymentsConfigured: Boolean(config.stripe.secretKey),
+        stripePayoutsEnabled: Boolean(config.stripe.secretKey && config.stripe.payoutsEnabled),
+        plaidConfigured: Boolean(config.plaid.clientId && config.plaid.secret),
+        btcWithdrawalsEnabled: Boolean(
+            config.withdrawals.btcEnabled &&
+                config.withdrawals.btcProviderUrl &&
+                config.withdrawals.btcProviderToken
+        ),
+        coingeckoConfigured: Boolean(config.coingecko.apiBaseUrl),
+        tradingProviderEnabled: Boolean(config.trading.providerEnabled),
+    });
+
+    // Legacy health endpoint retained for compatibility.
     app.get('/health', (req: Request, res: Response) => {
-        res.json({
+        res.status(200).json({
             status: 'active',
             timestamp: new Date().toISOString(),
-            providers: {
-                stripePaymentsConfigured: Boolean(config.stripe.secretKey),
-                stripePayoutsEnabled: Boolean(config.stripe.secretKey && config.stripe.payoutsEnabled),
-                plaidConfigured: Boolean(config.plaid.clientId && config.plaid.secret),
-                btcWithdrawalsEnabled: Boolean(
-                    config.withdrawals.btcEnabled &&
-                        config.withdrawals.btcProviderUrl &&
-                        config.withdrawals.btcProviderToken
-                ),
-                coingeckoConfigured: Boolean(config.coingecko.apiBaseUrl),
-                tradingProviderEnabled: Boolean(config.trading.providerEnabled),
-            },
+            providers: getProviderStatus(),
+        });
+    });
+
+    // API health endpoint consumed by status_check netlify function.
+    app.get('/api/health', (req: Request, res: Response) => {
+        res.status(200).json({
+            ok: true,
+            service: 'render-backend',
+            status: 'active',
+            timestamp: new Date().toISOString(),
+            providers: getProviderStatus(),
         });
     });
 
