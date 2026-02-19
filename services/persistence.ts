@@ -311,25 +311,25 @@ const requestAdminWaitlistApi = async <T>(payload: {
     throw new Error(`Unable to reach backend for waitlist admin action: ${message}`);
   }
 
-  let data: any = null;
+  let respJson: any = null;
   try {
-    data = await response.json();
+    respJson = await response.json();
   } catch {
-    data = null;
+    respJson = null;
   }
   const proxyMarker = response.headers.get('X-P3-Proxy');
   if ((import.meta as any)?.env?.MODE !== 'production' && proxyMarker) {
     console.log('[admin] waitlist proxy marker', proxyMarker);
   }
 
-  if (!response.ok || !data?.success) {
+  if (!response.ok || !respJson?.success) {
     const message =
-      String(data?.error || '').trim() ||
+      String(respJson?.error || '').trim() ||
       `Waitlist admin request failed with status ${response.status}.`;
     throw new Error(proxyMarker ? `${message} (via ${proxyMarker})` : message);
   }
 
-  return data.data as T;
+  return respJson.data as T;
 };
 
 // NOTE: All methods are now ASYNC because they hit the database.
