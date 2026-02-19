@@ -15,7 +15,7 @@ export const AuthInvitePage: React.FC = () => {
   const [error, setError] = useState('');
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const nextPath = params.get('next') || '/?view=profile';
+  const nextPath = params.get('next') || '/onboarding';
   const invitedEmail = String(params.get('email') || '').trim().toLowerCase();
 
   useEffect(() => {

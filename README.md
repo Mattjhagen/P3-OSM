@@ -65,6 +65,13 @@ If Netlify Identity dashboard invites fail (for example generic 500 errors), use
 1. `docs/identity-invites.md`
 2. `scripts/identity-invite-smoke.sh`
 
+## Supabase Auth Login
+
+Auth flows (Magic Link, Google OAuth, Apple OAuth) and callback configuration are documented in:
+
+- `docs/auth.md`
+- `scripts/auth-smoke.sh` (local/prod route smoke checks + manual auth checklist)
+
 Invite-link routing and onboarding:
 
 - Invite links should target `https://p3lending.space/auth/invite` (not `/`).

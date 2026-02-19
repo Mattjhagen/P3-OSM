@@ -32,6 +32,7 @@ import { PitchDeck } from './components/PitchDeck';
 import { DonationThankYouPage } from './components/DonationThankYouPage';
 import { StatusPage } from './components/StatusPage';
 import { AuthInvitePage } from './components/AuthInvitePage';
+import { AuthCallbackPage } from './components/AuthCallbackPage';
 import { AnalyticsService } from './services/analyticsService';
 import { PaymentService } from './services/paymentService';
 import { TradingService as TradingApiService } from './services/tradingService';
@@ -75,6 +76,9 @@ const App: React.FC = () => {
   const isAuthInviteRoute =
     typeof window !== 'undefined' &&
     window.location.pathname.replace(/\/+$/, '') === '/auth/invite';
+  const isAuthCallbackRoute =
+    typeof window !== 'undefined' &&
+    window.location.pathname.replace(/\/+$/, '') === '/auth/callback';
   const [appReady, setAppReady] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -246,6 +250,18 @@ const App: React.FC = () => {
     );
     
     const params = new URLSearchParams(window.location.search);
+    const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/';
+    if (normalizedPath === '/login') {
+      setShowLanding(false);
+    } else if (normalizedPath === '/dashboard') {
+      setShowLanding(false);
+      setActiveView('borrow');
+    } else if (normalizedPath === '/onboarding') {
+      setShowLanding(false);
+      setActiveView('profile');
+      setShowKYCModal(true);
+    }
+
     const refCode = params.get('ref');
     const waitlistInviteId = params.get('waitlist_invite');
     const invitedEmail = params.get('email');
@@ -390,13 +406,35 @@ const App: React.FC = () => {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/invite`,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) throw error;
       setAuthError('Check your email for a secure sign-in link.');
     } catch (error: any) {
       setAuthError(String(error?.message || 'Unable to send magic link.'));
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleSupabaseOAuth = async (provider: 'google' | 'apple') => {
+    setAuthError('');
+    setIsAuthSubmitting(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.assign(data.url);
+        return;
+      }
+    } catch (error: any) {
+      setAuthError(String(error?.message || `Unable to sign in with ${provider}.`));
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -834,6 +872,7 @@ const App: React.FC = () => {
 
   if (isStatusRoute) return <StatusPage />;
   if (isAuthInviteRoute) return <AuthInvitePage />;
+  if (isAuthCallbackRoute) return <AuthCallbackPage />;
 
   if (!appReady) return <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
 
@@ -926,6 +965,25 @@ const App: React.FC = () => {
                >
                  Send Magic Link
                </button>
+              <div className="w-full flex items-center gap-2 py-1">
+                <div className="h-px bg-zinc-800 flex-1" />
+                <span className="text-[10px] text-zinc-600 uppercase tracking-wider">or</span>
+                <div className="h-px bg-zinc-800 flex-1" />
+              </div>
+              <Button
+                onClick={() => handleSupabaseOAuth('google')}
+                isLoading={isAuthSubmitting}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white hover:bg-zinc-800"
+              >
+                Continue with Google
+              </Button>
+              <Button
+                onClick={() => handleSupabaseOAuth('apple')}
+                isLoading={isAuthSubmitting}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white hover:bg-zinc-800"
+              >
+                Continue with Apple
+              </Button>
                {authError ? <p className="text-xs text-zinc-400 text-center">{authError}</p> : null}
                <p className="text-xs text-zinc-600 mt-1">Auth is powered by Supabase.</p>
                <p className="text-xs text-zinc-600">Employee Login enabled via @p3lending.space email</p>
