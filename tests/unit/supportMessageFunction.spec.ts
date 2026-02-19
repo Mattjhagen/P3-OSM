@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { handler } from '../../netlify/functions/support_message.js';
 
 describe('support_message function', () => {
@@ -17,7 +19,7 @@ describe('support_message function', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns an AI message for normal support questions', async () => {
+  it('returns ok:true with AI message for normal support questions', async () => {
     const fetchMock = vi
       .fn()
       // Persist user message
@@ -47,13 +49,13 @@ describe('support_message function', () => {
 
     const body = JSON.parse(response.body);
     expect(response.statusCode).toBe(200);
-    expect(body.success).toBe(true);
-    expect(body.data.ticketStatus).toBe('none');
-    expect(body.data.messages[0].senderId).toBe('ai_support_agent');
+    expect(body.ok).toBe(true);
+    expect(Array.isArray(body.messages)).toBe(true);
+    expect(body.messages[0].senderId).toBe('ai_support_agent');
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it('creates a human handoff ticket when AI request fails', async () => {
+  it('returns fallback ticket_created when AI request fails', async () => {
     const fetchMock = vi
       .fn()
       // Persist user message
@@ -80,10 +82,53 @@ describe('support_message function', () => {
 
     const body = JSON.parse(response.body);
     expect(response.statusCode).toBe(200);
-    expect(body.success).toBe(true);
-    expect(body.data.ticketStatus).toBe('pending_human');
-    expect(body.data.ticketId).toContain('tick_support_');
-    expect(body.data.messages[0].message).toContain('Ticket ID');
+    expect(body.ok).toBe(false);
+    expect(body.fallback).toBe('ticket_created');
+    expect(body.ticketId).toContain('tick_support_');
+    expect(body.messages[0].message).toContain('Ticket ID');
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('returns missing_env fallback when Supabase credentials are absent', async () => {
+    process.env.SUPABASE_URL = '';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = '';
+    process.env.OPENAI_API_KEY = '';
+    process.env.API_KEY = '';
+    process.env.RAW_GEMINI_KEY = '';
+
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as any;
+
+    const response = await handler({
+      httpMethod: 'POST',
+      headers: { 'x-nf-request-id': 'req-missing-env' },
+      body: JSON.stringify({
+        threadId: 'thread-3',
+        userId: 'user-3',
+        senderName: 'Casey',
+        message: 'hi',
+        clientMessageId: 'msg_client_3',
+      }),
+    } as any);
+
+    const body = JSON.parse(response.body);
+    expect(response.statusCode).toBe(200);
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe('missing_env');
+    expect(Array.isArray(body.missing)).toBe(true);
+    expect(body.messages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('handles OPTIONS preflight with JSON and CORS headers', async () => {
+    const response = await handler({
+      httpMethod: 'OPTIONS',
+      headers: { 'x-nf-request-id': 'req-options' },
+    } as any);
+
+    const body = JSON.parse(response.body);
+    expect(response.statusCode).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(response.headers['access-control-allow-origin']).toBe('*');
+    expect(response.headers['access-control-allow-methods']).toContain('OPTIONS');
   });
 });

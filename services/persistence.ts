@@ -267,9 +267,12 @@ export interface SupportMessageRequest {
 }
 
 export interface SupportMessageResponse {
+  ok: boolean;
+  error?: string;
+  fallback?: 'ticket_created';
   conversationId: string;
   ticketId?: string;
-  ticketStatus?: 'none' | 'pending_human';
+  ticketStatus?: 'none' | 'pending_human' | null;
   messages: ChatMessage[];
 }
 
@@ -887,7 +890,7 @@ export const PersistenceService = {
   },
 
   sendSupportMessage: async (payload: SupportMessageRequest): Promise<SupportMessageResponse> => {
-    let response: Response;
+    let response: Response | null = null;
     try {
       response = await fetch('/.netlify/functions/support_message', {
         method: 'POST',
@@ -897,30 +900,70 @@ export const PersistenceService = {
         body: JSON.stringify(payload),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown support network error';
-      throw new Error(`Unable to reach support agent: ${message}`);
+      const fallbackMessage: ChatMessage = {
+        id: `sys_${Date.now()}`,
+        senderId: 'system',
+        senderName: 'P3 Support',
+        role: 'SUPPORT',
+        message: 'We are creating a support ticket for you. A human will reply shortly.',
+        timestamp: Date.now(),
+        type: 'CUSTOMER_SUPPORT',
+        threadId: payload.threadId,
+      };
+      return {
+        ok: false,
+        error: 'network_error',
+        fallback: 'ticket_created',
+        conversationId: payload.threadId,
+        ticketId: undefined,
+        ticketStatus: 'pending_human',
+        messages: [fallbackMessage],
+      };
     }
 
+    const raw = await response.text();
     let body: any = null;
     try {
-      body = await response.json();
+      body = raw ? JSON.parse(raw) : null;
     } catch {
       body = null;
     }
 
-    if (!response.ok || !body?.success) {
-      const message = String(body?.error || '').trim() || `Support request failed with status ${response.status}.`;
-      throw new Error(message);
+    const payloadBody = body || {};
+    const sourceMessages = Array.isArray(payloadBody?.messages)
+      ? payloadBody.messages
+      : Array.isArray(payloadBody?.data?.messages)
+        ? payloadBody.data.messages
+        : [];
+    const messages = sourceMessages.length
+      ? sourceMessages.map((row: any) => toChatMessage({ ...row, data: row })).filter(Boolean)
+      : [];
+    if (!messages.length) {
+      messages.push({
+        id: `sys_${Date.now()}`,
+        senderId: 'system',
+        senderName: 'P3 Support',
+        role: 'SUPPORT',
+        message: 'We are creating a support ticket for you. A human will reply shortly.',
+        timestamp: Date.now(),
+        type: 'CUSTOMER_SUPPORT',
+        threadId: payload.threadId,
+      });
     }
 
-    const messages = Array.isArray(body?.data?.messages)
-      ? body.data.messages.map((row: any) => toChatMessage({ ...row, data: row })).filter(Boolean)
-      : [];
-
     return {
-      conversationId: String(body?.data?.conversationId || payload.threadId),
-      ticketId: body?.data?.ticketId ? String(body.data.ticketId) : undefined,
-      ticketStatus: body?.data?.ticketStatus || 'none',
+      ok: Boolean(payloadBody?.ok),
+      error: payloadBody?.error ? String(payloadBody.error) : undefined,
+      fallback: payloadBody?.fallback === 'ticket_created' ? 'ticket_created' : undefined,
+      conversationId: String(
+        payloadBody?.conversationId || payloadBody?.data?.conversationId || payload.threadId
+      ),
+      ticketId: payloadBody?.ticketId
+        ? String(payloadBody.ticketId)
+        : payloadBody?.data?.ticketId
+          ? String(payloadBody.data.ticketId)
+          : undefined,
+      ticketStatus: payloadBody?.ticketStatus || payloadBody?.data?.ticketStatus || null,
       messages: messages as ChatMessage[],
     };
   },

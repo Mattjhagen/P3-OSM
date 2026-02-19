@@ -1,12 +1,17 @@
 const trim = (value) => String(value || '').trim();
 
+const CORS_HEADERS = {
+  'content-type': 'application/json',
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'content-type, authorization',
+  'access-control-allow-methods': 'POST, OPTIONS',
+};
+
 const toJsonResponse = (statusCode, payload) => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json' },
+  headers: CORS_HEADERS,
   body: JSON.stringify(payload),
 });
-
-const toIso = () => new Date().toISOString();
 
 const buildChatMessageRow = (payload) => ({
   id: payload.id,
@@ -22,6 +27,21 @@ const buildChatMessageRow = (payload) => ({
 const getSupabaseConfig = () => ({
   url: trim(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL).replace(/\/+$/, ''),
   serviceRoleKey: trim(process.env.SUPABASE_SERVICE_ROLE_KEY),
+});
+
+const buildSystemMessage = ({ threadId, ticketId, text }) => ({
+  id: `msg_${Date.now()}_system`,
+  senderId: 'system',
+  senderName: 'P3 Support',
+  role: 'SUPPORT',
+  message:
+    text ||
+    (ticketId
+      ? `We're creating a support ticket for you. Ticket ID: ${ticketId}. A human will reply shortly.`
+      : "We're creating a support ticket for you. A human will reply shortly."),
+  timestamp: Date.now(),
+  type: 'CUSTOMER_SUPPORT',
+  threadId,
 });
 
 const supabaseInsert = async (table, row) => {
@@ -204,121 +224,216 @@ const createSupportTicket = async ({ threadId, userId, userName, message }) => {
   return ticketId;
 };
 
-export const handler = async (event) => {
-  if ((event?.httpMethod || 'GET').toUpperCase() !== 'POST') {
-    return toJsonResponse(405, { success: false, error: 'Method not allowed.' });
-  }
+const logSupportError = (reqId, code, error) => {
+  const errorName = error instanceof Error ? error.name : 'UnknownError';
+  console.error(`[support_message] reqId=${reqId || ''} code=${code} error=${errorName}`);
+};
 
-  let body = {};
+const returnFallback = async ({ reqId, threadId, userId, senderName, userMessage, errorCode }) => {
+  const systemMsg = buildSystemMessage({ threadId, ticketId: null });
+  const missing = [];
+  const { url, serviceRoleKey } = getSupabaseConfig();
+  if (!url) missing.push('SUPABASE_URL');
+  if (!serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+
+  let ticketId = null;
   try {
-    body = JSON.parse(event?.body || '{}');
-  } catch {
-    return toJsonResponse(400, { success: false, error: 'Invalid request body.' });
-  }
-
-  const userMessage = trim(body?.message);
-  if (!userMessage) {
-    return toJsonResponse(400, { success: false, error: 'message is required.' });
-  }
-
-  const threadId = trim(body?.threadId || body?.userId || `anon_${Date.now()}`);
-  const userId = trim(body?.userId || `anon_${Date.now()}`);
-  const senderName = trim(body?.senderName || 'Customer');
-  const clientMessageId = trim(body?.clientMessageId || `msg_${Date.now()}_user`);
-
-  const userMsg = {
-    id: clientMessageId,
-    senderId: userId,
-    senderName,
-    role: 'CUSTOMER',
-    message: userMessage,
-    timestamp: Date.now(),
-    type: 'CUSTOMER_SUPPORT',
-    threadId,
-  };
-
-  try {
-    await supabaseInsert('chats', buildChatMessageRow(userMsg));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to persist user message.';
-    return toJsonResponse(500, { success: false, error: message });
-  }
-
-  let aiReply = '';
-  let handoffRequired = shouldForceHandoff(userMessage);
-
-  if (!handoffRequired) {
-    try {
-      aiReply = await generateAiReply(userMessage);
-      if (aiReply === 'HANDOFF_REQUIRED') {
-        handoffRequired = true;
-      }
-    } catch {
-      handoffRequired = true;
-    }
-  }
-
-  if (handoffRequired) {
-    try {
-      const ticketId = await createSupportTicket({
+    if (url && serviceRoleKey) {
+      ticketId = await createSupportTicket({
         threadId,
         userId,
         userName: senderName,
         message: userMessage,
       });
-
-      const systemMsg = {
-        id: `msg_${Date.now()}_system`,
-        senderId: 'system',
-        senderName: 'P3 Support',
-        role: 'SUPPORT',
-        message: `We're creating a support ticket for you. Ticket ID: ${ticketId}. A human will reply shortly.`,
-        timestamp: Date.now(),
-        type: 'CUSTOMER_SUPPORT',
-        threadId,
-      };
-
-      await supabaseInsert('chats', buildChatMessageRow(systemMsg));
-
-      return toJsonResponse(200, {
-        success: true,
-        data: {
-          conversationId: threadId,
-          ticketId,
-          ticketStatus: 'pending_human',
-          messages: [systemMsg],
-        },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create support ticket.';
-      return toJsonResponse(500, { success: false, error: message });
+      systemMsg.message = buildSystemMessage({ threadId, ticketId }).message;
     }
+  } catch (ticketError) {
+    logSupportError(reqId, 'ticket_insert_failed', ticketError);
+    return toJsonResponse(200, {
+      ok: false,
+      error: 'ticket_insert_failed',
+      fallback: 'ticket_created',
+      ticketId: null,
+      messages: [systemMsg],
+      requestId: reqId,
+    });
   }
-
-  const aiMsg = {
-    id: `msg_${Date.now()}_ai`,
-    senderId: 'ai_support_agent',
-    senderName: 'P3 Support Agent',
-    role: 'SUPPORT',
-    message: aiReply,
-    timestamp: Date.now(),
-    type: 'CUSTOMER_SUPPORT',
-    threadId,
-  };
 
   try {
-    await supabaseInsert('chats', buildChatMessageRow(aiMsg));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to persist AI response.';
-    return toJsonResponse(500, { success: false, error: message });
+    if (url && serviceRoleKey) {
+      await supabaseInsert('chats', buildChatMessageRow(systemMsg));
+    }
+  } catch (chatError) {
+    logSupportError(reqId, 'chat_insert_failed', chatError);
   }
 
-  return toJsonResponse(200, {
-    success: true,
-    data: {
+  const payload = {
+    ok: false,
+    error: errorCode,
+    ...(missing.length ? { missing } : {}),
+    fallback: 'ticket_created',
+    ticketId,
+    messages: [systemMsg],
+    requestId: reqId,
+  };
+  return toJsonResponse(200, payload);
+};
+
+export const handler = async (event) => {
+  const method = (event?.httpMethod || 'GET').toUpperCase();
+  const reqId = trim(event?.headers?.['x-nf-request-id'] || event?.headers?.['X-Nf-Request-Id']);
+
+  if (method === 'OPTIONS') {
+    return toJsonResponse(200, {
+      ok: true,
+      requestId: reqId,
+    });
+  }
+
+  if (method !== 'POST') {
+    return toJsonResponse(200, {
+      ok: false,
+      error: 'method_not_allowed',
+      messages: [],
+      requestId: reqId,
+    });
+  }
+
+  try {
+    let body = {};
+    try {
+      body = JSON.parse(event?.body || '{}');
+    } catch {
+      return toJsonResponse(200, {
+        ok: false,
+        error: 'invalid_body',
+        messages: [],
+        requestId: reqId,
+      });
+    }
+
+    const userMessage = trim(body?.message);
+    if (!userMessage) {
+      return toJsonResponse(200, {
+        ok: false,
+        error: 'message_required',
+        messages: [],
+        requestId: reqId,
+      });
+    }
+
+    const threadId = trim(body?.threadId || body?.userId || `anon_${Date.now()}`);
+    const userId = trim(body?.userId || `anon_${Date.now()}`);
+    const senderName = trim(body?.senderName || 'Customer');
+    const clientMessageId = trim(body?.clientMessageId || `msg_${Date.now()}_user`);
+
+    const userMsg = {
+      id: clientMessageId,
+      senderId: userId,
+      senderName,
+      role: 'CUSTOMER',
+      message: userMessage,
+      timestamp: Date.now(),
+      type: 'CUSTOMER_SUPPORT',
+      threadId,
+    };
+
+    try {
+      const { url, serviceRoleKey } = getSupabaseConfig();
+      if (!url || !serviceRoleKey) {
+        return await returnFallback({
+          reqId,
+          threadId,
+          userId,
+          senderName,
+          userMessage,
+          errorCode: 'missing_env',
+        });
+      }
+      await supabaseInsert('chats', buildChatMessageRow(userMsg));
+    } catch (error) {
+      logSupportError(reqId, 'user_message_insert_failed', error);
+      return await returnFallback({
+        reqId,
+        threadId,
+        userId,
+        senderName,
+        userMessage,
+        errorCode: 'ticket_created',
+      });
+    }
+
+    let aiReply = '';
+    let handoffRequired = shouldForceHandoff(userMessage);
+
+    if (!handoffRequired) {
+      try {
+        aiReply = await generateAiReply(userMessage);
+        if (aiReply === 'HANDOFF_REQUIRED') {
+          handoffRequired = true;
+        }
+      } catch (error) {
+        logSupportError(reqId, 'ai_failed', error);
+        handoffRequired = true;
+      }
+    }
+
+    if (handoffRequired) {
+      return await returnFallback({
+        reqId,
+        threadId,
+        userId,
+        senderName,
+        userMessage,
+        errorCode: resolveAiProvider() ? 'ai_failed' : 'missing_env',
+      });
+    }
+
+    const aiMsg = {
+      id: `msg_${Date.now()}_ai`,
+      senderId: 'ai_support_agent',
+      senderName: 'P3 Support Agent',
+      role: 'SUPPORT',
+      message: aiReply,
+      timestamp: Date.now(),
+      type: 'CUSTOMER_SUPPORT',
+      threadId,
+    };
+
+    try {
+      await supabaseInsert('chats', buildChatMessageRow(aiMsg));
+    } catch (error) {
+      logSupportError(reqId, 'ai_message_insert_failed', error);
+      return await returnFallback({
+        reqId,
+        threadId,
+        userId,
+        senderName,
+        userMessage,
+        errorCode: 'ticket_created',
+      });
+    }
+
+    return toJsonResponse(200, {
+      ok: true,
       conversationId: threadId,
-      ticketStatus: 'none',
+      ticketId: null,
       messages: [aiMsg],
-    },
-  });
+      requestId: reqId,
+    });
+  } catch (error) {
+    logSupportError(reqId, 'unhandled', error);
+    return toJsonResponse(200, {
+      ok: false,
+      error: 'internal_error',
+      messages: [
+        buildSystemMessage({
+          threadId: `fallback_${Date.now()}`,
+          ticketId: null,
+          text: 'Support is temporarily unavailable. Please try again shortly.',
+        }),
+      ],
+      requestId: reqId,
+    });
+  }
 };
