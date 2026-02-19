@@ -26,6 +26,8 @@ This guide will help you set up Slack webhook notifications for the P³ Lending 
 
 ## Step 3: Configure Environment Variables
 
+### Client-side notifications (optional)
+
 1. Open `config.ts` in your project.
 2. Update the `SLACK_WEBHOOK_URL` and other settings:
 
@@ -39,7 +41,15 @@ export const CONFIG = {
 };
 ```
 
-## Step 4: Configure Slash Commands (Optional Backend Feature)
+### Netlify function env vars (required for slash commands)
+
+Set these in Netlify Site Settings -> Environment variables:
+
+- `SLACK_SIGNING_SECRET` = Signing Secret from Slack App -> Basic Information
+- `SUPABASE_URL` = your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` = service role key (used to read `loan_activity` for `/loan-status`)
+
+## Step 4: Configure Slash Commands
 
 1. **Go to "Slash Commands"** in your Slack app settings
 2. **Click "Create New Command"**
@@ -58,7 +68,16 @@ export const CONFIG = {
 
 3. **Save each command**
 
-## Step 5: Test Your Webhook
+## Step 5: Test Slash Commands
+
+After deploy, run from Slack:
+
+- `/loan-status <loan-id>` -> reads from `loan_activity` and returns status/details
+- `/tip @user <amount> [message]` -> posts an in-channel tip message
+
+If either command fails with auth errors, re-check `SLACK_SIGNING_SECRET`.
+
+## Step 6: Test Incoming Webhook Notifications
 
 You can use the built-in hooks to test notifications.
 
@@ -132,6 +151,10 @@ import { TipComponent } from './components/TipComponent';
    - Slack webhooks do not support CORS preflight requests from browsers. 
    - The service uses `mode: 'no-cors'` to send "opaque" requests. You won't see a success response, but the message will arrive in Slack.
    - For production, use a backend proxy.
+
+3. **Slash command returns `invalid_signature`**
+   - Verify the Slack command Request URL is exactly `https://<your-site>/slack/webhook`.
+   - Confirm Netlify env var `SLACK_SIGNING_SECRET` matches Slack App Signing Secret.
 
 ## Security Considerations
 
