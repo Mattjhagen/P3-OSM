@@ -258,6 +258,12 @@ export interface WaitlistSignupResult {
   isExisting: boolean;
 }
 
+const getSupabaseAccessToken = async (): Promise<string | null> => {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return null;
+  return data.session?.access_token ?? null;
+};
+
 const requestAdminWaitlistApi = async <T>(payload: {
   path: string;
   query?: Record<string, string | number | boolean | undefined>;
@@ -265,8 +271,7 @@ const requestAdminWaitlistApi = async <T>(payload: {
   adminEmail: string;
   body?: Record<string, unknown>;
 }): Promise<T> => {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = await getSupabaseAccessToken();
   if (!token) {
     throw new Error('Missing Supabase session token.');
   }
