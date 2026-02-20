@@ -39,6 +39,7 @@ import { TradingService as TradingApiService } from './services/tradingService';
 import { ComplianceFeatureKey, ComplianceService } from './services/complianceService';
 import { BrowserProvider } from 'ethers';
 import { FeatureFlagService } from './services/featureFlagService';
+import { ensureProfile, isProfileAccessDeniedError, isDev, type EnsureProfileResult } from './services/profile';
 
 type AppView = 'borrow' | 'lend' | 'trade' | 'mentorship' | 'profile' | 'knowledge_base';
 
@@ -124,6 +125,8 @@ const App: React.FC = () => {
   const [riskReport, setRiskReport] = useState<RiskReport | null>(null);
   const [isRiskLoading, setIsRiskLoading] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [profileLoadResult, setProfileLoadResult] = useState<EnsureProfileResult | null>(null);
+  const [isProfileRetrying, setIsProfileRetrying] = useState(false);
 
   const [wallet, setWallet] = useState<WalletState>({
     isConnected: false,
@@ -158,53 +161,62 @@ const App: React.FC = () => {
   };
 
   const handleLogin = async (authUser: any) => {
+    if (isDev()) {
+      fetch('http://127.0.0.1:7252/ingest/d088b2d2-368a-4d15-b2a6-9f2121d6b427', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f7fb16' }, body: JSON.stringify({ sessionId: 'f7fb16', location: 'App.tsx:handleLogin:start', message: 'handleLogin start', data: { email: authUser?.email }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+    }
     console.log('Logged in with Supabase:', authUser);
-    setIsVerifyingEmail(false); 
+    setIsVerifyingEmail(false);
     setIsAuthenticated(true);
     setShowLanding(false);
     setIsQuickAdminSession(false);
-    
+    setProfileLoadResult(null);
+
     const email = authUser.email || '';
 
     // Check for Admin (using async DB call)
     try {
       if (email.endsWith('@p3lending.space')) {
-         const employees = await PersistenceService.getEmployees();
-         const matchedEmp = employees.find(e => e.email.toLowerCase() === email.toLowerCase());
-         
-         if (matchedEmp && matchedEmp.isActive) {
-            setPendingAdminEmail(email);
-            setShowAdminLogin(true);
-            return;
-         }
+        if (isDev()) {
+          fetch('http://127.0.0.1:7252/ingest/d088b2d2-368a-4d15-b2a6-9f2121d6b427', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f7fb16' }, body: JSON.stringify({ sessionId: 'f7fb16', location: 'App.tsx:handleLogin:beforeGetEmployees', message: 'before getEmployees', timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+        }
+        const employees = await PersistenceService.getEmployees();
+        if (isDev()) {
+          fetch('http://127.0.0.1:7252/ingest/d088b2d2-368a-4d15-b2a6-9f2121d6b427', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f7fb16' }, body: JSON.stringify({ sessionId: 'f7fb16', location: 'App.tsx:handleLogin:afterGetEmployees', message: 'after getEmployees', data: { count: employees?.length }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+        }
+        const matchedEmp = employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+        if (matchedEmp && matchedEmp.isActive) {
+          setPendingAdminEmail(email);
+          setShowAdminLogin(true);
+          return;
+        }
       }
-    } catch (e) { console.error("Admin check failed", e); }
-    
+    } catch (e) {
+      console.error('Admin check failed', e);
+    }
+
     const pendingRef = localStorage.getItem('p3_pending_ref');
-    let p3User: UserProfile;
-    try {
-      p3User = await PersistenceService.loadUser(authUser, pendingRef);
-    } catch (loadError: any) {
-      console.error('User profile load failed', loadError);
-      setAuthError(
-        String(
-          loadError?.message ||
-            'Unable to load your account. Please sign in with the account that completed KYC.'
-        )
-      );
-      clearAuthState(false);
-      await supabase.auth.signOut();
+    const { profile: p3User, error: profileError } = await ensureProfile(authUser, pendingRef);
+
+    if (profileError) {
+      setProfileLoadResult({ profile: null, error: profileError });
+      if (isDev()) console.warn('[profile] handleLogin: profile error', profileError);
       return;
     }
+    if (!p3User) {
+      setProfileLoadResult({ profile: null, error: 'Could not load profile.' });
+      return;
+    }
+
     setUser(p3User);
+    setProfileLoadResult(null);
     await AnalyticsService.identifyAuthenticatedUser({ userId: p3User.id, email });
-    
+
     localStorage.removeItem('p3_pending_ref');
-    
+
     // Initial Load of Data
     await refreshGlobalData();
 
-    if (p3User.riskAnalysis?.includes("unavailable") || p3User.reputationScore === 50) {
+    if (p3User.riskAnalysis?.includes('unavailable') || p3User.reputationScore === 50) {
       setIsAnalyzing(true);
       analyzeReputation(p3User)
         .then((result) => {
@@ -234,8 +246,41 @@ const App: React.FC = () => {
     setMyOffers([]);
     setShowAdminLogin(false);
     setPendingAdminEmail('');
+    setProfileLoadResult(null);
+    setIsProfileRetrying(false);
     if (recordLogoutEvent) {
       AnalyticsService.recordLogout();
+    }
+  };
+
+  const retryProfileLoad = async () => {
+    setProfileLoadResult(null);
+    setIsProfileRetrying(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        setProfileLoadResult({ profile: null, error: 'Session expired. Please sign in again.' });
+        return;
+      }
+      const pendingRef = localStorage.getItem('p3_pending_ref');
+      const result = await ensureProfile(session.user, pendingRef);
+      if (result.error) {
+        setProfileLoadResult(result);
+        return;
+      }
+      if (result.profile) {
+        setUser(result.profile);
+        setProfileLoadResult(null);
+        await AnalyticsService.identifyAuthenticatedUser({ userId: result.profile.id, email: result.profile.email ?? '' });
+        localStorage.removeItem('p3_pending_ref');
+        await refreshGlobalData();
+      } else {
+        setProfileLoadResult({ profile: null, error: 'Could not load profile.' });
+      }
+    } catch (e: any) {
+      setProfileLoadResult({ profile: null, error: e?.message ?? 'Failed to load profile.' });
+    } finally {
+      setIsProfileRetrying(false);
     }
   };
 
@@ -243,9 +288,15 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       setAppReady(true);
+      if (isDev()) {
+        fetch('http://127.0.0.1:7252/ingest/d088b2d2-368a-4d15-b2a6-9f2121d6b427', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f7fb16' }, body: JSON.stringify({ sessionId: 'f7fb16', location: 'App.tsx:initApp:beforeGetSession', message: 'before getSession', timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+      }
       const {
         data: { session },
       } = await supabase.auth.getSession();
+      if (isDev()) {
+        fetch('http://127.0.0.1:7252/ingest/d088b2d2-368a-4d15-b2a6-9f2121d6b427', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f7fb16' }, body: JSON.stringify({ sessionId: 'f7fb16', location: 'App.tsx:initApp:afterGetSession', message: 'after getSession', data: { hasSession: !!session?.user }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+      }
       if (session?.user) {
         await Promise.all([
           handleLogin(session.user),
@@ -960,18 +1011,38 @@ const App: React.FC = () => {
 
   if (showAdminLogin) return <AdminLoginModal email={pendingAdminEmail} onLogin={handleAdminPasswordLogin} onResetPassword={handleAdminPasswordReset} onCancel={() => { setShowAdminLogin(false); setPendingAdminEmail(''); handleLogout(); }} />;
 
-  // User is authenticated but data is loading
+  // User is authenticated but data is loading or profile load failed
   if (isAuthenticated && !user && !adminUser) {
+    const isDenied = profileLoadResult && isProfileAccessDeniedError(profileLoadResult);
     return (
       <div className="min-h-[100dvh] bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
-         <div className="absolute inset-0 bg-grid-pattern pointer-events-none opacity-20"></div>
-         <div className="z-10 text-center space-y-8 animate-fade-in">
-           {isVerifyingEmail ? (
-             <div className="flex flex-col items-center gap-4 animate-pulse"><div className="w-12 h-12 border-4 border-[#00e599] border-t-transparent rounded-full animate-spin"></div><h2 className="text-2xl font-bold text-white">Verifying Email...</h2></div>
-           ) : (
-             <div className="flex flex-col items-center gap-4 animate-pulse"><div className="w-12 h-12 border-4 border-[#00e599] border-t-transparent rounded-full animate-spin"></div><h2 className="text-xl font-bold text-white">Loading Profile...</h2></div>
-           )}
-         </div>
+        <div className="absolute inset-0 bg-grid-pattern pointer-events-none opacity-20" />
+        <div className="z-10 text-center space-y-8 animate-fade-in max-w-md px-4">
+          {profileLoadResult?.error ? (
+            <>
+              <h2 className="text-xl font-bold text-white">
+                {isDenied ? 'Profile access denied' : 'Could not load profile'}
+              </h2>
+              <p className="text-zinc-400 text-sm">{profileLoadResult.error}</p>
+              {isDenied && (
+                <p className="text-zinc-500 text-xs">Check that your account has access to profile data. If this persists, contact support.</p>
+              )}
+              <Button onClick={retryProfileLoad} isLoading={isProfileRetrying} variant="primary">
+                Retry
+              </Button>
+            </>
+          ) : isVerifyingEmail ? (
+            <div className="flex flex-col items-center gap-4 animate-pulse">
+              <div className="w-12 h-12 border-4 border-[#00e599] border-t-transparent rounded-full animate-spin" />
+              <h2 className="text-2xl font-bold text-white">Verifying Email...</h2>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 animate-pulse">
+              <div className="w-12 h-12 border-4 border-[#00e599] border-t-transparent rounded-full animate-spin" />
+              <h2 className="text-xl font-bold text-white">Loading Profile...</h2>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
