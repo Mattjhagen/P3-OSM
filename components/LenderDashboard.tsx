@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LoanOffer, LoanRequest, MatchResult, UserProfile } from '../types';
 import { Button } from './Button';
 import { matchBorrowers, suggestLoanTerms } from '../services/geminiService';
@@ -38,37 +38,36 @@ export const LenderDashboard: React.FC<Props> = ({ user, myOffers, communityRequ
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
 
   const activeOffers = myOffers.filter(o => o.status === 'ACTIVE');
+  const [isScanning, setIsScanning] = useState(false);
 
-  // Auto-scan logic (same as before)
-  useEffect(() => {
-    const scanForOpportunities = async () => {
-      if (hasScanned || activeOffers.length === 0 || communityRequests.length === 0) return;
-      const newNotifications: Notification[] = [];
-      const primaryOffer = activeOffers[0]; 
-      try {
-        const results = await matchBorrowers(primaryOffer, communityRequests);
-        const highMatches = results.filter(r => r.matchScore >= 80);
-        highMatches.forEach(match => {
-          const req = communityRequests.find(r => r.id === match.requestId);
-          if (req) {
-            newNotifications.push({
-              id: `notif_${Date.now()}_${match.requestId}`,
-              offerId: primaryOffer.id,
-              requestId: match.requestId,
-              borrowerName: req.borrowerName,
-              score: match.matchScore
-            });
-          }
-        });
-        if (newNotifications.length > 0) setNotifications(newNotifications);
-      } catch (e) {
-        console.error("Auto-scan failed", e);
-      } finally {
-        setHasScanned(true);
-      }
-    };
-    scanForOpportunities();
-  }, [activeOffers, communityRequests, hasScanned]);
+  const handleScanForOpportunities = async () => {
+    if (activeOffers.length === 0 || communityRequests.length === 0) return;
+    setIsScanning(true);
+    const newNotifications: Notification[] = [];
+    const primaryOffer = activeOffers[0];
+    try {
+      const results = await matchBorrowers(primaryOffer, communityRequests);
+      const highMatches = results.filter(r => r.matchScore >= 80);
+      highMatches.forEach(match => {
+        const req = communityRequests.find(r => r.id === match.requestId);
+        if (req) {
+          newNotifications.push({
+            id: `notif_${Date.now()}_${match.requestId}`,
+            offerId: primaryOffer.id,
+            requestId: match.requestId,
+            borrowerName: req.borrowerName,
+            score: match.matchScore
+          });
+        }
+      });
+      if (newNotifications.length > 0) setNotifications(newNotifications);
+      setHasScanned(true);
+    } catch (e) {
+      console.error("Scan for opportunities failed", e);
+    } finally {
+      setIsScanning(false);
+    }
+  };
 
   const handleAIAdvice = async () => {
     setIsConsultingAI(true);
@@ -243,6 +242,11 @@ export const LenderDashboard: React.FC<Props> = ({ user, myOffers, communityRequ
                       <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                    </div>
                    <p className="font-medium text-sm">Select an offer to find qualified borrowers.</p>
+                   {activeOffers.length > 0 && communityRequests.length > 0 && (
+                     <Button size="sm" variant="outline" onClick={handleScanForOpportunities} isLoading={isScanning} className="border-dashed border-zinc-600 hover:border-[#00e599]">
+                       Scan for opportunities
+                     </Button>
+                   )}
                  </div>
                ) : matches.length === 0 && !isMatching ? (
                  <div className="text-center py-20 text-zinc-500">No matching borrowers found for this offer criteria.</div>

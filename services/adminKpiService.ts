@@ -91,7 +91,7 @@ export const AdminKpiService = {
         .select('*')
         .gte('last_seen', activeCutoffIso)
         .order('last_seen', { ascending: false })
-        .limit(5000);
+        .limit(1500);
       if (!error && data) {
         sessions = data as LiveSessionRow[];
       }
