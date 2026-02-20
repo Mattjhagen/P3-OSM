@@ -380,7 +380,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user) {
       refreshGlobalData();
-      const interval = setInterval(refreshGlobalData, 5000);
+      const interval = setInterval(refreshGlobalData, 15000);
       return () => clearInterval(interval);
     }
   }, [user?.id]);

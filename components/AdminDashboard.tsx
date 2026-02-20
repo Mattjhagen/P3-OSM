@@ -197,23 +197,21 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
   );
 
   useEffect(() => {
-    // Load data
+    // Load data (parallelized for faster initial load)
     const loadData = async () => {
       try {
-        const u = await PersistenceService.getAllUsers();
+        const [u, e, t, d, w] = await Promise.all([
+          PersistenceService.getAllUsers(),
+          PersistenceService.getEmployees(),
+          PersistenceService.getInternalTickets(),
+          PersistenceService.getAllDisputes(),
+          refreshWaitlist(false),
+        ]);
         setUsers(u || []);
-        
-        const e = await PersistenceService.getEmployees();
         setEmployees(e || []);
-        
-        const t = await PersistenceService.getInternalTickets();
         setInternalTickets(t || []);
-        
-        const d = await PersistenceService.getAllDisputes();
         setDisputes(d || []);
-
-        const w = await refreshWaitlist(false);
-
+        setWaitlist(w || []);
         setIsKpiLoading(true);
         const snapshot = await AdminKpiService.getSnapshot(u || [], w || []);
         setKpiSnapshot(snapshot);
@@ -226,7 +224,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     loadData();
     loadOpsSnapshot();
     refreshClientLogs();
-    loadRemoteUserLogs();
+    // loadRemoteUserLogs deferred until OPERATIONS tab is active
 
     // Hide Tawk.to when in Admin Mode
     if (window.Tawk_API && window.Tawk_API.hideWidget) {
@@ -238,7 +236,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
         window.Tawk_API.showWidget();
       }
     };
-  }, [loadOpsSnapshot, refreshClientLogs, loadRemoteUserLogs, refreshWaitlist]);
+  }, [loadOpsSnapshot, refreshClientLogs, refreshWaitlist]);
 
   useEffect(() => {
     const interval = setInterval(() => {
