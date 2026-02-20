@@ -200,6 +200,15 @@ const loadAttributionContext = (): AttributionContext | null => {
   }
 };
 
+const GEO_TIMEOUT_MS = 3000;
+const DEFAULT_GEO = {
+  country: 'Unknown',
+  region: 'Unknown',
+  city: 'Unknown',
+  latitude: null as number | null,
+  longitude: null as number | null,
+};
+
 const fetchGeoLocation = async (): Promise<{
   country: string;
   region: string;
@@ -208,7 +217,13 @@ const fetchGeoLocation = async (): Promise<{
   longitude: number | null;
 }> => {
   try {
-    const response = await fetch('https://ipapi.co/json/', { method: 'GET' });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GEO_TIMEOUT_MS);
+    const response = await fetch('https://ipapi.co/json/', {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
     if (!response.ok) throw new Error(`ipapi status ${response.status}`);
     const payload = await response.json();
     return {
@@ -219,13 +234,7 @@ const fetchGeoLocation = async (): Promise<{
       longitude: typeof payload.longitude === 'number' ? payload.longitude : null,
     };
   } catch {
-    return {
-      country: 'Unknown',
-      region: 'Unknown',
-      city: 'Unknown',
-      latitude: null,
-      longitude: null,
-    };
+    return DEFAULT_GEO;
   }
 };
 

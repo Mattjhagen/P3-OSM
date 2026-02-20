@@ -142,9 +142,10 @@ const App: React.FC = () => {
   // Helper to refresh global data
   const refreshGlobalData = async () => {
     try {
-      const allReqs = await PersistenceService.getAllRequests();
-      const allOffers = await PersistenceService.getAllOffers();
-      
+      const [allReqs, allOffers] = await Promise.all([
+        PersistenceService.getAllRequests(),
+        PersistenceService.getAllOffers(),
+      ]);
       setCommunityRequests(allReqs);
       setAvailableOffers(allOffers);
       if (user) {
@@ -205,19 +206,21 @@ const App: React.FC = () => {
 
     if (p3User.riskAnalysis?.includes("unavailable") || p3User.reputationScore === 50) {
       setIsAnalyzing(true);
-      const result = await analyzeReputation(p3User);
-      setUser(prev => {
-        if (!prev) return null;
-        const finalUser = {
-          ...prev,
-          reputationScore: result.score,
-          riskAnalysis: result.analysis,
-          badges: [...new Set([...prev.badges, ...(result.newBadges || [])])]
-        };
-        PersistenceService.saveUser(finalUser); 
-        return finalUser;
-      });
-      setIsAnalyzing(false);
+      analyzeReputation(p3User)
+        .then((result) => {
+          setUser((prev) => {
+            if (!prev) return null;
+            const finalUser = {
+              ...prev,
+              reputationScore: result.score,
+              riskAnalysis: result.analysis,
+              badges: [...new Set([...prev.badges, ...(result.newBadges || [])])],
+            };
+            PersistenceService.saveUser(finalUser);
+            return finalUser;
+          });
+        })
+        .finally(() => setIsAnalyzing(false));
     }
   };
 
@@ -240,12 +243,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       setAppReady(true);
-      await AnalyticsService.startSessionTracking();
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (session?.user) {
-        await handleLogin(session.user);
+        await Promise.all([
+          handleLogin(session.user),
+          AnalyticsService.startSessionTracking(),
+        ]);
+      } else {
+        await AnalyticsService.startSessionTracking();
       }
     };
     initApp().catch((error) => {
