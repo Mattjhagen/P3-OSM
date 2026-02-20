@@ -49,9 +49,23 @@ export const AuthCallbackPage: React.FC = () => {
         const linkedProvider = IdentityLinkingService.parseOAuthProvider(params.get('provider'));
         const isManualLinkFlow =
           intent === IdentityLinkingService.linkIntent && Boolean(linkedProvider);
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
 
         if (code) {
           await supabase.auth.exchangeCodeForSession(code);
+        } else if (accessToken && refreshToken) {
+          // Fallback for implicit/hash redirects so legacy provider flows still complete.
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+        }
+
+        // Remove sensitive params/tokens from URL as soon as callback is processed.
+        if (window.location.search || window.location.hash) {
+          window.history.replaceState({}, document.title, '/auth/callback');
         }
 
         const {
@@ -108,11 +122,6 @@ export const AuthCallbackPage: React.FC = () => {
       } catch (authError: any) {
         console.error('[auth/callback] finalize_failed', authError);
         if (!active) return;
-        const params = new URLSearchParams(window.location.search);
-        const intent = String(params.get('intent') || '').trim();
-        const linkedProvider = IdentityLinkingService.parseOAuthProvider(params.get('provider'));
-        const isManualLinkFlow =
-          intent === IdentityLinkingService.linkIntent && Boolean(linkedProvider);
 
         if (isManualLinkFlow && linkedProvider) {
           IdentityLinkingService.persistResult({

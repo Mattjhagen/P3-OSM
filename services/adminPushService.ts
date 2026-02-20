@@ -72,6 +72,9 @@ export const AdminPushService = {
 
   enable: async () => {
     if (!isSupported()) throw new Error('Push notifications are not supported on this device/browser.');
+    if (isIosDevice() && !isStandaloneDisplay()) {
+      throw new Error('On iPhone/iPad, install this app to Home Screen first, then enable notifications from the installed app.');
+    }
     const token = await ensureAuthToken();
 
     const registration = await getServiceWorkerRegistration();
@@ -82,9 +85,13 @@ export const AdminPushService = {
 
     const vapidResponse = await fetch('/.netlify/functions/push_vapid_public', { method: 'GET' });
     const vapidBody = await vapidResponse.json().catch(() => ({}));
+    const vapidError = String(vapidBody?.error || '');
     const publicKey = String(vapidBody?.publicKey || '');
     if (!publicKey) {
-      throw new Error('Push key unavailable. Contact operations.');
+      if (vapidError === 'missing_vapid_public_key') {
+        throw new Error('Push key unavailable: VAPID_PUBLIC_KEY is not configured in Netlify environment.');
+      }
+      throw new Error(`Push key unavailable${vapidError ? `: ${vapidError}` : ''}. Contact operations.`);
     }
 
     const subscription =

@@ -23,6 +23,10 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const requestUrl = new URL(event.request.url);
+  // Do not intercept third-party requests (analytics, OAuth provider assets, etc.).
+  // Keeping this service worker same-origin only avoids cross-origin side effects.
+  if (requestUrl.origin !== self.location.origin) return;
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
