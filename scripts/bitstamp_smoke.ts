@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 
 const BITSTAMP_ENV = (process.env.BITSTAMP_ENV || 'prod').toLowerCase() === 'sandbox' ? 'sandbox' : 'prod';
-const BASE_URL = BITSTAMP_ENV === 'sandbox' ? 'https://www.bitstamp.net' : 'https://www.bitstamp.net';
+const BASE_URL = BITSTAMP_ENV === 'sandbox' ? 'https://www.sandbox.bitstamp.net' : 'https://www.bitstamp.net';
 
 const buildAuthHeaders = (method: string, path: string, body: string, contentType?: string) => {
   const apiKey = process.env.BITSTAMP_API_KEY || '';
