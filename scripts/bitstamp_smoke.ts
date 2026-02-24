@@ -2,12 +2,15 @@
 import crypto from 'crypto';
 
 const BITSTAMP_ENV = (process.env.BITSTAMP_ENV || 'prod').toLowerCase() === 'sandbox' ? 'sandbox' : 'prod';
-const BASE_URL = BITSTAMP_ENV === 'sandbox' ? 'https://www.sandbox.bitstamp.net' : 'https://www.bitstamp.net';
+const BASE_URL = BITSTAMP_ENV === 'sandbox' ? 'https://www.bitstamp.net' : 'https://www.bitstamp.net';
+const EFFECTIVE_BASE_URL =
+  process.env.BITSTAMP_BASE_URL ||
+  (BITSTAMP_ENV === 'sandbox' ? 'https://www.sandbox.bitstamp.net' : BASE_URL);
 
 const buildAuthHeaders = (method: string, path: string, body: string, contentType?: string) => {
   const apiKey = process.env.BITSTAMP_API_KEY || '';
   const apiSecret = process.env.BITSTAMP_API_SECRET || '';
-  const host = new URL(BASE_URL).host;
+  const host = new URL(EFFECTIVE_BASE_URL).host;
   const nonce = crypto.randomUUID();
   const timestamp = Date.now().toString();
   const version = 'v2';
@@ -32,7 +35,7 @@ const buildAuthHeaders = (method: string, path: string, body: string, contentTyp
 };
 
 const run = async () => {
-  const tickerRes = await fetch(`${BASE_URL}/api/v2/ticker/btcusd/`, {
+  const tickerRes = await fetch(`${EFFECTIVE_BASE_URL}/api/v2/ticker/btcusd/`, {
     headers: { Accept: 'application/json' },
   });
 
@@ -52,7 +55,7 @@ const run = async () => {
   const body = new URLSearchParams({ limit: '10', offset: '0' }).toString();
   const contentType = 'application/x-www-form-urlencoded';
   const txPath = '/api/v2/user_transactions/';
-  const txRes = await fetch(`${BASE_URL}${txPath}`, {
+  const txRes = await fetch(`${EFFECTIVE_BASE_URL}${txPath}`, {
     method: 'POST',
     headers: buildAuthHeaders('POST', txPath, body, contentType),
     body,

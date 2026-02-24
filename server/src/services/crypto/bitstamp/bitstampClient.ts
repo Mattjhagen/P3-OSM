@@ -6,10 +6,12 @@ import { BitstampRequestOptions, BitstampTickerItem, BitstampUserTransaction, No
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_RETRIES = 2;
 const BITSTAMP_PROD_BASE_URL = 'https://www.bitstamp.net';
-const BITSTAMP_SANDBOX_BASE_URL = 'https://www.sandbox.bitstamp.net';
 
 const getBaseUrl = () =>
-  config.crypto.bitstamp.env === 'sandbox' ? BITSTAMP_SANDBOX_BASE_URL : BITSTAMP_PROD_BASE_URL;
+  config.crypto.bitstamp.env === 'sandbox' ? BITSTAMP_PROD_BASE_URL : BITSTAMP_PROD_BASE_URL;
+
+const getEffectiveBaseUrl = (url: string) =>
+  config.crypto.bitstamp.env === 'sandbox' ? 'https://www.sandbox.bitstamp.net' : url;
 
 const parseNumber = (value: unknown): number => {
   const parsed = Number(value);
@@ -50,7 +52,7 @@ class BitstampHttpError extends Error {
 const wait = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const request = async <T>(options: BitstampRequestOptions): Promise<T> => {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getEffectiveBaseUrl(getBaseUrl());
   const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
   const query = options.query?.toString() || '';
   const body = options.body?.toString() || '';
