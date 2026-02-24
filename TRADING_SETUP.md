@@ -3,7 +3,7 @@
 
 The current Trading Dashboard in the application is a **High-Fidelity Simulation**. It mocks price movements, chart data, and order execution.
 
-To turn this into a real trading platform (like Robinhood or Coinbase), you need to integrate the following services.
+To turn this into a real trading platform (like Coinbase), you need to integrate the following services.
 
 ## 1. Market Data (Price Feeds)
 
@@ -46,7 +46,7 @@ Use **0x Protocol (Matcha)** or **1inch API**.
 Integrate the Uniswap Smart Router directly into the frontend.
 
 ### Option C: Centralized (Custodial)
-If you want to hold user funds (like Robinhood), you need:
+If you want to hold user funds (like custodial exchanges), you need:
 1.  **Custody Provider:** Fireblocks or Coinbase Prime.
 2.  **Banking Rails:** Plaid + Stripe to connect bank accounts.
 3.  **Legal:** Money Transmitter Licenses (MTL) in 50 states (Extremely expensive).

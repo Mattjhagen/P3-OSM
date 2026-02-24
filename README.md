@@ -3,7 +3,7 @@
 P3 Lending is a peer-to-peer lending marketplace that leverages AI for reputation scoring and risk analysis, allowing users to build credit through "social underwriting" rather than purely financial history.
 
 ## 🎨 Aesthetic & Design
-The application features a high-contrast "Neon Green & Dark Zinc" aesthetic (inspired by Robinhood/Kalshi) designed for clarity and modern financial trust.
+The application features a high-contrast "Neon Green & Dark Zinc" aesthetic (inspired by exchange-style/Kalshi) designed for clarity and modern financial trust.
 
 ## 🚀 Quick Start
 
