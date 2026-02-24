@@ -20,7 +20,8 @@
     "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit",
     "format": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css,html}\"",
-    "ci": "npm run lint && npm run test && npm --prefix server run test && npm run test:contracts && npm run e2e"
+    "ci": "npm run lint && npm run test && npm --prefix server run test && npm run test:contracts && npm run e2e",
+    "check:merge-conflicts": "node scripts/check_merge_conflicts.mjs"
   },
   "dependencies": {
     "@coinbase/wallet-sdk": "^3.7.2",
