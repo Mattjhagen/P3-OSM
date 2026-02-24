@@ -99,6 +99,7 @@ const request = async <T>(options: BitstampRequestOptions): Promise<T> => {
       });
 
       if (!response.ok) {
+        const responseText = await response.text().catch(() => '');
         const canRetry = response.status === 429 || response.status >= 500;
 
         if (canRetry && attempt < MAX_RETRIES) {
@@ -106,7 +107,12 @@ const request = async <T>(options: BitstampRequestOptions): Promise<T> => {
           continue;
         }
 
-        throw new BitstampHttpError(`Bitstamp request failed (${response.status}).`, response.status, 'BITSTAMP_UPSTREAM_ERROR');
+        const safeMessage = responseText ? `: ${responseText.slice(0, 200)}` : '';
+        throw new BitstampHttpError(
+          `Bitstamp request failed (${response.status})${safeMessage}`,
+          response.status,
+          'BITSTAMP_UPSTREAM_ERROR'
+        );
       }
 
       return (await response.json()) as T;
