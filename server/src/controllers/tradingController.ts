@@ -53,8 +53,7 @@ export const TradingController = {
           fiatCurrency: returnedFiat,
           supportedFiatCurrencies: MarketPriceService.supportedFiatCurrencies,
           fetchedAt: new Date().toISOString(),
-          source: 'coingecko',
-          cacheTtlSeconds: Number(process.env.COINGECKO_CACHE_SECONDS || 20),
+          source: 'bitstamp',
         },
       });
     } catch (error) {

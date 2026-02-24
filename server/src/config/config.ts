@@ -51,10 +51,14 @@ export const config = {
     compliance: {
         statementSigningSecret: validatedEnv.STATEMENT_SIGNING_SECRET,
     },
-    coingecko: {
-        apiKey: validatedEnv.COINGECKO_API_KEY,
-        apiBaseUrl: validatedEnv.COINGECKO_API_BASE_URL,
-        cacheSeconds: validatedEnv.COINGECKO_CACHE_SECONDS,
+    crypto: {
+        provider: validatedEnv.CRYPTO_PROVIDER,
+        bitstamp: {
+            env: validatedEnv.BITSTAMP_ENV,
+            apiKey: validatedEnv.BITSTAMP_API_KEY,
+            apiSecret: validatedEnv.BITSTAMP_API_SECRET,
+            subaccountId: validatedEnv.BITSTAMP_SUBACCOUNT_ID.trim(),
+        },
     },
     fees: {
         percent: validatedEnv.TRANSACTION_FEE_PERCENT,
