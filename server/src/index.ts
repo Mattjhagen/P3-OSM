@@ -60,7 +60,7 @@ export const createApp = () => {
                 config.withdrawals.btcProviderUrl &&
                 config.withdrawals.btcProviderToken
         ),
-        coingeckoConfigured: Boolean(config.coingecko.apiBaseUrl),
+        cryptoProvider: config.crypto.provider,
         tradingProviderEnabled: Boolean(config.trading.providerEnabled),
     });
 
