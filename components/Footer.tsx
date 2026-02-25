@@ -1,12 +1,25 @@
-
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { LegalDocType } from './LegalModal';
+
+const OFFICIAL_ONION_URL = 'http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion';
 
 interface Props {
   onOpenLegal: (type: LegalDocType) => void;
 }
 
 export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyOnion = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(OFFICIAL_ONION_URL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }, []);
+
   const handleOpenDeck = (e: React.MouseEvent) => {
     e.preventDefault();
     // Dispatch a custom event or manipulate the URL to trigger App.tsx logic
@@ -62,6 +75,32 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
                 <li><a href="/status" className="hover:text-[#00e599] transition-colors">System Status</a></li>
              </ul>
           </div>
+        </div>
+
+        {/* Official Tor Onion Service verification block */}
+        <div className="pt-6 mt-6 border-t border-zinc-800/80">
+          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Official Tor Onion Service</p>
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            <a
+              href={OFFICIAL_ONION_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-zinc-400 hover:text-[#00e599] break-all font-mono"
+            >
+              {OFFICIAL_ONION_URL}
+            </a>
+            <button
+              type="button"
+              onClick={handleCopyOnion}
+              className="shrink-0 text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400 transition-colors"
+              aria-label="Copy onion address"
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <p className="text-[9px] text-zinc-600 leading-snug max-w-xl">
+            Verify this address matches our published domain and GitHub to avoid phishing clones.
+          </p>
         </div>
 
         <div className="pt-8 border-t border-zinc-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-zinc-600">
