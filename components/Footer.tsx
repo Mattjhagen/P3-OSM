@@ -83,6 +83,8 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
             <li><a href="/terms" className="hover:text-[#00e599] transition-colors">Terms of Service</a></li>
             <li><a href="/privacy" className="hover:text-[#00e599] transition-colors">Privacy Policy</a></li>
             <li><a href="/risk" className="hover:text-[#00e599] transition-colors">Risk Disclosures</a></li>
+            <li><a href="/marketplace" className="hover:text-[#00e599] transition-colors">Marketplace Disclaimer</a></li>
+            <li><a href="/beta" className="hover:text-[#00e599] transition-colors">Beta Notice</a></li>
           </ul>
           <p className="text-[9px] text-zinc-600 leading-snug">Not a bank / Not FDIC insured.</p>
           <p className="text-[9px] text-zinc-600 leading-snug mt-1">Beta / MVP demo — no public lending or custody. For evaluation only.</p>

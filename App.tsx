@@ -36,6 +36,8 @@ import { AuthCallbackPage } from './components/AuthCallbackPage';
 import { TermsPage } from './components/TermsPage';
 import { PrivacyPage } from './components/PrivacyPage';
 import { RiskPage } from './components/RiskPage';
+import { MarketplacePage } from './components/MarketplacePage';
+import { BetaPage } from './components/BetaPage';
 import { AnalyticsService } from './services/analyticsService';
 import { PaymentService } from './services/paymentService';
 import { TradingService as TradingApiService } from './services/tradingService';
@@ -86,6 +88,8 @@ const App: React.FC = () => {
   const isTermsRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/terms';
   const isPrivacyRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/privacy';
   const isRiskRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/risk';
+  const isMarketplaceRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/marketplace';
+  const isBetaRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/beta';
   const [appReady, setAppReady] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -986,6 +990,8 @@ const App: React.FC = () => {
   if (isTermsRoute) return <TermsPage />;
   if (isPrivacyRoute) return <PrivacyPage />;
   if (isRiskRoute) return <RiskPage />;
+  if (isMarketplaceRoute) return <MarketplacePage />;
+  if (isBetaRoute) return <BetaPage />;
 
   if (!appReady) return <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
 
