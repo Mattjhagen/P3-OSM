@@ -277,4 +277,13 @@ async def stripe_webhook(request: Request):
     return {"status": "success"}
 ```
 
-Onion Site @ lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion
+## Official Access Points
+
+**Clearnet:**  
+https://p3lending.space
+
+**Tor Onion:**  
+http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion
+
+**DNS Verification:**  
+TXT record: `p3-onion=lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion`
