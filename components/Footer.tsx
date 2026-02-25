@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { LegalDocType } from './LegalModal';
 
 const OFFICIAL_ONION_URL = 'http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion';
+const OFFICIAL_CLEARNET_URL = 'https://p3lending.space';
 
 interface Props {
   onOpenLegal: (type: LegalDocType) => void;
@@ -55,8 +56,6 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
           <div>
              <h4 className="text-[10px] font-bold text-white uppercase tracking-wider mb-4">Legal</h4>
              <ul className="space-y-3 text-[11px] text-zinc-500 font-medium">
-                <li><button onClick={() => onOpenLegal('TERMS')} className="hover:text-[#00e599] transition-colors">Terms of Service</button></li>
-                <li><button onClick={() => onOpenLegal('PRIVACY')} className="hover:text-[#00e599] transition-colors">Privacy Policy</button></li>
                 <li><button onClick={() => onOpenLegal('ESIGN')} className="hover:text-[#00e599] transition-colors">E-Sign Consent</button></li>
                 <li><button onClick={() => onOpenLegal('DISCLOSURES')} className="hover:text-[#00e599] transition-colors">State Disclosures</button></li>
              </ul>
@@ -77,29 +76,53 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
           </div>
         </div>
 
-        {/* Official Tor Onion Service verification block */}
+        {/* Legal & Disclosures */}
         <div className="pt-6 mt-6 border-t border-zinc-800/80">
-          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Official Tor Onion Service</p>
-          <div className="flex flex-wrap items-center gap-2 mb-1.5">
-            <a
-              href={OFFICIAL_ONION_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] text-zinc-400 hover:text-[#00e599] break-all font-mono"
-            >
-              {OFFICIAL_ONION_URL}
-            </a>
-            <button
-              type="button"
-              onClick={handleCopyOnion}
-              className="shrink-0 text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400 transition-colors"
-              aria-label="Copy onion address"
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+          <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">Legal & Disclosures</h4>
+          <ul className="space-y-1.5 text-[11px] text-zinc-500 mb-3">
+            <li><a href="/terms" className="hover:text-[#00e599] transition-colors">Terms of Service</a></li>
+            <li><a href="/privacy" className="hover:text-[#00e599] transition-colors">Privacy Policy</a></li>
+            <li><a href="/risk" className="hover:text-[#00e599] transition-colors">Risk Disclosures</a></li>
+          </ul>
+          <p className="text-[9px] text-zinc-600 leading-snug">Not a bank / Not FDIC insured.</p>
+          <p className="text-[9px] text-zinc-600 leading-snug mt-1">Beta / MVP demo — no public lending or custody. For evaluation only.</p>
+        </div>
+
+        {/* Verify Official Access */}
+        <div className="pt-6 mt-6 border-t border-zinc-800/80">
+          <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Verify Official Access</h4>
+          <div className="space-y-2 mb-1.5">
+            <div>
+              <a
+                href={OFFICIAL_CLEARNET_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-zinc-400 hover:text-[#00e599] break-all"
+              >
+                Official clearnet: {OFFICIAL_CLEARNET_URL}
+              </a>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={OFFICIAL_ONION_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-zinc-400 hover:text-[#00e599] break-all font-mono"
+              >
+                Official onion: {OFFICIAL_ONION_URL}
+              </a>
+              <button
+                type="button"
+                onClick={handleCopyOnion}
+                className="shrink-0 text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400 transition-colors"
+                aria-label="Copy onion address"
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
           </div>
           <p className="text-[9px] text-zinc-600 leading-snug max-w-xl">
-            Verify this address matches our published domain and GitHub to avoid phishing clones.
+            Verify this onion address matches p3lending.space and our GitHub to avoid phishing clones.
           </p>
         </div>
 
