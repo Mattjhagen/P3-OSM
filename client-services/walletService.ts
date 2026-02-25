@@ -3,6 +3,7 @@ import { BrowserProvider, formatEther } from 'ethers';
 import { SiweMessage } from 'siwe';
 import { WalletState, WalletProvider } from '../types';
 import CoinbaseWalletSDK from '@coinbase/wallet-sdk';
+import { BACKEND_URL } from "./backendService";
 
 // Declare global ethereum property on window
 declare global {
@@ -11,8 +12,6 @@ declare global {
   }
 }
 
-declare const __BACKEND_URL__: string;
-const BACKEND_URL = typeof __BACKEND_URL__ !== 'undefined' && __BACKEND_URL__ ? __BACKEND_URL__ : 'http://localhost:3001';
 
 export const authenticateWithBackend = async (signer: any, address: string, chainId: number) => {
   try {

@@ -1,14 +1,12 @@
-declare const __BACKEND_URL__: string;
+kcd /Users/matt/P3-Lending-Protocol
 
-/**
- * BackendService
- * Centralizes the base URL for production and development.
- */
-export const BACKEND_URL = typeof __BACKEND_URL__ !== 'undefined' && __BACKEND_URL__
-    ? __BACKEND_URL__
-    : ''; // Relative paths by default (Netlify Rewrites)
+cat > client-services/backendService.ts <<'EOF'
+export const BACKEND_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
+  'http://localhost:3001';
 
-export async function fetchWithBase(path: string, options?: RequestInit) {
-    const url = path.startsWith('http') ? path : `${BACKEND_URL}${path}`;
-    return options ? fetch(url, options) : fetch(url);
-}
+export const backendFetch = (path: string, options?: RequestInit) => {
+  const url = path.startsWith('http') ? path : `${BACKEND_URL}${path}`;
+  return options ? fetch(url, options) : fetch(url);
+};
+EOF
