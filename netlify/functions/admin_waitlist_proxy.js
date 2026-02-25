@@ -1,6 +1,6 @@
 /**
  * Admin waitlist proxy: validates client Supabase session, then forwards
- * to Render backend with internal bearer. Browser must not call Render admin
+ * to the backend (Cloud Run) with internal bearer. Browser must not call backend admin
  * endpoints directly when ADMIN_INTERNAL_BEARER is used.
  */
 
@@ -362,16 +362,24 @@ export const handler = async (event, context) => {
   }
 
   const backendBase = trim(
-    process.env.VITE_BACKEND_URL || process.env.BACKEND_URL || ''
-  ).replace(/\/api\/?$/i, '');
+    process.env.BACKEND_URL || process.env.VITE_BACKEND_URL || ''
+  ).replace(/\/+$/, '');
   const internalBearer = trim(process.env.ADMIN_INTERNAL_BEARER || '');
 
   if (!backendBase) {
+    console.error('[admin_waitlist_proxy] misconfigured', {
+      reqId,
+      reason: 'missing_backend_url',
+      userId,
+      isAdmin,
+      path,
+    });
     return toJsonResponse(500, {
       success: false,
       error: 'Proxy misconfiguration: missing backend URL.',
     });
   }
+
   if (!internalBearer) {
     console.error('[admin_waitlist_proxy] misconfigured', {
       reqId,
@@ -386,7 +394,9 @@ export const handler = async (event, context) => {
     });
   }
 
-  const url = `${backendBase}${path}`;
+  const safePath = String(path || '').startsWith('/') ? String(path) : `/${path}`;
+  const url = `${backendBase}${safePath}`;
+
   const body = event.body || undefined;
   const headers = {
     'Content-Type': getHeader(event, 'Content-Type') || 'application/json',
