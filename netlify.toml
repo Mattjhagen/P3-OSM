@@ -15,8 +15,15 @@
   status = 200
   force = true
 
-# Handle Single Page Application (SPA) Routing
-# This ensures that routes like /profile or /lend don't return 404 on refresh
+# Serve static assets as files (must come before SPA fallback)
+# Prevents /assets/*.js and other build outputs from being rewritten to index.html
+[[redirects]]
+  from = "/assets/*"
+  to = "/assets/:splat"
+  status = 200
+
+# Handle Single Page Application (SPA) Routing (must be last)
+# Routes like /profile or /lend get index.html on refresh; static assets already matched above
 [[redirects]]
   from = "/*"
   to = "/index.html"
