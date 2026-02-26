@@ -10,7 +10,7 @@ create index if not exists idx_users_email_normalized
 
 create table if not exists public.kyc_verified_identities (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id text not null references public.users(id) on delete cascade,
   identity_hash text not null unique,
   provider text not null default 'stripe_identity',
   source_session_id text,
