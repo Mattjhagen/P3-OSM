@@ -88,6 +88,6 @@ $$;
 
 drop trigger if exists trg_enforce_verified_account_email_uniqueness on public.users;
 create trigger trg_enforce_verified_account_email_uniqueness
-before insert or update of email, kyc_tier
+before insert or update of email
 on public.users
 for each row execute procedure public.enforce_verified_account_email_uniqueness();
