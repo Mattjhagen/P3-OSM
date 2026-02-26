@@ -11,9 +11,29 @@ create table if not exists public.orgs (
 
 create index if not exists idx_orgs_owner_user_id on public.orgs(owner_user_id);
 
--- org_members (role: owner, admin, developer, viewer)
-create type public.org_member_role as enum ('owner', 'admin', 'developer', 'viewer');
+-- enums (idempotent)
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_type t
+    join pg_namespace n on n.oid = t.typnamespace
+    where t.typname = 'org_member_role' and n.nspname = 'public'
+  ) then
+    create type public.org_member_role as enum ('owner', 'admin', 'developer', 'viewer');
+  end if;
 
+  if not exists (
+    select 1
+    from pg_type t
+    join pg_namespace n on n.oid = t.typnamespace
+    where t.typname = 'api_key_status' and n.nspname = 'public'
+  ) then
+    create type public.api_key_status as enum ('active', 'revoked');
+  end if;
+end$$;
+
+-- org_members (role: owner, admin, developer, viewer)
 create table if not exists public.org_members (
     id uuid primary key default gen_random_uuid(),
     org_id uuid not null references public.orgs(id) on delete cascade,
@@ -27,8 +47,6 @@ create index if not exists idx_org_members_org_id on public.org_members(org_id);
 create index if not exists idx_org_members_user_id on public.org_members(user_id);
 
 -- api_keys (store key_prefix + key_hash only; raw key shown once at creation)
-create type public.api_key_status as enum ('active', 'revoked');
-
 create table if not exists public.api_keys (
     id uuid primary key default gen_random_uuid(),
     org_id uuid not null references public.orgs(id) on delete cascade,
