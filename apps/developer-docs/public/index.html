@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P3 Lending Developer API</title>
+  <meta name="description" content="B2B API for reputation scores and lending data." />
+  <style>
+    :root { --bg: #050505; --fg: #e4e4e7; --muted: #71717a; --accent: #00e599; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); margin: 0; line-height: 1.6; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #27272a; padding-bottom: 0.5rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background: #18181b; padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; }
+    pre { background: #18181b; padding: 1rem; overflow-x: auto; border-radius: 8px; }
+    .nav { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #27272a; }
+    .nav a { color: var(--muted); }
+    .nav a:hover { color: var(--accent); }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    ul { padding-left: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav">
+      <a href="/">Home</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#auth">Auth</a>
+      <a href="#endpoints">Endpoints</a>
+      <a href="#errors">Errors</a>
+      <a href="#rate-limits">Rate limits</a>
+      <a href="https://api.p3lending.space/docs/openapi.json" target="_blank" rel="noopener">OpenAPI (JSON)</a>
+    </nav>
+
+    <h1>P3 Lending Developer API</h1>
+    <p class="muted">B2B API for reputation scores. Base URL: <code>https://api.p3lending.space</code></p>
+
+    <h2 id="quickstart">Quickstart</h2>
+    <ol>
+      <li>Log in to <a href="https://p3lending.space">p3lending.space</a>, open <strong>Developers</strong> in the sidebar.</li>
+      <li>Create an API key (copy it once; it won’t be shown again).</li>
+      <li>Call the API with <code>Authorization: Bearer &lt;your_key&gt;</code>.</li>
+    </ol>
+    <pre><code>curl -H "Authorization: Bearer p3_live_..." \
+  "https://api.p3lending.space/api/v1/reputation/score?user_id=UUID"</code></pre>
+
+    <h2 id="auth">Auth</h2>
+    <p>All <code>/api/v1/*</code> endpoints require an API key in the <code>Authorization</code> header:</p>
+    <pre><code>Authorization: Bearer p3_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# or
+Authorization: Bearer p3_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
+    <p>Keys are scoped (e.g. <code>score:read</code>, <code>score:history</code>). Never store or log the raw key; store only the prefix if needed for display.</p>
+
+    <h2 id="endpoints">Endpoints</h2>
+    <ul>
+      <li><strong>GET /api/v1/reputation/score?user_id=</strong> — Score by user ID (scope: <code>score:read</code>).</li>
+      <li><strong>GET /api/v1/reputation/score/by-wallet?address=</strong> — Score by wallet address (scope: <code>score:read</code>).</li>
+      <li><strong>POST /api/v1/reputation/score/batch</strong> — Body: <code>{"user_ids": ["uuid1", "uuid2"]}</code> (scope: <code>score:read</code>).</li>
+      <li><strong>GET /api/v1/reputation/score/history?user_id=&from=&to=</strong> — Score history (scope: <code>score:history</code>).</li>
+    </ul>
+    <p>OpenAPI spec: <a href="https://api.p3lending.space/docs/openapi.json">/docs/openapi.json</a>.</p>
+
+    <h2 id="errors">Errors</h2>
+    <p>Responses use HTTP status codes and a JSON body:</p>
+    <ul>
+      <li><strong>400</strong> — Bad request (e.g. missing <code>user_id</code>).</li>
+      <li><strong>401</strong> — Invalid or missing API key.</li>
+      <li><strong>403</strong> — Valid key but missing required scope.</li>
+      <li><strong>404</strong> — User not found.</li>
+      <li><strong>429</strong> — Rate limit exceeded; check <code>X-RateLimit-*</code> headers.</li>
+      <li><strong>503</strong> — Developer API not configured.</li>
+    </ul>
+
+    <h2 id="rate-limits">Rate limits</h2>
+    <p>Per-key limits (configurable when creating the key):</p>
+    <ul>
+      <li><code>X-RateLimit-Limit</code> — Requests per minute.</li>
+      <li><code>X-RateLimit-Remaining</code> — Remaining in current window.</li>
+      <li><code>X-RateLimit-Reset</code> — Unix timestamp when the window resets.</li>
+    </ul>
+    <p>When exceeded, the API returns <strong>429</strong>.</p>
+  </div>
+</body>
+</html>

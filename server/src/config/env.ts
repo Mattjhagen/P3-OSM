@@ -87,4 +87,16 @@ export const validatedEnv = cleanEnv(process.env, {
   }),
   ETH_RPC_URL: str({ default: 'http://127.0.0.1:8545' }),
   P3_PROTOCOL_ADDRESS: str({ default: '0x0000000000000000000000000000000000000000' }),
+  API_KEY_PEPPER: str({
+    default: '',
+    desc: 'Server-side secret to salt API key hashes (required for Developer API)',
+  }),
+  RATE_LIMIT_REDIS_URL: str({
+    default: '',
+    desc: 'Optional Redis URL for per-key rate limiting; if unset, Supabase table is used',
+  }),
+  REPUTATION_ENRICHMENT_ENABLED: bool({
+    default: false,
+    desc: 'Enable optional Gemini enrichment for reputation score (feature flag)',
+  }),
 });

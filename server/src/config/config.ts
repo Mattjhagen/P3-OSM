@@ -91,5 +91,10 @@ export const config = {
         rpcUrl: validatedEnv.ETH_RPC_URL,
         contractAddress: validatedEnv.P3_PROTOCOL_ADDRESS,
     },
+    developerApi: {
+        apiKeyPepper: validatedEnv.API_KEY_PEPPER,
+        rateLimitRedisUrl: validatedEnv.RATE_LIMIT_REDIS_URL,
+        reputationEnrichmentEnabled: validatedEnv.REPUTATION_ENRICHMENT_ENABLED,
+    },
     isProd: validatedEnv.NODE_ENV === 'production',
 };

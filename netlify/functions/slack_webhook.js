@@ -176,9 +176,40 @@ const handleTipCommand = (text, userName) => {
   };
 };
 
+const handleHelpCommand = () => ({
+  response_type: 'ephemeral',
+  text: 'P3 Lending — Slash commands',
+  blocks: [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*P3 Lending* — available slash commands',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: '*Command*\n`/loan-status`' },
+        { type: 'mrkdwn', text: '*Usage*\n`/loan-status <loan-id>` — Look up loan status from P3.' },
+        { type: 'mrkdwn', text: '*Command*\n`/tip`' },
+        { type: 'mrkdwn', text: '*Usage*\n`/tip @user <amount> [message]` — Send a tip (in-channel).' },
+        { type: 'mrkdwn', text: '*Command*\n`/help`' },
+        { type: 'mrkdwn', text: '*Usage*\nShow this message.' },
+      ],
+    },
+    {
+      type: 'context',
+      elements: [
+        { type: 'mrkdwn', text: 'Endpoint: `https://p3lending.space/slack/webhook` · Configure in Slack App → Slash Commands.' },
+      ],
+    },
+  ],
+});
+
 const handleUnknownCommand = (command) => ({
   response_type: 'ephemeral',
-  text: `Unsupported command \`${command}\`. Supported commands: \`/loan-status\`, \`/tip\`.`,
+  text: `Unsupported command \`${command}\`. Use \`/help\` for available commands.`,
 });
 
 export const handler = async (event) => {
@@ -233,6 +264,8 @@ export const handler = async (event) => {
     responseBody = await handleLoanStatusCommand(text);
   } else if (command === '/tip') {
     responseBody = handleTipCommand(text, userName);
+  } else if (command === '/help') {
+    responseBody = handleHelpCommand();
   } else {
     responseBody = handleUnknownCommand(command || 'unknown');
   }

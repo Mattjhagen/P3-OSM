@@ -94,4 +94,19 @@ describe('slack_webhook function', () => {
     expect(payload.text).toContain('matt tipped @alex');
     expect(payload.text).toContain('$12.50');
   });
+
+  it('returns help blocks for /help command', async () => {
+    process.env.SLACK_SIGNING_SECRET = 'test-secret';
+    const body = 'command=%2Fhelp&text=&user_name=matt';
+    const event = makeEvent({ body, secret: 'test-secret' });
+
+    const response = await handler(event as any);
+    const payload = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(payload.response_type).toBe('ephemeral');
+    expect(payload.text).toContain('Slash commands');
+    expect(payload.blocks).toBeDefined();
+    expect(payload.blocks.length).toBeGreaterThan(0);
+  });
 });

@@ -15,6 +15,9 @@ import withdrawalRoutes from './routes/withdrawalRoutes';
 import plaidRoutes from './routes/plaidRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import complianceRoutes from './routes/complianceRoutes';
+import reputationRoutes from './routes/reputationRoutes';
+import developerRoutes from './routes/developerRoutes';
+import { openApiSpec } from './openapiSpec';
 import { PaymentController } from './controllers/paymentController';
 import { VerificationController } from './controllers/verificationController';
 import { TradingController } from './controllers/tradingController';
@@ -49,6 +52,12 @@ export const createApp = () => {
     app.use('/api/plaid', plaidRoutes);
     app.use('/api/notifications', notificationRoutes);
     app.use('/api/compliance', complianceRoutes);
+    app.use('/api/v1/reputation', reputationRoutes);
+    app.use('/api/developer', developerRoutes);
+    app.get('/docs/openapi.json', (_req: Request, res: Response) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.json(openApiSpec);
+    });
     app.get('/api/prices', publicApiLimiter, TradingController.getPrices);
 
     const getProviderStatus = () => ({

@@ -10,6 +10,14 @@ declare global {
         roles: string[];
         rawUser?: User;
       };
+      apiKey?: {
+        id: string;
+        orgId: string;
+        keyPrefix: string;
+        scopes: string[];
+        rpmLimit: number;
+        rpdLimit: number;
+      };
     }
   }
 }

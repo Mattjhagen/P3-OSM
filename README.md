@@ -58,6 +58,14 @@ Notes:
 - Frontend env validation now requires `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 - Backend env validation now requires `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
 
+## Slack Slash Commands
+
+Slash commands (`/loan-status`, `/tip`, `/help`) are handled by the Netlify function at `/slack/webhook`. To configure your Slack app and use with the Slack MCP, see:
+
+- `docs/slack-commands.md`
+
+Required env: `SLACK_SIGNING_SECRET` (and Supabase vars for `/loan-status`).
+
 ## Netlify Identity Invites
 
 If Netlify Identity dashboard invites fail (for example generic 500 errors), use:
