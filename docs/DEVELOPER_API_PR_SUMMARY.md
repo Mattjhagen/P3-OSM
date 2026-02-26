@@ -65,7 +65,7 @@ docs/
 
 ## Migration SQL
 
-Migration file: **`supabase/migrations/20260225000100_developer_api_orgs_keys.sql`**
+Migration file: `**supabase/migrations/20260225000100_developer_api_orgs_keys.sql**`
 
 It creates:
 
@@ -105,7 +105,7 @@ curl -s -X POST "https://p3lending.space/api/developer/keys" \
   -d '{"name":"My Key","env":"live","scopes":["score:read","score:history"],"rpm_limit":60,"rpd_limit":10000}'
 ```
 
-Response includes **`raw_key`** once — store it securely; it is not returned again.
+Response includes `**raw_key**` once — store it securely; it is not returned again.
 
 ```json
 {"success":true,"data":{"id":"...","name":"My Key","key_prefix":"p3_live_abcd1234...","raw_key":"p3_live_abcdef1234567890...","scopes":["score:read","score:history"],"rpm_limit":60,"rpd_limit":10000,"created_at":"..."}}
@@ -113,7 +113,7 @@ Response includes **`raw_key`** once — store it securely; it is not returned a
 
 ### 2. Call Developer API with the API key
 
-Use the **raw key** from step 1 as Bearer token for `/api/v1/*`.
+Use the **raw key** from step 1 as Bearer token for `/api/v1/`*.
 
 **Health (no auth):**
 
@@ -161,35 +161,42 @@ curl -s -H "Authorization: Bearer p3_live_YOUR_FULL_KEY" \
 - **Netlify:** New site from this repo; **Base directory** = `apps/developer-docs`, **Publish directory** = `public`. Add custom domain **developers.p3lending.space**. Note the Netlify subdomain (e.g. `something.netlify.app`).
 - **Cloudflare (p3lending.space):**
 
-| Type  | Name        | Content                    | Proxy   | TTL  |
-|-------|-------------|----------------------------|---------|------|
-| CNAME | developers  | \<your-site\>.netlify.app | DNS only or Proxied | Auto |
+
+| Type  | Name       | Content               | Proxy               | TTL  |
+| ----- | ---------- | --------------------- | ------------------- | ---- |
+| CNAME | developers | your-site.netlify.app | DNS only or Proxied | Auto |
+
 
 - **TLS:** Netlify issues cert for the custom domain; if Cloudflare proxy is On, use SSL/TLS **Full** or **Full (strict)**.
 
-Full steps: **`docs/deployment/developers-subdomain.md`**.
+Full steps: `**docs/deployment/developers-subdomain.md`**.
 
 ### api.p3lending.space (API)
 
 - **Backend:** Deploy the API to **Cloud Run** or **Render** and add custom domain **api.p3lending.space** in the provider’s dashboard. Note the CNAME target they give.
 - **Cloudflare (p3lending.space):**
 
-| Type  | Name | Content                         | Proxy   | TTL  |
-|-------|------|---------------------------------|---------|------|
-| CNAME | api  | \<cloud-run-or-render-target\> | Off or Proxied | Auto |
+
+| Type  | Name | Content                    | Proxy          | TTL  |
+| ----- | ---- | -------------------------- | -------------- | ---- |
+| CNAME | api  | cloud-run-or-render-target | Off or Proxied | Auto |
+
 
 - **CORS:** Allow `Authorization`, `Content-Type`; origins in production should be restricted to your domains (e.g. `https://p3lending.space`, `https://developers.p3lending.space`).
 - **Env on API host:** `API_KEY_PEPPER`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; optional: `RATE_LIMIT_REDIS_URL`, `REPUTATION_ENRICHMENT_ENABLED`, `GEMINI_API_KEY`.
 
-Full steps: **`docs/deployment/api-domain.md`**.
+Full steps: `**docs/deployment/api-domain.md`**.
 
 ---
 
 ## Env vars (reference)
 
-| Variable                     | Required | Description |
-|-----------------------------|----------|-------------|
-| API_KEY_PEPPER              | Yes      | Server-side pepper for hashing API keys. |
-| RATE_LIMIT_REDIS_URL        | No       | Redis URL for distributed rate limiting (optional; in-memory used if unset). |
-| REPUTATION_ENRICHMENT_ENABLED | No     | Default false. Enable Gemini enrichment if set. |
-| GEMINI_API_KEY              | No       | Only if REPUTATION_ENRICHMENT_ENABLED is true. |
+
+| Variable                      | Required | Description                                                                  |
+| ----------------------------- | -------- | ---------------------------------------------------------------------------- |
+| API_KEY_PEPPER                | Yes      | Server-side pepper for hashing API keys.                                     |
+| RATE_LIMIT_REDIS_URL          | No       | Redis URL for distributed rate limiting (optional; in-memory used if unset). |
+| REPUTATION_ENRICHMENT_ENABLED | No       | Default false. Enable Gemini enrichment if set.                              |
+| GEMINI_API_KEY                | No       | Only if REPUTATION_ENRICHMENT_ENABLED is true.                               |
+
+

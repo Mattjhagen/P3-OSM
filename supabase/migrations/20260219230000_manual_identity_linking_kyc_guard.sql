@@ -2,12 +2,14 @@
 
 create extension if not exists "pgcrypto";
 
+-- Ensure users has an email column (normalized + indexed)
 alter table public.users
   add column if not exists email text;
 
 create index if not exists idx_users_email_normalized
   on public.users ((lower(btrim(email))));
 
+-- Store verified identity hashes (per user)
 create table if not exists public.kyc_verified_identities (
   id uuid primary key default gen_random_uuid(),
   user_id text not null references public.users(id) on delete cascade,
@@ -25,13 +27,16 @@ create unique index if not exists idx_kyc_verified_identities_user_id
 create index if not exists idx_kyc_verified_identities_created_at
   on public.kyc_verified_identities(created_at desc);
 
+-- Keep updated_at current
 drop trigger if exists update_kyc_verified_identities_updated_at on public.kyc_verified_identities;
 create trigger update_kyc_verified_identities_updated_at
 before update on public.kyc_verified_identities
 for each row execute procedure public.update_updated_at_column();
 
+-- This table is written by server/service-role logic; keep RLS off here.
 alter table public.kyc_verified_identities disable row level security;
 
+-- Enforce unique normalized email across all users (no kyc_tier dependency)
 create or replace function public.enforce_verified_account_email_uniqueness()
 returns trigger
 language plpgsql
@@ -40,7 +45,6 @@ set search_path = public
 as $$
 declare
   normalized_email text;
-  has_verified_conflict boolean := false;
   has_any_conflict boolean := false;
 begin
   normalized_email := nullif(lower(btrim(coalesce(new.email, ''))), '');
@@ -51,41 +55,26 @@ begin
   -- Persist canonical lowercase email values.
   new.email := normalized_email;
 
+  -- Enforce unique email across all users.
   select exists (
     select 1
     from public.users u
     where u.id <> new.id
       and nullif(lower(btrim(coalesce(u.email, ''))), '') = normalized_email
-      and coalesce(u.kyc_tier, 0) >= 2
-  ) into has_verified_conflict;
+  ) into has_any_conflict;
 
-  if has_verified_conflict then
+  if has_any_conflict then
     raise exception using
       errcode = '23505',
-      message = 'email_already_bound_to_verified_account',
-      detail = 'This email is already associated with a KYC-verified account.';
-  end if;
-
-  if coalesce(new.kyc_tier, 0) >= 2 then
-    select exists (
-      select 1
-      from public.users u
-      where u.id <> new.id
-        and nullif(lower(btrim(coalesce(u.email, ''))), '') = normalized_email
-    ) into has_any_conflict;
-
-    if has_any_conflict then
-      raise exception using
-        errcode = '23514',
-        message = 'verified_account_requires_unique_email',
-        detail = 'KYC-verified accounts cannot share an email with another account.';
-    end if;
+      message = 'email_already_in_use',
+      detail = 'This email is already associated with another account.';
   end if;
 
   return new;
 end;
 $$;
 
+-- Trigger email uniqueness normalization/guard
 drop trigger if exists trg_enforce_verified_account_email_uniqueness on public.users;
 create trigger trg_enforce_verified_account_email_uniqueness
 before insert or update of email
