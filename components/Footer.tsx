@@ -3,6 +3,8 @@ import { LegalDocType } from './LegalModal';
 
 const OFFICIAL_ONION_URL = 'http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion';
 const OFFICIAL_CLEARNET_URL = 'https://p3lending.space';
+const TESTFLIGHT_APPLE_URL = 'https://testflight.apple.com/join/gMrr2QcP';
+const GOOGLE_PLAY_BETA_URL = 'https://play.google.com/apps/test/com.ollamamobile.app/3';
 
 interface Props {
   onOpenLegal: (type: LegalDocType) => void;
@@ -126,6 +128,31 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
           <p className="text-[9px] text-zinc-600 leading-snug max-w-xl">
             Verify this onion address matches p3lending.space and our GitHub to avoid phishing clones.
           </p>
+        </div>
+
+        {/* Test the beta — native apps */}
+        <div className="pt-6 mt-6 border-t border-zinc-800/80">
+          <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Test the beta</h4>
+          <div className="flex flex-wrap items-center gap-4">
+            <a
+              href={TESTFLIGHT_APPLE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-zinc-400 hover:text-[#00e599] transition-colors"
+              aria-label="Join P3 Lending (Beta) on TestFlight for iPhone, iPad, Mac"
+            >
+              Apple — TestFlight
+            </a>
+            <a
+              href={GOOGLE_PLAY_BETA_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-zinc-400 hover:text-[#00e599] transition-colors"
+              aria-label="P3 Lending beta on Google Play"
+            >
+              Android — Google Play
+            </a>
+          </div>
         </div>
 
         <div className="pt-8 border-t border-zinc-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-zinc-600">
