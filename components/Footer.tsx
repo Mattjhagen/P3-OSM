@@ -3,7 +3,7 @@ import { LegalDocType } from './LegalModal';
 
 const OFFICIAL_ONION_URL = 'http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion';
 const OFFICIAL_CLEARNET_URL = 'https://p3lending.space';
-const TESTFLIGHT_APPLE_URL = 'https://testflight.apple.com/join/gMrr2QcP';
+const APPLE_APP_STORE_URL = 'https://testflight.apple.com/join/gMrr2QcP';
 
 interface Props {
   onOpenLegal: (type: LegalDocType) => void;
@@ -129,17 +129,23 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
           </p>
         </div>
 
-        {/* Test the beta — Apple TestFlight */}
+        {/* Download on the App Store */}
         <div className="pt-6 mt-6 border-t border-zinc-800/80">
-          <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Test the beta</h4>
+          <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Get the app</h4>
           <a
-            href={TESTFLIGHT_APPLE_URL}
+            href={APPLE_APP_STORE_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center opacity-90 hover:opacity-100 transition-opacity"
-            aria-label="Join P3 Lending (Beta) on TestFlight for iPhone, iPad, Mac"
+            aria-label="Download P3 Lending on the App Store"
           >
-            <img src="/badge-app-store.svg" alt="Download on the App Store" className="h-10 w-auto" width={120} height={40} />
+            <img
+              src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+              alt="Download on the App Store"
+              className="h-10 w-auto"
+              width={120}
+              height={40}
+            />
           </a>
         </div>
 
