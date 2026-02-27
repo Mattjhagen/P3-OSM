@@ -1,0 +1,6 @@
+[build]
+  publish = "public"
+  command = "echo \"static\""
+
+# IMPORTANT: no SPA fallback redirects for blog
+# (keeps /posts/*, /tags/, /rss.xml, /sitemap.xml working correctly)
