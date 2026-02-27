@@ -63,7 +63,7 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
           </div>
 
           <div>
-             <h4 className="text-[10px] font-bold text-white uppercase tracking-wider mb-4">Resources</h4>
+             <h4 className="text-[10px] font-bold text-white uppercase tracking-wider mb-4">Docs &amp; Safety</h4>
              <ul className="space-y-3 text-[11px] text-zinc-500 font-medium">
                 <li><button onClick={() => onOpenLegal('ECOA')} className="hover:text-[#00e599] transition-colors">Fair Lending (ECOA)</button></li>
                 <li><button onClick={() => onOpenLegal('SECURITY')} className="hover:text-[#00e599] transition-colors">Responsible Security</button></li>
@@ -73,6 +73,42 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
                <li><a href="/invesors" className="hover:text-[#00e599] transition-colors">For Investors</a></li>
                 <li><a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Sitemap.xml</a></li>
                 <li><a href="/status" className="hover:text-[#00e599] transition-colors">System Status</a></li>
+             </ul>
+          </div>
+          
+          <div>
+             <h4 className="text-[10px] font-bold text-white uppercase tracking-wider mb-4">Resources</h4>
+             <ul className="space-y-3 text-[11px] text-zinc-500 font-medium">
+                <li>
+                  <a
+                    href="https://developers.p3lending.space"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-[#00e599] transition-colors"
+                  >
+                    Developers
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://blog.p3lending.space"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-[#00e599] transition-colors"
+                  >
+                    Blog
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://learn.p3lending.space"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-[#00e599] transition-colors"
+                  >
+                    Learning Center
+                  </a>
+                </li>
              </ul>
           </div>
         </div>

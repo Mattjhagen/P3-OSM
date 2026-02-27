@@ -376,6 +376,32 @@ export const LandingPage: React.FC<Props> = ({ onLaunch, onDevAdminLogin, onOpen
       <nav className="relative z-50 flex items-center justify-between px-4 sm:px-6 py-6 max-w-7xl mx-auto w-full">
         <Logo />
         <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-3 text-xs text-zinc-500">
+            <a
+              href="https://developers.p3lending.space"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-white transition-colors"
+            >
+              Developers
+            </a>
+            <a
+              href="https://blog.p3lending.space"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-white transition-colors"
+            >
+              Blog
+            </a>
+            <a
+              href="https://learn.p3lending.space"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-white transition-colors"
+            >
+              Learning Center
+            </a>
+          </div>
           <button onClick={() => setShowWaitlist(true)} className="bg-[#00e599] text-black px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-bold hover:bg-[#00cc88] transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]">
             Join Waitlist
           </button>

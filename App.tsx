@@ -67,6 +67,7 @@ const MOCK_CHARITIES: Charity[] = [
 ];
 
 const FIRST_VISIT_PITCH_DECK_KEY = 'p3_has_seen_pitch_deck';
+const PITCHDECK_AUTOLOAD_BLOCK_KEY = 'p3_pitchdeck_autoload_blocked_v1';
 const QUICK_SWITCH_SOURCE_EMAIL = 'mattjhagen@ymail.com';
 const QUICK_SWITCH_TARGET_ADMIN_EMAIL = 'admin@p3lending.space';
 const DEFAULT_RESTRICTION_MESSAGE = 'Your account is restricted due to default. Please contact support with explanation.';
@@ -77,6 +78,18 @@ const isFinanciallyRestricted = (profile: UserProfile | null) => {
   const normalizedStatus = String(profile.accountStatus || 'ACTIVE').toUpperCase();
   return normalizedStatus === 'DEFAULTED' || normalizedStatus === 'SUSPENDED';
 };
+
+function isFirstSession(): boolean {
+  try {
+    const existing = localStorage.getItem(PITCHDECK_AUTOLOAD_BLOCK_KEY);
+    if (existing) return false;
+    localStorage.setItem(PITCHDECK_AUTOLOAD_BLOCK_KEY, '1');
+    return true;
+  } catch {
+    // If storage is unavailable, treat this as first session and avoid any automatic behavior.
+    return true;
+  }
+}
 
 const App: React.FC = () => {
   const isStatusRoute =
@@ -362,6 +375,9 @@ const App: React.FC = () => {
     const kycStatus = params.get('kyc');
     const isThanksPath = window.location.pathname.toLowerCase() === '/thanks';
     const hasSeenPitchDeck = localStorage.getItem(FIRST_VISIT_PITCH_DECK_KEY) === 'true';
+    // Mark this browser as having evaluated pitch deck autoload once; we never auto-open
+    // the deck, but this guard prevents future regressions from treating first sessions specially.
+    const firstSession = isFirstSession();
     const shouldShowDonationThankYou =
       isThanksPath ||
       donationStatus === 'success' ||
@@ -412,10 +428,6 @@ const App: React.FC = () => {
       setShowPitchDeck(true);
       localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
       params.delete('deck');
-    } else if (!hasSeenPitchDeck) {
-      // First-time visitors are shown the investor deck before entering the app.
-      setShowPitchDeck(true);
-      localStorage.setItem(FIRST_VISIT_PITCH_DECK_KEY, 'true');
     }
 
     if (
@@ -1246,6 +1258,32 @@ const App: React.FC = () => {
                <h1 className="text-base md:text-xl font-bold text-white tracking-tight truncate">{VIEW_TITLES[activeView]}</h1>
              </div>
              <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
+                <div className="hidden md:flex items-center gap-3 text-xs text-zinc-500">
+                  <a
+                    href="https://developers.p3lending.space"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-white transition-colors"
+                  >
+                    Developers
+                  </a>
+                  <a
+                    href="https://blog.p3lending.space"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-white transition-colors"
+                  >
+                    Blog
+                  </a>
+                  <a
+                    href="https://learn.p3lending.space"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-white transition-colors"
+                  >
+                    Learning Center
+                  </a>
+                </div>
                 <a href="https://www.facebook.com/profile.php?id=61573009392683" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full flex items-center justify-center border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-500 transition-all" title="Visit our Facebook Page">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 </a>
