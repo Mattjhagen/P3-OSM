@@ -15,31 +15,42 @@
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Tags | P3 Lending Blog" />
   <meta name="twitter:description" content="Browse P3 blog posts by topic." />
+
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <nav>
-      <a href="/">P3 Lending Blog</a> › Tags
+  <div class="wrap">
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/tags/">Tags</a>
+      <a href="/rss.xml">RSS</a>
+      <a href="https://p3lending.space" target="_blank" rel="noopener">Main portal</a>
+      <a href="https://learn.p3lending.space" target="_blank" rel="noopener">Learning Center</a>
+      <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developers</a>
     </nav>
-  </header>
-  <main>
-    <h1>Tags</h1>
-    <ul>
-      <li><a href="/posts/developer-api-launch/">developers</a></li>
-      <li><a href="/posts/developer-api-launch/">api</a></li>
-      <li><a href="/posts/developer-api-launch/">reputation</a></li>
-      <li><a href="/posts/reputation-phase1/">product</a></li>
-    </ul>
-  </main>
-  <footer>
-    <p>
-      © <span id="year"></span> P3 Lending ·
-      <a href="https://p3lending.space">Main site</a> ·
-      <a href="https://learn.p3lending.space">Learning Center</a> ·
-      <a href="https://developers.p3lending.space">Developers</a>
-    </p>
-  </footer>
+
+    <main>
+      <h1>Tags</h1>
+      <ul>
+        <li><a href="/posts/developer-api-launch/">developers</a></li>
+        <li><a href="/posts/developer-api-launch/">api</a></li>
+        <li><a href="/posts/developer-api-launch/">reputation</a></li>
+        <li><a href="/posts/reputation-phase1/">product</a></li>
+      </ul>
+    </main>
+
+    <footer>
+      <div class="footer-inner">
+        <div>© <span id="year"></span> P3 Lending. All rights reserved.</div>
+        <div class="footer-links">
+          <a href="https://p3lending.space" target="_blank" rel="noopener">Main portal</a>
+          <a href="https://learn.p3lending.space" target="_blank" rel="noopener">Learning Center</a>
+          <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developers</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
   <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>
-

@@ -1,0 +1,29 @@
+:root { --bg: #050505; --fg: #e4e4e7; --muted: #71717a; --accent: #00e599; --border: #27272a; }
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); margin: 0; line-height: 1.6; }
+.wrap { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; }
+.nav { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.nav a { color: var(--muted); text-decoration: none; }
+.nav a:hover { color: var(--accent); }
+h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+p { margin: 0.4rem 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+ul { padding-left: 1.5rem; }
+code { background: #18181b; padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; }
+pre { background: #18181b; padding: 1rem; overflow-x: auto; border-radius: 8px; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.post-list { display: grid; gap: 1.25rem; margin-top: 1.25rem; }
+.post-card { background: #0b0b0d; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+.post-card h2 { margin-top: 0; border: none; padding: 0; }
+.post-meta { font-size: 0.85rem; color: var(--muted); margin: 0.35rem 0; }
+.tags { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.35rem; font-size: 0.8rem; }
+.tag { padding: 0.15rem 0.5rem; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); background: #0b0b0d; }
+.subscribe { margin-top: 2rem; padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); background: #0b0b0d; color: var(--muted); font-size: 0.9rem; }
+.subscribe h2 { margin-top: 0; }
+footer { border-top: 1px solid var(--border); padding: 1.5rem 0; margin-top: 2rem; font-size: 0.85rem; color: var(--muted); }
+.footer-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 1rem; }
+.footer-links a { color: var(--accent); }
+article header p { color: var(--muted); font-size: 0.9rem; }
