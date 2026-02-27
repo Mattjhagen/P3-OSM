@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reputation Scoring, Phase 1 | P3 Lending Blog</title>
+  <meta name="description" content="An overview of the first phase of P3's 0–1000 reputation scoring model." />
+  <link rel="canonical" href="https://blog.p3lending.space/posts/reputation-phase1/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Reputation Scoring, Phase 1" />
+  <meta property="og:description" content="How we are rolling out an explainable 0–1000 reputation score with guardrails." />
+  <meta property="og:url" content="https://blog.p3lending.space/posts/reputation-phase1/" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Reputation Scoring, Phase 1" />
+  <meta name="twitter:description" content="A closer look at the first scoring model shipping with P3." />
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">P3 Lending Blog</a> › Reputation Scoring, Phase 1
+    </nav>
+  </header>
+  <main>
+    <article>
+      <header>
+        <h1>Reputation Scoring, Phase 1</h1>
+        <p>Published 2026-02-27 · Tags: reputation, product</p>
+      </header>
+      <p>The first iteration of the P3 reputation score focuses on transparency and safe defaults.</p>
+      <p>Scores are returned on a 0–1000 scale with components for trust, risk, and capacity. We also ship guardrails that cap scores in cases like new accounts with little data or recent serious issues.</p>
+      <p>This is an evolving model. We plan to refine it based on data, research, and feedback from both borrowers and lenders.</p>
+      <p>For details about how scores appear in the consumer app, read the <a href="https://learn.p3lending.space/reputation-score/">Reputation score overview</a>. For API access, see <a href="https://developers.p3lending.space/">developers.p3lending.space</a>.</p>
+    </article>
+  </main>
+  <footer>
+    <p>
+      © <span id="year"></span> P3 Lending ·
+      <a href="https://p3lending.space">Main site</a> ·
+      <a href="https://learn.p3lending.space">Learning Center</a> ·
+      <a href="https://developers.p3lending.space">Developers</a>
+    </p>
+  </footer>
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>
+

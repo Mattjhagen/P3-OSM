@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P3 Lending | Learn How Reputation-Based Lending Works</title>
+  <meta name="description" content="P3 Learning Center explains reputation-based lending, borrowers, lenders, safety and FAQs in plain language." />
+  <link rel="canonical" href="https://learn.p3lending.space/" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <!-- Search console: add site verification when ready -->
+  <!-- <meta name="google-site-verification" content="REPLACE_ME" /> -->
+  <link rel="icon" href="/favicon.ico" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="P3 Lending | Learn How Reputation-Based Lending Works · P3 Learning Center" />
+  <meta property="og:description" content="Consumer learning center for borrowers and lenders interested in reputation-based lending, safety, and FAQs." />
+  <meta property="og:url" content="https://learn.p3lending.space/" />
+  <meta property="og:site_name" content="P3 Lending" />
+  <meta property="og:image" content="https://learn.p3lending.space/og-default.png" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="P3 Lending | Learn How Reputation-Based Lending Works · P3 Learning Center" />
+  <meta name="twitter:description" content="Understand P3, reputation scores, borrower and lender basics, and safety tips in plain language." />
+  <meta name="twitter:image" content="https://learn.p3lending.space/og-default.png" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "P3 Lending",
+    "url": "https://p3lending.space/",
+    "logo": "https://p3lending.space/icon.png",
+    "sameAs": [
+      "https://p3lending.space",
+      "https://developers.p3lending.space",
+      "https://learn.p3lending.space",
+      "https://blog.p3lending.space"
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "P3 Learning Center",
+    "url": "https://learn.p3lending.space/",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://learn.p3lending.space/?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #020617;
+      --fg: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22c55e;
+      --border: #1f2937;
+      --card: #020617;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background: radial-gradient(circle at top left, #0f172a 0, #020617 40%, #000 100%);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(15,23,42,0.92);
+      border-bottom: 1px solid rgba(148,163,184,0.35);
+      backdrop-filter: blur(18px);
+    }
+    .nav {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .logo-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 20%, #bbf7d0 0, #22c55e 35%, #16a34a 65%, #052e16 100%);
+      box-shadow: 0 0 20px rgba(34,197,94,0.7);
+    }
+    .nav-title {
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      font-size: 0.95rem;
+    }
+    .nav-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      font-size: 0.9rem;
+    }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .nav-links a:hover {
+      color: var(--accent);
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 3rem;
+    }
+    h1 {
+      font-size: 2.15rem;
+      margin-bottom: 0.35rem;
+    }
+    h2 {
+      font-size: 1.35rem;
+      margin-top: 2.25rem;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.35rem;
+    }
+    h3 {
+      font-size: 1.05rem;
+      margin-top: 1.1rem;
+      margin-bottom: 0.3rem;
+    }
+    p { margin: 0.4rem 0; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul { padding-left: 1.4rem; margin: 0.4rem 0 0.8rem; }
+    ol { padding-left: 1.5rem; margin: 0.4rem 0 0.8rem; }
+    .lead {
+      color: var(--muted);
+      max-width: 640px;
+      font-size: 0.98rem;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid rgba(34,197,94,0.6);
+      background: radial-gradient(circle at 0 0, rgba(34,197,94,0.26), transparent 60%);
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34,197,94,0.9);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.2fr);
+      gap: 1.75rem;
+      margin-top: 1.75rem;
+      align-items: flex-start;
+    }
+    .card {
+      background: radial-gradient(circle at top, rgba(15,23,42,0.9), var(--card));
+      border-radius: 1.2rem;
+      padding: 1.35rem 1.4rem;
+      border: 1px solid rgba(148,163,184,0.35);
+      box-shadow: 0 20px 55px rgba(15,23,42,0.75);
+    }
+    .card h3 { margin-top: 0; }
+    .link-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.8rem;
+      margin-top: 1.1rem;
+      font-size: 0.9rem;
+    }
+    .link-pill {
+      display: inline-flex;
+      padding: 0.35rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.35);
+      color: var(--muted);
+    }
+    .section-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
+      margin-top: 1.1rem;
+    }
+    .section-card {
+      background: rgba(15,23,42,0.9);
+      border-radius: 1rem;
+      padding: 1rem 1.1rem;
+      border: 1px solid rgba(51,65,85,0.9);
+      font-size: 0.95rem;
+    }
+    .disclaimer {
+      margin-top: 1.2rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 0.9rem;
+      border: 1px solid rgba(248, 250, 252, 0.1);
+      background: rgba(15,23,42,0.9);
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    footer {
+      border-top: 1px solid rgba(30,64,175,0.8);
+      background: radial-gradient(circle at top, rgba(30,64,175,0.5), #020617 55%, #020617 100%);
+      padding: 1.5rem 1.25rem 1.8rem;
+      margin-top: 2rem;
+    }
+    .footer-inner {
+      max-width: 1040px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.8rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      header {
+        position: static;
+      }
+      .nav {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <div class="nav-left">
+        <div class="logo-dot" aria-hidden="true"></div>
+        <div>
+          <div class="nav-title">P3 Lending • Learning Center</div>
+          <div class="nav-sub">Plain-language guides for borrowers and lenders.</div>
+        </div>
+      </div>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/getting-started/">Getting started</a>
+        <a href="/borrowers/">Borrowers</a>
+        <a href="/lenders/">Lenders</a>
+        <a href="/reputation-score/">Reputation score</a>
+        <a href="/safety/">Safety</a>
+        <a href="/faq/">FAQ</a>
+        <a href="/glossary/">Glossary</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section aria-labelledby="hero-title">
+      <span class="pill">
+        <span class="pill-dot"></span>
+        Learn how P3 works
+      </span>
+      <h1 id="hero-title">Credit based on character, not just history.</h1>
+      <p class="lead">
+        P3 is building a reputation layer for lending. This learning center explains how it works, what the
+        reputation score means, and how to use the protocol safely as a borrower or lender.
+      </p>
+
+      <div class="grid">
+        <article class="card">
+          <h3>Start here</h3>
+          <p>New to P3 or to crypto lending? Read these guides in order:</p>
+          <div class="link-list">
+            <a class="link-pill" href="/getting-started/">Getting started guide</a>
+            <a class="link-pill" href="/borrowers/">For borrowers</a>
+            <a class="link-pill" href="/lenders/">For lenders</a>
+            <a class="link-pill" href="/reputation-score/">Reputation score explained</a>
+            <a class="link-pill" href="/safety/">Safety and common scams</a>
+            <a class="link-pill" href="/faq/">Frequently asked questions</a>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Need the technical details?</h3>
+          <p>Developers and partners should start at the Developer Center:</p>
+          <ul>
+            <li><a href="https://developers.p3lending.space">P3 Developer Center</a></li>
+            <li><a href="https://api.p3lending.space/docs/openapi.json">OpenAPI JSON (API)</a></li>
+            <li><a href="https://p3lending.space">Main application</a></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="disclaimer" aria-label="Important disclaimer">
+        <strong>Important:</strong> P3 is an early-stage protocol. Nothing on this site is financial, investment,
+        tax, or legal advice. Lending and borrowing carry risk, including the risk of losing money. Always do your
+        own research and never risk more than you can afford to lose.
+      </div>
+    </section>
+
+    <section aria-labelledby="topics-heading">
+      <h2 id="topics-heading">What you can learn</h2>
+      <div class="section-grid">
+        <article class="section-card">
+          <h3>Borrowing with P3</h3>
+          <p>See how reputation, collateral, and terms interact so you know what you are agreeing to before taking a loan.</p>
+          <p><a href="/borrowers/">Read the borrowers guide →</a></p>
+        </article>
+        <article class="section-card">
+          <h3>Lending and risk</h3>
+          <p>Understand how lenders use the score, how diversification works, and why yields can change over time.</p>
+          <p><a href="/lenders/">Read the lenders guide →</a></p>
+        </article>
+        <article class="section-card">
+          <h3>Reputation score</h3>
+          <p>Learn how the 0–1000 score, bands, and guardrails are designed to reward long-term, on-time behavior.</p>
+          <p><a href="/reputation-score/">Reputation score explained →</a></p>
+        </article>
+        <article class="section-card">
+          <h3>Safety &amp; scams</h3>
+          <p>Review practical steps to protect yourself from phishing, fake support, and offers that sound too good to be true.</p>
+          <p><a href="/safety/">Safety checklist →</a></p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="related-heading">
+      <h2 id="related-heading">Explore related guides</h2>
+      <ul>
+        <li><a href="/getting-started/">Getting started with P3</a></li>
+        <li><a href="/reputation-score/">How the P3 reputation score works</a></li>
+        <li><a href="/safety/">Safety and common scam patterns</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <div>© <span id="year"></span> P3 Lending. All rights reserved.</div>
+      <div class="footer-links">
+        <a href="https://p3lending.space">Main portal</a>
+        <a href="https://developers.p3lending.space">Developers</a>
+        <a href="https://blog.p3lending.space">Blog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
+

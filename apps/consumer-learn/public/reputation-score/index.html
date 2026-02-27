@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P3 Reputation Score Explained</title>
+  <meta name="description" content="Plain-language explanation of the P3 reputation score, bands, and what can move your score up or down." />
+  <link rel="canonical" href="https://learn.p3lending.space/reputation-score/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="P3 Reputation Score Explained" />
+  <meta property="og:description" content="Understand the 0–1000 P3 reputation score, bands, and guardrails." />
+  <meta property="og:url" content="https://learn.p3lending.space/reputation-score/" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="P3 Reputation Score Explained" />
+  <meta name="twitter:description" content="Learn how the P3 reputation score is designed for borrowers and lenders." />
+
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">P3 Learning Center</a> › Reputation Score
+    </nav>
+  </header>
+  <main>
+    <h1>P3 Reputation Score, in Plain Language</h1>
+    <p>The P3 reputation score is a single number between 0 and 1000 that summarizes many signals about how someone has met past commitments.</p>
+
+    <h2 id="bands">Score bands</h2>
+    <p>Scores are grouped into bands so they are easier to read at a glance:</p>
+    <ul>
+      <li><strong>A:</strong> typically 850+ — long history of on-time behavior, few recent concerns.</li>
+      <li><strong>B:</strong> 700–849 — generally positive history with some variation.</li>
+      <li><strong>C:</strong> 550–699 — mixed or limited history; proceed carefully.</li>
+      <li><strong>D:</strong> 400–549 — recent problems or very little trustworthy data.</li>
+      <li><strong>E:</strong> below 400 — high risk or severe recent issues.</li>
+    </ul>
+
+    <h2 id="what-moves-the-score">What can move your score</h2>
+    <ul>
+      <li>Consistently repaying on time tends to help.</li>
+      <li>Missing payments, defaults, or flags can lower the score quickly.</li>
+      <li>New accounts start with conservative caps until more history is visible.</li>
+    </ul>
+
+    <h2 id="not-a-promise">What the score is not</h2>
+    <p>The reputation score is <strong>not</strong> a guarantee of repayment and <strong>not</strong> financial advice. It is one tool for understanding risk and must be combined with your own judgment.</p>
+
+    <p>If you build or integrate with P3 programmatically, see the <a href="https://developers.p3lending.space">Developer Center</a> and the <a href="https://api.p3lending.space/docs/openapi.json">OpenAPI spec</a>.</p>
+  </main>
+  <footer>
+    <p>
+      © <span id="year"></span> P3 Lending ·
+      <a href="https://p3lending.space">Main site</a> ·
+      <a href="https://developers.p3lending.space">Developers</a> ·
+      <a href="https://blog.p3lending.space">Blog</a>
+    </p>
+  </footer>
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>
+

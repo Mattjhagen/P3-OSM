@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P3 Lenders Guide</title>
+  <meta name="description" content="Learn how lending works on P3, how to read the reputation score, and what risks you should understand first." />
+  <link rel="canonical" href="https://learn.p3lending.space/lenders/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="P3 Lenders Guide" />
+  <meta property="og:description" content="Plain-language guide for lenders exploring the P3 reputation-based lending protocol." />
+  <meta property="og:url" content="https://learn.p3lending.space/lenders/" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="P3 Lenders Guide" />
+  <meta name="twitter:description" content="Understand how risk, diversification, and reputation work if you choose to lend on P3." />
+
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">P3 Learning Center</a> › Lenders
+    </nav>
+  </header>
+  <main>
+    <h1>Lending with P3</h1>
+    <p>Lending on P3 is experimental and risky. This page describes core concepts to understand before considering it.</p>
+
+    <h2 id="score">Reading the reputation score</h2>
+    <p>The reputation score is one input into risk. Higher scores usually mean more positive history, but they never guarantee repayment.</p>
+    <p>See the <a href="/reputation-score/">Reputation score overview</a> for details on bands, factors, and guardrails.</p>
+
+    <h2 id="diversification">Diversification and limits</h2>
+    <ul>
+      <li>Avoid concentrating too much into a single borrower or loan.</li>
+      <li>Expect that some loans will underperform or default, especially during early protocol phases.</li>
+      <li>Only use capital that you can afford to lose.</li>
+    </ul>
+
+    <h2 id="not-advice">Not investment advice</h2>
+    <p>Nothing in P3 — including the app, this learning center, or any score — is investment, financial, tax, or legal advice.</p>
+    <p>You are responsible for your own decisions. Consider speaking with a qualified advisor before committing meaningful capital.</p>
+  </main>
+  <footer>
+    <p>
+      © <span id="year"></span> P3 Lending ·
+      <a href="https://p3lending.space">Main site</a> ·
+      <a href="https://developers.p3lending.space">Developers</a> ·
+      <a href="https://blog.p3lending.space">Blog</a>
+    </p>
+  </footer>
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>
+

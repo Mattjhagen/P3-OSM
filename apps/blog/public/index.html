@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P3 Lending Blog</title>
+  <meta name="description" content="Product updates, release notes, and essays from the P3 Lending team." />
+  <link rel="canonical" href="https://blog.p3lending.space/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="P3 Lending Blog" />
+  <meta property="og:description" content="Stay up to date on new features, reputation scoring improvements, and protocol updates." />
+  <meta property="og:url" content="https://blog.p3lending.space/" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="P3 Lending Blog" />
+  <meta name="twitter:description" content="Release notes and long-form posts from P3." />
+
+  <link rel="alternate" type="application/rss+xml" title="P3 Lending Blog RSS" href="/rss.xml" />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+      line-height: 1.6;
+    }
+    header {
+      background: #020617;
+      border-bottom: 1px solid #1f2937;
+      padding: 0.9rem 1.25rem;
+    }
+    .nav-inner {
+      max-width: 880px;
+      margin: 0 auto;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .nav-title {
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      font-size: 0.95rem;
+    }
+    .nav-sub { font-size: 0.8rem; color: #9ca3af; }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 2.5rem;
+    }
+    h1 { font-size: 2rem; margin-top: 0; }
+    h2 { font-size: 1.35rem; margin-top: 1.75rem; }
+    a { color: #22c55e; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .post-list {
+      display: grid;
+      gap: 1.25rem;
+      margin-top: 1.25rem;
+    }
+    .post-card {
+      border-radius: 1rem;
+      border: 1px solid #1f2937;
+      padding: 1rem 1.1rem;
+      background: #020617;
+    }
+    .post-meta {
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-top: 0.35rem;
+      font-size: 0.75rem;
+    }
+    .tag {
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid #1f2937;
+      color: #9ca3af;
+    }
+    .subscribe {
+      margin-top: 2rem;
+      padding: 1.1rem 1.2rem;
+      border-radius: 1rem;
+      border: 1px dashed #1f2937;
+      background: #020617;
+      font-size: 0.9rem;
+      color: #9ca3af;
+    }
+    footer {
+      border-top: 1px solid #1f2937;
+      padding: 1rem 1.25rem 1.5rem;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav-inner">
+      <div>
+        <div class="nav-title">P3 Lending Blog</div>
+        <div class="nav-sub">Product updates, release notes, and research notes.</div>
+      </div>
+      <nav aria-label="Primary">
+        <a href="/">Home</a> ·
+        <a href="/tags/">Tags</a> ·
+        <a href="/rss.xml">RSS</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <h1>Latest posts</h1>
+    <section class="post-list" aria-label="Blog posts">
+      <article class="post-card">
+        <h2><a href="/posts/developer-api-launch/">Developer API Launch</a></h2>
+        <p class="post-meta">2026-02-27 · Tags:
+          <span class="tag">developers</span>
+          <span class="tag">api</span>
+          <span class="tag">reputation</span>
+        </p>
+        <p>We are introducing API keys, scoped access, and rate limits so partners can integrate P3 reputation scores into their own products.</p>
+      </article>
+
+      <article class="post-card">
+        <h2><a href="/posts/reputation-phase1/">Reputation Scoring, Phase 1</a></h2>
+        <p class="post-meta">2026-02-27 · Tags:
+          <span class="tag">reputation</span>
+          <span class="tag">product</span>
+        </p>
+        <p>Our first version of the 0–1000 reputation score ships with explainable components and guardrails to reflect real-world risk.</p>
+      </article>
+    </section>
+
+    <section class="subscribe" aria-labelledby="subscribe-heading">
+      <h2 id="subscribe-heading">Subscribe</h2>
+      <p>A full email list is not live yet. For now you can:</p>
+      <ul>
+        <li>Add <a href="/rss.xml">the RSS feed</a> to your reader of choice.</li>
+        <li>Bookmark this page for release notes on future protocol changes.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    © <span id="year"></span> P3 Lending ·
+    <a href="https://p3lending.space">Main site</a> ·
+    <a href="https://learn.p3lending.space">Learning Center</a> ·
+    <a href="https://developers.p3lending.space">Developers</a>
+    <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+  </footer>
+</body>
+</html>
+

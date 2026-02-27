@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>P3 Lending Blog</title>
+    <link>https://blog.p3lending.space/</link>
+    <description>Product updates and essays from the P3 Lending team.</description>
+    <language>en-us</language>
+
+    <item>
+      <title>Developer API Launch</title>
+      <link>https://blog.p3lending.space/posts/developer-api-launch/</link>
+      <guid>https://blog.p3lending.space/posts/developer-api-launch/</guid>
+      <pubDate>Thu, 27 Feb 2026 00:00:00 GMT</pubDate>
+      <description>We shipped the first version of the P3 Developer API with API keys, scopes, and reputation score endpoints.</description>
+    </item>
+
+    <item>
+      <title>Reputation Scoring, Phase 1</title>
+      <link>https://blog.p3lending.space/posts/reputation-phase1/</link>
+      <guid>https://blog.p3lending.space/posts/reputation-phase1/</guid>
+      <pubDate>Thu, 27 Feb 2026 00:00:00 GMT</pubDate>
+      <description>An overview of the first phase of P3's 0–1000 reputation scoring model.</description>
+    </item>
+  </channel>
+</rss>
+
