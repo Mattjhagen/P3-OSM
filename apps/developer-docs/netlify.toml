@@ -1,8 +1,11 @@
 [build]
   publish = "public"
   command = "echo \"static\""
+<<<<<<< HEAD
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+=======
+>>>>>>> bef2d10 (chore(netlify): document multi-site static config)
