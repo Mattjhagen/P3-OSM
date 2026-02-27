@@ -36,64 +36,56 @@ create index if not exists idx_rep_score_snapshots_org_computed on public.rep_sc
 
 -- Deterministic feature layer (initial version)
 create or replace view public.rep_features_user as
-with repayment_agg as (
+with base as (
   select
-    la.borrower_id as user_id,
-    count(rh.id)::int as repayment_count_total,
-    coalesce(avg(case when rh.is_late then 0 else 1 end), 1)::numeric as on_time_rate_180d,
-    count(*) filter (
-      where rh.is_late = true
-        and rh.created_at >= now() - interval '30 day'
-    )::int as late_count_30d
-  from public.loan_activity la
-  left join public.repayment_history rh on rh.loan_id = la.id
-  group by la.borrower_id
+    u.id as user_id,
+    u.created_at as user_created_at,
+    coalesce(u.default_flag, false) as default_flag
+  from public.users u
 ),
-loan_agg as (
-  select
-    la.borrower_id as user_id,
-    count(*) filter (where lower(coalesce(la.status, '')) in ('active', 'funded', 'in_progress'))::int as active_loan_count,
-    count(*) filter (where lower(coalesce(la.status, '')) in ('defaulted', 'default'))::int as default_count_total,
-    count(*) filter (
-      where lower(coalesce(la.status, '')) in ('defaulted', 'default')
-        and la.created_at >= now() - interval '90 day'
-    )::int as default_count_90d,
-    avg(case
-      when lower(coalesce(la.status, '')) in ('active', 'funded', 'in_progress') then 1.0
-      else 0.0
-    end)::numeric as utilization_ratio
-  from public.loan_activity la
-  group by la.borrower_id
-),
-event_defaults as (
+ev as (
   select
     e.user_id,
-    bool_or(e.event_type = 'default.recorded') as default_ever_from_events,
-    bool_or(e.event_type = 'default.recorded' and e.event_ts >= now() - interval '90 day') as default_90d_from_events
+    count(*) filter (where e.event_type in ('repayment_on_time','repayment_late')) as repayment_count_total,
+    count(*) filter (where e.event_type = 'repayment_late' and e.event_ts >= now() - interval '30 days') as late_count_30d,
+    count(*) filter (where e.event_type = 'default') as default_count_total,
+    bool_or(e.event_type = 'default' and e.event_ts >= now() - interval '90 days') as default_in_last_90d,
+    max(
+      case
+        when e.event_type in ('kyc_verified','kyc_level_1') then 1
+        when e.event_type in ('kyc_level_2') then 2
+        else 0
+      end
+    ) as kyc_level
+  from public.rep_events e
+  group by e.user_id
+),
+on_time as (
+  select
+    e.user_id,
+    case
+      when count(*) filter (where e.event_type in ('repayment_on_time','repayment_late')) = 0 then null
+      else
+        (count(*) filter (where e.event_type = 'repayment_on_time')::numeric
+         / nullif(count(*) filter (where e.event_type in ('repayment_on_time','repayment_late'))::numeric, 0))
+    end as on_time_rate_180d
   from public.rep_events e
   group by e.user_id
 )
 select
-  u.id as user_id,
-  greatest(0, extract(day from now() - coalesce(u.created_at, now())))::int as account_age_days,
-  greatest(0, coalesce(u.kyc_tier, 0))::int as kyc_level,
-  coalesce(r.repayment_count_total, 0) as repayment_count_total,
-  coalesce(r.on_time_rate_180d, 1)::numeric as on_time_rate_180d,
-  coalesce(r.late_count_30d, 0) as late_count_30d,
-  (
-    coalesce(l.default_count_total, 0) > 0
-    or coalesce(ev.default_ever_from_events, false)
-  ) as default_ever,
-  (
-    coalesce(l.default_count_90d, 0) > 0
-    or coalesce(ev.default_90d_from_events, false)
-  ) as default_in_last_90d,
-  coalesce(l.active_loan_count, 0) as active_loan_count,
-  least(greatest(coalesce(l.utilization_ratio, 0), 0), 1)::numeric as utilization_ratio
-from public.users u
-left join repayment_agg r on r.user_id = u.id
-left join loan_agg l on l.user_id = u.id
-left join event_defaults ev on ev.user_id = u.id;
+  b.user_id,
+  greatest(0, floor(extract(epoch from (now() - b.user_created_at)) / 86400))::int as account_age_days,
+  coalesce(ev.kyc_level, 0)::int as kyc_level,
+  coalesce(ev.repayment_count_total, 0)::int as repayment_count_total,
+  coalesce(ev.late_count_30d, 0)::int as late_count_30d,
+  (coalesce(ev.default_count_total, 0) > 0 or b.default_flag) as default_ever,
+  coalesce(ev.default_in_last_90d, false) as default_in_last_90d,
+  ot.on_time_rate_180d as on_time_rate_180d,
+  null::int as active_loan_count,
+  null::numeric as utilization_ratio
+from base b
+left join ev on ev.user_id = b.user_id
+left join on_time ot on ot.user_id = b.user_id;
 
 -- RLS
 alter table public.rep_events enable row level security;
