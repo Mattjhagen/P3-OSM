@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
-import type { ApiKeyRow, UsageRow, AuditRow } from '../services/developerApiService';
-import { listKeys, createKey, revokeKey, getUsage, getAudit } from '../services/developerApiService';
+import type { ApiKeyRow, UsageRow, AuditRow, OrgPlanStatus } from '../services/developerApiService';
+import { listKeys, createKey, revokeKey, getUsage, getAudit, getPlan } from '../services/developerApiService';
 
-type DevTab = 'keys' | 'usage' | 'audit';
+type DevTab = 'keys' | 'usage' | 'audit' | 'plan';
 
 export const DeveloperSettings: React.FC = () => {
   const [tab, setTab] = useState<DevTab>('keys');
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [plan, setPlan] = useState<OrgPlanStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [loadingAudit, setLoadingAudit] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState(false);
   const [error, setError] = useState('');
   const [createName, setCreateName] = useState('');
   const [createEnv, setCreateEnv] = useState<'live' | 'test'>('live');
@@ -70,6 +72,22 @@ export const DeveloperSettings: React.FC = () => {
     if (tab === 'audit') loadAudit();
   }, [tab]);
 
+  const loadPlan = async () => {
+    setLoadingPlan(true);
+    setError('');
+    try {
+      const data = await getPlan();
+      setPlan(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load plan');
+    } finally {
+      setLoadingPlan(false);
+    }
+  };
+  useEffect(() => {
+    if (tab === 'plan') loadPlan();
+  }, [tab]);
+
   const handleCreate = async () => {
     if (!createName.trim()) return;
     setCreating(true);
@@ -79,8 +97,6 @@ export const DeveloperSettings: React.FC = () => {
         name: createName.trim(),
         env: createEnv,
         scopes: ['score:read', 'score:history'],
-        rpm_limit: 60,
-        rpd_limit: 10000,
       });
       setNewKeyShown(raw_key);
       setCreateName('');
@@ -116,6 +132,9 @@ export const DeveloperSettings: React.FC = () => {
       tab === t ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
     }`;
 
+  const isSandbox = plan?.plan === 'sandbox';
+  const liveBlocked = isSandbox && createEnv === 'live';
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
@@ -127,6 +146,7 @@ export const DeveloperSettings: React.FC = () => {
 
       <div className="flex flex-wrap gap-2 border-b border-zinc-800 pb-2">
         <button type="button" onClick={() => setTab('keys')} className={tabClass('keys')}>API Keys</button>
+        <button type="button" onClick={() => setTab('plan')} className={tabClass('plan')}>Plan &amp; Billing</button>
         <button type="button" onClick={() => setTab('usage')} className={tabClass('usage')}>Usage</button>
         <button type="button" onClick={() => setTab('audit')} className={tabClass('audit')}>Audit Logs</button>
         <a href="https://developers.p3lending.space" target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm text-zinc-500 hover:text-[#00e599] transition-colors">Docs →</a>
@@ -140,6 +160,54 @@ export const DeveloperSettings: React.FC = () => {
 
       {tab !== 'keys' && (
         <>
+          {tab === 'plan' && (
+            <div className="glass-panel rounded-xl p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-white mb-1">Plan</h3>
+                  <p className="text-xs text-zinc-500">
+                    Sandbox keys are for testing. Live keys require a paid plan.
+                  </p>
+                </div>
+                <a
+                  href="mailto:founders@p3lending.space?subject=Upgrade%20P3%20Developer%20API%20Plan"
+                  className="text-xs px-3 py-2 rounded-lg bg-[#00e599] text-black font-semibold hover:opacity-90"
+                >
+                  Upgrade to Paid
+                </a>
+              </div>
+
+              {loadingPlan ? (
+                <p className="text-zinc-500 text-sm mt-4">Loading...</p>
+              ) : !plan ? (
+                <p className="text-zinc-500 text-sm mt-4">Plan data unavailable.</p>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
+                    <div className="text-[10px] text-zinc-500">Current plan</div>
+                    <div className="text-sm text-white font-semibold capitalize">{plan.plan}</div>
+                    <div className="text-[10px] text-zinc-500 mt-1">Status: {plan.status}</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
+                    <div className="text-[10px] text-zinc-500">Monthly quota</div>
+                    <div className="text-sm text-white font-semibold">{plan.monthly_limit.toLocaleString()} requests</div>
+                    <div className="text-[10px] text-zinc-500 mt-1">
+                      Resets {new Date(plan.current_period_end).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
+                    <div className="text-[10px] text-zinc-500">This period</div>
+                    <div className="text-sm text-white font-semibold">
+                      {plan.usage_month.requests.toLocaleString()} used
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-1">
+                      {plan.usage_month.remaining.toLocaleString()} remaining · {plan.usage_month.errors.toLocaleString()} errors
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {tab === 'usage' && (
             <div className="glass-panel rounded-xl p-6">
               <h3 className="text-sm font-semibold text-white mb-4">Recent requests</h3>
@@ -227,10 +295,22 @@ export const DeveloperSettings: React.FC = () => {
               <option value="test">Test</option>
             </select>
           </div>
-          <Button onClick={handleCreate} disabled={creating || !createName.trim()} isLoading={creating}>
+          <Button onClick={handleCreate} disabled={creating || !createName.trim() || liveBlocked} isLoading={creating}>
             Create key
           </Button>
         </div>
+        {liveBlocked && (
+          <div className="mt-3 text-xs text-amber-300">
+            Live keys require a paid plan. Select <span className="font-semibold">Test</span> or click{' '}
+            <a
+              className="text-[#00e599] hover:underline"
+              href="mailto:founders@p3lending.space?subject=Upgrade%20P3%20Developer%20API%20Plan"
+            >
+              Upgrade to Paid
+            </a>
+            .
+          </div>
+        )}
       </div>
       )}
 
@@ -252,7 +332,7 @@ export const DeveloperSettings: React.FC = () => {
                   <span className="text-sm font-medium text-white">{k.name}</span>
                   <span className="ml-2 text-[10px] text-zinc-500 font-mono">{k.key_prefix}…</span>
                   <div className="text-[10px] text-zinc-500 mt-1">
-                    Scopes: {k.scopes?.join(', ') || '—'} · {k.rpm_limit} rpm, {k.rpd_limit} rpd
+                    Env: {k.env ?? (k.key_prefix.startsWith('p3_test_') ? 'test' : 'live')} · Scopes: {k.scopes?.join(', ') || '—'} · {k.rpm_limit} rpm, {k.rpd_limit} rpd
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

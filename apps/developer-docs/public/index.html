@@ -21,6 +21,9 @@
     .nav a:hover { color: var(--accent); }
     .muted { color: var(--muted); font-size: 0.9rem; }
     ul { padding-left: 1.5rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
+    th, td { border: 1px solid #27272a; padding: 0.5rem; font-size: 0.9rem; }
+    th { text-align: left; color: var(--fg); background: #0b0b0d; }
   </style>
 </head>
 <body>
@@ -29,6 +32,7 @@
       <a href="/">Home</a>
       <a href="#quickstart">Quickstart</a>
       <a href="#auth">Auth</a>
+      <a href="#plans">Plans</a>
       <a href="#endpoints">Endpoints</a>
       <a href="#errors">Errors</a>
       <a href="#rate-limits">Rate limits</a>
@@ -54,6 +58,34 @@
 Authorization: Bearer p3_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
     <p>Keys are scoped (e.g. <code>score:read</code>, <code>score:history</code>). Never store or log the raw key; store only the prefix if needed for display.</p>
 
+    <h2 id="plans">Plans</h2>
+    <p class="muted">Start in <strong>Sandbox</strong> with test keys. Upgrade to <strong>Paid</strong> to use live keys and higher quotas.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Plan</th>
+          <th>Key prefix</th>
+          <th>Default limits</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Sandbox (Free)</td>
+          <td><code>p3_test_...</code></td>
+          <td>10 rpm · 500 rpd · 5,000 / month</td>
+          <td>Testing and integration</td>
+        </tr>
+        <tr>
+          <td>Paid (Production)</td>
+          <td><code>p3_live_...</code></td>
+          <td>120 rpm · 50,000 rpd · 1,000,000 / month</td>
+          <td>Live usage, higher quotas</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted">Upgrade: email <a href="mailto:founders@p3lending.space?subject=Upgrade%20P3%20Developer%20API%20Plan">founders@p3lending.space</a>.</p>
+
     <h2 id="endpoints">Endpoints</h2>
     <ul>
       <li><strong>GET /api/v1/reputation/score?user_id=</strong> — Score by user ID (scope: <code>score:read</code>).</li>
@@ -70,7 +102,8 @@ Authorization: Bearer p3_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
       <li><strong>401</strong> — Invalid or missing API key.</li>
       <li><strong>403</strong> — Valid key but missing required scope.</li>
       <li><strong>404</strong> — User not found.</li>
-      <li><strong>429</strong> — Rate limit exceeded; check <code>X-RateLimit-*</code> headers.</li>
+      <li><strong>402</strong> — Paid plan required for live keys (<code>code=paid_required</code>).</li>
+      <li><strong>429</strong> — Rate limit exceeded (<code>X-RateLimit-*</code>) or monthly quota exceeded (<code>code=monthly_quota_exceeded</code>).</li>
       <li><strong>503</strong> — Developer API not configured.</li>
     </ul>
 
@@ -80,6 +113,12 @@ Authorization: Bearer p3_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
       <li><code>X-RateLimit-Limit</code> — Requests per minute.</li>
       <li><code>X-RateLimit-Remaining</code> — Remaining in current window.</li>
       <li><code>X-RateLimit-Reset</code> — Unix timestamp when the window resets.</li>
+    </ul>
+    <p>Monthly quota headers:</p>
+    <ul>
+      <li><code>X-MonthlyQuota-Limit</code> — Requests allowed in the current period.</li>
+      <li><code>X-MonthlyQuota-Remaining</code> — Remaining requests.</li>
+      <li><code>X-MonthlyQuota-Reset</code> — Unix timestamp when the period resets.</li>
     </ul>
     <p>When exceeded, the API returns <strong>429</strong>.</p>
   </div>

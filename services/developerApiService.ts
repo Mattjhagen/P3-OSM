@@ -21,10 +21,12 @@ export interface ApiKeyRow {
   id: string;
   name: string;
   key_prefix: string;
+  env?: 'live' | 'test';
   scopes: string[];
   status: string;
   rpm_limit: number;
   rpd_limit: number;
+  monthly_limit_override?: number | null;
   created_at: string;
   revoked_at?: string;
 }
@@ -42,6 +44,7 @@ export async function createKey(params: {
   scopes?: string[];
   rpm_limit?: number;
   rpd_limit?: number;
+  monthly_limit_override?: number | null;
 }): Promise<{ raw_key: string; data: ApiKeyRow }> {
   const res = await authFetch('/api/developer/keys', {
     method: 'POST',
@@ -50,6 +53,26 @@ export async function createKey(params: {
   const json = await res.json();
   if (!json.success) throw new Error(json.error || 'Failed to create key');
   return { raw_key: json.data.raw_key, data: json.data };
+}
+
+export interface OrgPlanStatus {
+  plan: 'sandbox' | 'paid';
+  status: 'active' | 'past_due' | 'canceled';
+  monthly_limit: number;
+  current_period_start: string;
+  current_period_end: string;
+  usage_month: {
+    requests: number;
+    errors: number;
+    remaining: number;
+  };
+}
+
+export async function getPlan(): Promise<OrgPlanStatus> {
+  const res = await authFetch('/api/developer/plan');
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to load plan');
+  return json.data as OrgPlanStatus;
 }
 
 export async function revokeKey(id: string): Promise<void> {
