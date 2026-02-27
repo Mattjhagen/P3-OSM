@@ -1,5 +1,4 @@
 User-agent: *
-Disallow:
-
+Allow: /
 Sitemap: https://blog.p3lending.space/sitemap.xml
 
