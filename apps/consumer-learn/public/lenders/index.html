@@ -19,12 +19,19 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <nav>
-      <a href="/">P3 Learning Center</a> › Lenders
+  <div class="wrap">
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/getting-started/">Getting started</a>
+      <a href="/borrowers/">Borrowers</a>
+      <a href="/lenders/">Lenders</a>
+      <a href="/reputation-score/">Reputation score</a>
+      <a href="/safety/">Safety</a>
+      <a href="/faq/">FAQ</a>
+      <a href="/glossary/">Glossary</a>
+      <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developer Center</a>
     </nav>
-  </header>
-  <main>
+    <main>
     <h1>Lending with P3</h1>
     <p>Lending on P3 is experimental and risky. This page describes core concepts to understand before considering it.</p>
 
@@ -42,15 +49,11 @@
     <h2 id="not-advice">Not investment advice</h2>
     <p>Nothing in P3 — including the app, this learning center, or any score — is investment, financial, tax, or legal advice.</p>
     <p>You are responsible for your own decisions. Consider speaking with a qualified advisor before committing meaningful capital.</p>
-  </main>
-  <footer>
-    <p>
-      © <span id="year"></span> P3 Lending ·
-      <a href="https://p3lending.space">Main site</a> ·
-      <a href="https://developers.p3lending.space">Developers</a> ·
-      <a href="https://blog.p3lending.space">Blog</a>
-    </p>
-  </footer>
+    </main>
+    <footer>
+      <p>© <span id="year"></span> P3 Lending · <a href="https://p3lending.space" target="_blank" rel="noopener">Main portal</a> · <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developers</a> · <a href="https://blog.p3lending.space" target="_blank" rel="noopener">Blog</a></p>
+    </footer>
+  </div>
   <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>

@@ -19,27 +19,35 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <nav>
-      <a href="/">P3 Learning Center</a> › Getting Started
+  <div class="wrap">
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/getting-started/">Getting started</a>
+      <a href="/borrowers/">Borrowers</a>
+      <a href="/lenders/">Lenders</a>
+      <a href="/reputation-score/">Reputation score</a>
+      <a href="/safety/">Safety</a>
+      <a href="/faq/">FAQ</a>
+      <a href="/glossary/">Glossary</a>
+      <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developer Center</a>
     </nav>
-  </header>
-  <main>
+    <main>
     <h1>Getting Started with P3</h1>
     <p>P3 is an experimental reputation-based lending protocol. This page explains the basics before you connect a wallet or deposit funds.</p>
     <h2 id="what-is-p3">What is P3?</h2>
     <p>P3 uses a reputation score to summarize how reliably someone has met past commitments. Borrowers can build a portable track record; lenders can see a plain-language signal of risk.</p>
     <h2 id="steps">Three steps to get started</h2>
     <ol>
-      <li>Create an account at <a href="https://p3lending.space">p3lending.space</a>.</li>
+      <li>Create an account at <a href="https://p3lending.space" target="_blank" rel="noopener">p3lending.space</a>.</li>
       <li>Complete basic verification if prompted in your region.</li>
       <li>Explore borrowing and lending options using small amounts first.</li>
     </ol>
     <p>Next, read the <a href="/borrowers/">Borrowers guide</a>, the <a href="/lenders/">Lenders guide</a>, and the <a href="/safety/">Safety checklist</a>.</p>
-  </main>
-  <footer>
-    <p>© <span id="year"></span> P3 Lending · <a href="https://p3lending.space">Main site</a> · <a href="https://developers.p3lending.space">Developers</a> · <a href="https://blog.p3lending.space">Blog</a></p>
-  </footer>
+    </main>
+    <footer>
+      <p>© <span id="year"></span> P3 Lending · <a href="https://p3lending.space" target="_blank" rel="noopener">Main portal</a> · <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developers</a> · <a href="https://blog.p3lending.space" target="_blank" rel="noopener">Blog</a></p>
+    </footer>
+  </div>
   <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>

@@ -15,14 +15,22 @@
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="P3 Borrowers Guide" />
   <meta name="twitter:description" content="Understand how borrowing, repayments, and reputation work in P3." />
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <nav>
-      <a href="/">P3 Learning Center</a> › Borrowers
+  <div class="wrap">
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/getting-started/">Getting started</a>
+      <a href="/borrowers/">Borrowers</a>
+      <a href="/lenders/">Lenders</a>
+      <a href="/reputation-score/">Reputation score</a>
+      <a href="/safety/">Safety</a>
+      <a href="/faq/">FAQ</a>
+      <a href="/glossary/">Glossary</a>
+      <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developer Center</a>
     </nav>
-  </header>
-  <main>
+    <main>
     <h1>Borrowing with P3</h1>
     <p>This guide is for people who want to request credit through P3.</p>
     <h2 id="how-it-works">How borrowing works</h2>
@@ -36,10 +44,11 @@
     <h2 id="risks">Key risks</h2>
     <p>Borrowing always carries risk. You are responsible for any obligations you accept. P3 does not guarantee funding or forgiveness.</p>
     <p>Review the <a href="/safety/">Safety checklist</a> before you borrow, and see the <a href="/reputation-score/">Reputation score overview</a> to understand how your behavior changes your score.</p>
-  </main>
-  <footer>
-    <p>© <span id="year"></span> P3 Lending · <a href="https://p3lending.space">Main site</a> · <a href="https://developers.p3lending.space">Developers</a> · <a href="https://blog.p3lending.space">Blog</a></p>
-  </footer>
+    </main>
+    <footer>
+      <p>© <span id="year"></span> P3 Lending · <a href="https://p3lending.space" target="_blank" rel="noopener">Main portal</a> · <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developers</a> · <a href="https://blog.p3lending.space" target="_blank" rel="noopener">Blog</a></p>
+    </footer>
+  </div>
   <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>

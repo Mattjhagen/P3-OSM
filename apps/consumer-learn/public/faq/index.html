@@ -134,17 +134,19 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <nav>
-      <a href="/">P3 Learning Center</a> ·
-      <a href="/getting-started/">Getting started</a> ·
-      <a href="/borrowers/">Borrowers</a> ·
-      <a href="/lenders/">Lenders</a> ·
-      <a href="/reputation-score/">Reputation score</a> ·
+  <div class="wrap">
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/getting-started/">Getting started</a>
+      <a href="/borrowers/">Borrowers</a>
+      <a href="/lenders/">Lenders</a>
+      <a href="/reputation-score/">Reputation score</a>
       <a href="/safety/">Safety</a>
+      <a href="/faq/">FAQ</a>
+      <a href="/glossary/">Glossary</a>
+      <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developer Center</a>
     </nav>
-  </header>
-  <main>
+    <main>
     <h1>Frequently Asked Questions</h1>
 
     <h2 id="what-is-p3">What is P3?</h2>
@@ -167,15 +169,11 @@
       <li><a href="/privacy/">Privacy &amp; data basics</a></li>
       <li><a href="/glossary/">Glossary of common terms</a></li>
     </ul>
-  </main>
-  <footer>
-    <p>
-      © <span id="year"></span> P3 Lending ·
-      <a href="https://p3lending.space">Main site</a> ·
-      <a href="https://developers.p3lending.space">Developers</a> ·
-      <a href="https://blog.p3lending.space">Blog</a>
-    </p>
-  </footer>
+    </main>
+    <footer>
+      <p>© <span id="year"></span> P3 Lending · <a href="https://p3lending.space" target="_blank" rel="noopener">Main portal</a> · <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developers</a> · <a href="https://blog.p3lending.space" target="_blank" rel="noopener">Blog</a></p>
+    </footer>
+  </div>
   <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>

@@ -19,12 +19,19 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <nav>
-      <a href="/">P3 Learning Center</a> › Glossary
+  <div class="wrap">
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/getting-started/">Getting started</a>
+      <a href="/borrowers/">Borrowers</a>
+      <a href="/lenders/">Lenders</a>
+      <a href="/reputation-score/">Reputation score</a>
+      <a href="/safety/">Safety</a>
+      <a href="/faq/">FAQ</a>
+      <a href="/glossary/">Glossary</a>
+      <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developer Center</a>
     </nav>
-  </header>
-  <main>
+    <main>
     <h1>Glossary</h1>
     <h2 id="reputation-score">Reputation score</h2>
     <p>A 0–1000 number that summarizes many signals about how reliably someone has met past commitments.</p>
@@ -37,15 +44,11 @@
 
     <h2 id="guardrail">Guardrail</h2>
     <p>A rule that caps or adjusts a score in scenarios like extremely new accounts or recent serious issues.</p>
-  </main>
-  <footer>
-    <p>
-      © <span id="year"></span> P3 Lending ·
-      <a href="https://p3lending.space">Main site</a> ·
-      <a href="https://developers.p3lending.space">Developers</a> ·
-      <a href="https://blog.p3lending.space">Blog</a>
-    </p>
-  </footer>
+    </main>
+    <footer>
+      <p>© <span id="year"></span> P3 Lending · <a href="https://p3lending.space" target="_blank" rel="noopener">Main portal</a> · <a href="https://developers.p3lending.space" target="_blank" rel="noopener">Developers</a> · <a href="https://blog.p3lending.space" target="_blank" rel="noopener">Blog</a></p>
+    </footer>
+  </div>
   <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>
