@@ -10,15 +10,24 @@ import {
   OAuthLinkProvider,
   SupportedIdentityProvider,
 } from '../services/identityLinkingService';
+import {
+  hashPortalPin,
+  normalizePortalPinInput,
+  normalizePortalPinLockSettings,
+  normalizePortalPinTimeout,
+  PORTAL_PIN_TIMEOUT_OPTIONS,
+  validatePortalPin,
+} from '../services/portalPinLock';
 
 interface Props {
   user: UserProfile;
   onSave: (updatedUser: UserProfile) => void;
   onDeposit: (amount: number) => Promise<void>;
   onWithdraw: (amount: number, method: 'STRIPE' | 'BTC', destination: string) => Promise<void>;
+  isOnboarding?: boolean;
 }
 
-export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWithdraw }) => {
+export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWithdraw, isOnboarding = false }) => {
   const [formData, setFormData] = useState(user);
   const [isSaving, setIsSaving] = useState(false);
   const [depositAmount, setDepositAmount] = useState(100);
@@ -41,6 +50,33 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [portalPinEnabled, setPortalPinEnabled] = useState(
+    normalizePortalPinLockSettings(user.portalPinLock).enabled
+  );
+  const [portalPinTimeoutMinutes, setPortalPinTimeoutMinutes] = useState(
+    normalizePortalPinLockSettings(user.portalPinLock).inactivityMinutes
+  );
+  const [portalPin, setPortalPin] = useState('');
+  const [portalPinConfirm, setPortalPinConfirm] = useState('');
+  const [portalPinError, setPortalPinError] = useState('');
+  const [hasPortalPin, setHasPortalPin] = useState(
+    Boolean(normalizePortalPinLockSettings(user.portalPinLock).pinHash)
+  );
+
+  const syncPortalPinEditor = (profile: UserProfile) => {
+    const settings = normalizePortalPinLockSettings(profile.portalPinLock);
+    setPortalPinEnabled(settings.enabled);
+    setPortalPinTimeoutMinutes(settings.inactivityMinutes);
+    setHasPortalPin(Boolean(settings.pinHash));
+    setPortalPin('');
+    setPortalPinConfirm('');
+    setPortalPinError('');
+  };
+
+  useEffect(() => {
+    setFormData(user);
+    syncPortalPinEditor(user);
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,11 +217,59 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPortalPinError('');
     setIsSaving(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-    onSave(formData);
-    setIsSaving(false);
+    try {
+      const currentPinSettings = normalizePortalPinLockSettings(formData.portalPinLock);
+      const normalizedTimeout = normalizePortalPinTimeout(portalPinTimeoutMinutes);
+      const normalizedPin = normalizePortalPinInput(portalPin);
+      const normalizedPinConfirm = normalizePortalPinInput(portalPinConfirm);
+      const hasPinInput = normalizedPin.length > 0 || normalizedPinConfirm.length > 0;
+
+      let nextPinSettings = {
+        ...currentPinSettings,
+        enabled: portalPinEnabled && Boolean(currentPinSettings.pinHash),
+        inactivityMinutes: normalizedTimeout,
+      };
+
+      if (hasPinInput) {
+        const pinValidationError = validatePortalPin(normalizedPin);
+        if (pinValidationError) {
+          setPortalPinError(pinValidationError);
+          return;
+        }
+        if (normalizedPin !== normalizedPinConfirm) {
+          setPortalPinError('PIN confirmation must match.');
+          return;
+        }
+        const pinHash = await hashPortalPin(normalizedPin, user.id);
+        nextPinSettings = {
+          enabled: portalPinEnabled,
+          inactivityMinutes: normalizedTimeout,
+          pinHash,
+          pinLength: normalizedPin.length,
+          updatedAt: new Date().toISOString(),
+        };
+      } else if (portalPinEnabled && !currentPinSettings.pinHash) {
+        setPortalPinError('Set a 4-6 digit PIN before enabling inactivity lock.');
+        return;
+      }
+
+      const updatedProfile: UserProfile = {
+        ...formData,
+        portalPinLock: nextPinSettings,
+      };
+
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 800));
+      onSave(updatedProfile);
+      setFormData(updatedProfile);
+      setHasPortalPin(Boolean(nextPinSettings.pinHash));
+      setPortalPin('');
+      setPortalPinConfirm('');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDownloadStatement = async (statementId: string) => {
@@ -293,6 +377,104 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="glass-panel p-8 rounded-2xl space-y-6 border border-zinc-800/50">
+          <div className="flex flex-col gap-2">
+            <h3 className="text-lg font-bold text-white border-b border-zinc-800 pb-4">
+              Inactivity PIN Lock
+            </h3>
+            <p className="text-xs text-zinc-500">
+              Lock this portal after inactivity and require a 4-6 digit PIN to unlock.
+            </p>
+            {isOnboarding ? (
+              <p className="text-xs text-[#00e599]">
+                Onboarding step: set your PIN now or leave it disabled and configure it later.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+            <div>
+              <p className="text-sm font-semibold text-white">Enable inactivity lock</p>
+              <p className="text-[11px] text-zinc-500">
+                {hasPortalPin
+                  ? 'A PIN is already configured for this account.'
+                  : 'Create a PIN first, then enable this setting.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={portalPinEnabled}
+              onClick={() => setPortalPinEnabled((prev) => !prev)}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                portalPinEnabled ? 'bg-[#00e599]/80' : 'bg-zinc-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                  portalPinEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-zinc-500 uppercase tracking-wider font-bold mb-2">
+                Auto-lock timeout
+              </label>
+              <select
+                value={portalPinTimeoutMinutes}
+                onChange={(event) => setPortalPinTimeoutMinutes(normalizePortalPinTimeout(event.target.value))}
+                className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00e599] outline-none transition-colors"
+              >
+                {PORTAL_PIN_TIMEOUT_OPTIONS.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {minutes} minutes
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 uppercase tracking-wider font-bold mb-2">
+                {hasPortalPin ? 'New PIN (optional)' : 'Create PIN'}
+              </label>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={portalPin}
+                onChange={(event) => setPortalPin(normalizePortalPinInput(event.target.value))}
+                placeholder={hasPortalPin ? 'Leave blank to keep current PIN' : '4-6 digits'}
+                className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00e599] outline-none transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 uppercase tracking-wider font-bold mb-2">
+                Confirm PIN
+              </label>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={portalPinConfirm}
+                onChange={(event) => setPortalPinConfirm(normalizePortalPinInput(event.target.value))}
+                placeholder="Repeat PIN"
+                className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white focus:border-[#00e599] outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          {portalPinError ? (
+            <p className="text-[11px] text-red-400">{portalPinError}</p>
+          ) : (
+            <p className="text-[11px] text-zinc-500">
+              Leave PIN fields blank to keep your current PIN while changing timeout or enabled state.
+            </p>
+          )}
+        </div>
         
         {/* Avatar Section */}
         <div className="glass-panel p-8 rounded-2xl flex flex-col md:flex-row items-center gap-8 border border-zinc-800/50">
@@ -655,7 +837,7 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
         </div>
 
         <div className="flex justify-end gap-4">
-           <Button type="button" variant="ghost" onClick={() => setFormData(user)}>Reset Changes</Button>
+           <Button type="button" variant="ghost" onClick={() => { setFormData(user); syncPortalPinEditor(user); }}>Reset Changes</Button>
            <Button type="submit" isLoading={isSaving} className="min-w-[120px]">Save Profile</Button>
         </div>
 

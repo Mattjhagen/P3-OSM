@@ -38,6 +38,14 @@ export interface ReferralData {
   earnings: number;
 }
 
+export interface PortalPinLockSettings {
+  enabled: boolean;
+  inactivityMinutes: number;
+  pinHash: string;
+  pinLength: number;
+  updatedAt: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -82,6 +90,9 @@ export interface UserProfile {
   
   // Trading Portfolio
   portfolio?: PortfolioItem[];
+
+  // Client-side inactivity lock for user portal
+  portalPinLock?: PortalPinLockSettings;
 }
 
 export interface PortfolioItem {

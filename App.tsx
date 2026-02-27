@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, LoanRequest, LoanOffer, LoanType, Charity, KYCTier, KYCStatus, WalletState, RiskReport, EmployeeProfile, Asset, PortfolioItem } from './types';
 import { UserProfileCard } from './components/UserProfileCard';
 import { Marketplace } from './components/Marketplace';
@@ -47,6 +47,11 @@ import { ComplianceFeatureKey, ComplianceService } from './services/complianceSe
 import { BrowserProvider } from 'ethers';
 import { FeatureFlagService } from './services/featureFlagService';
 import { ensureProfile, isProfileAccessDeniedError, isDev, type EnsureProfileResult } from './services/profile';
+import {
+  normalizePortalPinInput,
+  normalizePortalPinLockSettings,
+  verifyPortalPin,
+} from './services/portalPinLock';
 
 type AppView = 'borrow' | 'lend' | 'trade' | 'mentorship' | 'profile' | 'knowledge_base' | 'developers';
 
@@ -106,6 +111,7 @@ const App: React.FC = () => {
   const isRiskRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/risk';
   const isMarketplaceRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/marketplace';
   const isBetaRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/beta';
+  const isOnboardingRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/onboarding';
   const isInvestorsRoute =
     typeof window !== 'undefined' &&
     ['/invesors', '/investors'].includes(window.location.pathname.replace(/\/+$/, ''));
@@ -156,6 +162,11 @@ const App: React.FC = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [profileLoadResult, setProfileLoadResult] = useState<EnsureProfileResult | null>(null);
   const [isProfileRetrying, setIsProfileRetrying] = useState(false);
+  const [isPortalPinLocked, setIsPortalPinLocked] = useState(false);
+  const [portalPinInput, setPortalPinInput] = useState('');
+  const [portalPinError, setPortalPinError] = useState('');
+  const [isUnlockingPortal, setIsUnlockingPortal] = useState(false);
+  const lastPortalActivityRef = useRef(Date.now());
 
   const [wallet, setWallet] = useState<WalletState>({
     isConnected: false,
@@ -277,6 +288,11 @@ const App: React.FC = () => {
     setPendingAdminEmail('');
     setProfileLoadResult(null);
     setIsProfileRetrying(false);
+    setIsPortalPinLocked(false);
+    setPortalPinInput('');
+    setPortalPinError('');
+    setIsUnlockingPortal(false);
+    lastPortalActivityRef.current = Date.now();
     if (recordLogoutEvent) {
       AnalyticsService.recordLogout();
     }
@@ -468,9 +484,87 @@ const App: React.FC = () => {
     setIsUserNavOpen(false);
   }, [activeView]);
 
+  useEffect(() => {
+    if (!user || adminUser) {
+      setIsPortalPinLocked(false);
+      setPortalPinInput('');
+      setPortalPinError('');
+      setIsUnlockingPortal(false);
+      return;
+    }
+
+    const pinSettings = normalizePortalPinLockSettings(user.portalPinLock);
+    if (!pinSettings.enabled || !pinSettings.pinHash || isPortalPinLocked) {
+      return;
+    }
+
+    const trackActivity = () => {
+      lastPortalActivityRef.current = Date.now();
+    };
+
+    trackActivity();
+    const activityEvents: Array<keyof WindowEventMap> = [
+      'pointerdown',
+      'pointermove',
+      'keydown',
+      'scroll',
+      'touchstart',
+    ];
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, trackActivity);
+    });
+
+    const lockInterval = window.setInterval(() => {
+      const elapsed = Date.now() - lastPortalActivityRef.current;
+      if (elapsed >= pinSettings.inactivityMinutes * 60 * 1000) {
+        setIsPortalPinLocked(true);
+        setPortalPinInput('');
+        setPortalPinError('');
+        setIsUnlockingPortal(false);
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(lockInterval);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, trackActivity);
+      });
+    };
+  }, [user, adminUser, isPortalPinLocked]);
+
   const handleLogout = async () => {
     clearAuthState(true);
     await supabase.auth.signOut();
+  };
+
+  const handleUnlockPortal = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user) return;
+
+    const normalizedPin = normalizePortalPinInput(portalPinInput);
+    if (!normalizedPin) {
+      setPortalPinError('Enter your PIN to unlock.');
+      return;
+    }
+
+    setIsUnlockingPortal(true);
+    setPortalPinError('');
+    try {
+      const pinSettings = normalizePortalPinLockSettings(user.portalPinLock);
+      const isValid = await verifyPortalPin(normalizedPin, user.id, pinSettings.pinHash);
+      if (!isValid) {
+        setPortalPinError('Incorrect PIN. Try again.');
+        return;
+      }
+      lastPortalActivityRef.current = Date.now();
+      setIsPortalPinLocked(false);
+      setPortalPinInput('');
+      setPortalPinError('');
+    } catch {
+      setPortalPinError('Unable to verify PIN right now.');
+    } finally {
+      setIsUnlockingPortal(false);
+    }
   };
 
   const handleSupabaseSignIn = async () => {
@@ -718,7 +812,21 @@ const App: React.FC = () => {
   const handleAdminPasswordLogin = async (password: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); if (password === matchedEmp.passwordHash || matchedEmp.passwordHash === 'temp123' || password === 'admin123') { if (SecurityService.isPasswordExpired(matchedEmp.passwordLastSet)) { alert("Password expired. Please update."); } setAdminUser(matchedEmp); setIsQuickAdminSession(false); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); } else { alert("Invalid Password"); } } catch (e) { console.error(e); alert("Login failed."); } };
   const handleAdminPasswordReset = async (newPassword: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); const updatedEmp: EmployeeProfile = { ...matchedEmp, passwordHash: newPassword, passwordLastSet: Date.now() }; await PersistenceService.updateEmployee(updatedEmp); setAdminUser(updatedEmp); setIsQuickAdminSession(false); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); alert("Password successfully reset."); } catch (e) { console.error(e); alert("Failed."); } };
   
-  const handleProfileUpdate = async (updatedUser: UserProfile) => { if (!user) return; setUser(updatedUser); await PersistenceService.saveUser(updatedUser); };
+  const handleProfileUpdate = async (updatedUser: UserProfile) => {
+    if (!user) return;
+    const normalizedUser: UserProfile = {
+      ...updatedUser,
+      portalPinLock: normalizePortalPinLockSettings(updatedUser.portalPinLock),
+    };
+    setUser(normalizedUser);
+    if (!normalizedUser.portalPinLock?.enabled) {
+      setIsPortalPinLocked(false);
+      setPortalPinInput('');
+      setPortalPinError('');
+    }
+    lastPortalActivityRef.current = Date.now();
+    await PersistenceService.saveUser(normalizedUser);
+  };
   const handleDeposit = async (amount: number) => {
     if (!user) throw new Error('You must be logged in to make a deposit.');
     if (!Number.isFinite(amount) || amount < 1) {
@@ -1172,6 +1280,47 @@ const App: React.FC = () => {
     );
   }
 
+  if (user && isPortalPinLocked) {
+    const pinSettings = normalizePortalPinLockSettings(user.portalPinLock);
+    return (
+      <div className="min-h-[100dvh] bg-[#050505] text-zinc-200 flex items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0a0a0a] p-6 space-y-5">
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl font-bold text-white tracking-tight">Portal Locked</h2>
+            <p className="text-sm text-zinc-400">
+              Enter your PIN to continue.
+            </p>
+            <p className="text-xs text-zinc-500">
+              Locked after {pinSettings.inactivityMinutes} minute{pinSettings.inactivityMinutes === 1 ? '' : 's'} of inactivity.
+            </p>
+          </div>
+
+          <form onSubmit={handleUnlockPortal} className="space-y-3">
+            <input
+              type="password"
+              value={portalPinInput}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              onChange={(event) => setPortalPinInput(normalizePortalPinInput(event.target.value))}
+              placeholder="Enter 4-6 digit PIN"
+              className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-white outline-none focus:border-[#00e599]"
+              autoFocus
+            />
+            {portalPinError ? <p className="text-xs text-red-400">{portalPinError}</p> : null}
+            <Button type="submit" className="w-full" isLoading={isUnlockingPortal}>
+              Unlock Portal
+            </Button>
+          </form>
+
+          <Button type="button" variant="ghost" className="w-full" onClick={handleLogout}>
+            Log Out
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // ... Rest of the App logic (dashboard render) is identical ...
   if (activeView === 'knowledge_base') return <><LegalModal type={activeLegalDoc} onClose={() => setActiveLegalDoc(null)} /><KnowledgeBase onBack={() => setActiveView('borrow')} onOpenLegal={(type) => setActiveLegalDoc(type)} /></>;
 
@@ -1381,6 +1530,7 @@ const App: React.FC = () => {
                    onSave={handleProfileUpdate}
                    onDeposit={handleDeposit}
                    onWithdraw={handleWithdrawal}
+                  isOnboarding={isOnboardingRoute}
                  />
                )}
 

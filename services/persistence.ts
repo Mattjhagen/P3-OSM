@@ -4,6 +4,7 @@ import { AdminNotificationClient } from './adminNotificationClient';
 import { frontendEnv } from './env';
 import { RuntimeConfigService } from './runtimeConfigService';
 import { decryptWithDek, encryptWithDek, EncryptedEnvelope } from './chatCrypto';
+import { normalizePortalPinLockSettings } from './portalPinLock';
 
 // INITIAL TEMPLATE REMAINING FOR FALLBACK
 const INITIAL_USER_TEMPLATE: UserProfile = {
@@ -25,7 +26,8 @@ const INITIAL_USER_TEMPLATE: UserProfile = {
   mentorshipsCount: 0,
   walletAgeDays: 0, 
   txCount: 0,
-  referrals: []
+  referrals: [],
+  portalPinLock: normalizePortalPinLockSettings(undefined),
 };
 
 const WAITLIST_DISPLAY_OFFSET = Math.max(
@@ -849,7 +851,11 @@ export const PersistenceService = {
           email: netlifyUser.email,
           name: data?.data?.name || netlifyUser.user_metadata?.full_name || netlifyUser.email,
         });
-        return { ...data.data, id: data.id, email: data.email }; // Flatten jsonb
+        const flattened = { ...data.data, id: data.id, email: data.email } as UserProfile;
+        return {
+          ...flattened,
+          portalPinLock: normalizePortalPinLockSettings(flattened.portalPinLock),
+        }; // Flatten jsonb
       } else {
         // 2. Create New User
         const newUser: UserProfile = {
@@ -858,6 +864,7 @@ export const PersistenceService = {
           email: netlifyUser.email || '',
           name: netlifyUser.user_metadata?.full_name || netlifyUser.email.split('@')[0],
           avatarUrl: netlifyUser.user_metadata?.avatar_url || undefined,
+          portalPinLock: normalizePortalPinLockSettings(undefined),
         };
 
         // Handle Referral
@@ -899,10 +906,14 @@ export const PersistenceService = {
 
   saveUser: async (user: UserProfile) => {
     // Separate ID from data blob to avoid duplication
-    const { id, ...userData } = user;
+    const normalizedUser = {
+      ...user,
+      portalPinLock: normalizePortalPinLockSettings(user.portalPinLock),
+    };
+    const { id, ...userData } = normalizedUser;
     await supabase
       .from('users')
-      .upsert({ id: id, data: user });
+      .upsert({ id: id, data: userData });
   },
 
   getAllUsers: async (): Promise<UserProfile[]> => {
@@ -912,6 +923,7 @@ export const PersistenceService = {
           ...(r.data || {}),
           id: r.id || r.data?.id,
           email: r.email || r.data?.email || '',
+          portalPinLock: normalizePortalPinLockSettings(r.data?.portalPinLock),
         }))
       : [];
   },
