@@ -5,7 +5,7 @@
 
 create table if not exists public.rep_events (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id text not null references public.users(id) on delete cascade,
   org_id uuid references public.orgs(id) on delete set null,
   event_type text not null,
   event_ts timestamptz not null default now(),
@@ -18,7 +18,7 @@ create index if not exists idx_rep_events_type_ts on public.rep_events(event_typ
 
 create table if not exists public.rep_score_snapshots (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id text not null references public.users(id) on delete cascade,
   org_id uuid references public.orgs(id) on delete set null,
   trust_score int not null check (trust_score between 0 and 1000),
   risk_score int not null check (risk_score between 0 and 1000),
@@ -109,7 +109,7 @@ drop policy if exists "rep_snapshots_select_org_or_self_or_service" on public.re
 create policy "rep_snapshots_select_org_or_self_or_service" on public.rep_score_snapshots
 for select using (
   auth.role() = 'service_role'
-  or user_id = auth.uid()
+  or user_id = auth.uid()::text
   or (
     org_id is not null and exists (
       select 1 from public.org_members m
@@ -122,4 +122,3 @@ for select using (
 
 -- Keep service-role access to feature view explicit.
 grant select on public.rep_features_user to service_role;
-
