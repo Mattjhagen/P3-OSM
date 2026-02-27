@@ -1,6 +1,0 @@
-[build]
-  publish = "public"
-  command = "echo \"static\""
-
-# IMPORTANT: do NOT add SPA redirects here.
-# Blog needs to serve /sitemap.xml and /rss.xml directly.
