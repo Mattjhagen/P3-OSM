@@ -15,8 +15,14 @@ declare global {
         orgId: string;
         keyPrefix: string;
         scopes: string[];
+        env: 'test' | 'live';
+        plan: 'sandbox' | 'paid';
+        planStatus: 'active' | 'past_due' | 'canceled';
         rpmLimit: number;
         rpdLimit: number;
+        monthlyLimit: number;
+        currentPeriodStart?: string | null;
+        currentPeriodEnd?: string | null;
       };
     }
   }

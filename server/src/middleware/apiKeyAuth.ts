@@ -9,11 +9,21 @@ import { supabase } from '../config/supabase';
 import { config } from '../config/config';
 
 const PREFIX_LEN = 20; // p3_live_ (8) + 12 chars of random for lookup
+const DEFAULT_LIMITS = {
+  sandbox: { monthly: 5_000 },
+  paid: { monthly: 1_000_000 },
+} as const;
 
 function parseBearer(header: string | undefined): string | null {
   if (!header) return null;
   const m = header.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : null;
+}
+
+function deriveEnv(rawKey: string, storedEnv?: string | null): 'test' | 'live' {
+  if (rawKey.startsWith('p3_test_')) return 'test';
+  if (rawKey.startsWith('p3_live_')) return 'live';
+  return storedEnv === 'test' ? 'test' : 'live';
 }
 
 function extractPrefix(rawKey: string): string {
@@ -41,7 +51,7 @@ export async function apiKeyAuth(req: Request, res: Response, next: NextFunction
   const prefix = extractPrefix(rawKey);
   const { data: row, error } = await supabase
     .from('api_keys')
-    .select('id, org_id, key_prefix, key_hash, scopes, status, rpm_limit, rpd_limit')
+    .select('id, org_id, key_prefix, key_hash, scopes, status, rpm_limit, rpd_limit, env, monthly_limit_override')
     .eq('key_prefix', prefix)
     .eq('status', 'active')
     .maybeSingle();
@@ -57,13 +67,37 @@ export async function apiKeyAuth(req: Request, res: Response, next: NextFunction
     return;
   }
 
+  const env = deriveEnv(rawKey, row.env);
+
+  const { data: planRow } = await supabase
+    .from('org_plans')
+    .select('plan, status, monthly_limit, current_period_start, current_period_end')
+    .eq('org_id', row.org_id)
+    .maybeSingle();
+
+  const plan = (planRow?.plan === 'paid' ? 'paid' : 'sandbox') as 'sandbox' | 'paid';
+  const planStatus = (planRow?.status === 'past_due'
+    ? 'past_due'
+    : planRow?.status === 'canceled'
+      ? 'canceled'
+      : 'active') as 'active' | 'past_due' | 'canceled';
+
+  const planMonthly = Number(planRow?.monthly_limit) || DEFAULT_LIMITS[plan].monthly;
+  const monthlyLimit = Number(row.monthly_limit_override) || planMonthly;
+
   req.apiKey = {
     id: row.id,
     orgId: row.org_id,
     keyPrefix: row.key_prefix,
     scopes: row.scopes ?? [],
+    env,
+    plan,
+    planStatus,
     rpmLimit: row.rpm_limit ?? 60,
     rpdLimit: row.rpd_limit ?? 10000,
+    monthlyLimit,
+    currentPeriodStart: planRow?.current_period_start ?? null,
+    currentPeriodEnd: planRow?.current_period_end ?? null,
   };
   next();
 }
