@@ -2,5 +2,5 @@
   publish = "public"
   command = "echo \"static\""
 
-# IMPORTANT: no SPA fallback redirects for blog
-# (keeps /posts/<slug>/ and /rss.xml and /sitemap.xml working correctly)
+# IMPORTANT: do NOT add SPA redirects here.
+# Blog needs to serve /sitemap.xml and /rss.xml directly.
