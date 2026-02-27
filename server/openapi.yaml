@@ -32,9 +32,17 @@ paths:
                   data:
                     type: object
                     properties:
-                      score: { type: number }
-                      band: { type: string, enum: [A, B, C, D] }
+                      score: { type: integer, minimum: 0, maximum: 1000 }
+                      reputation_score: { type: integer, minimum: 0, maximum: 1000 }
+                      trust_score: { type: integer, minimum: 0, maximum: 1000 }
+                      risk_score: { type: integer, minimum: 0, maximum: 1000 }
+                      capacity_score: { type: integer, minimum: 0, maximum: 1000 }
+                      band: { type: string, enum: [A, B, C, D, E] }
                       reasons: { type: array, items: { type: string } }
+                      top_reasons_positive: { type: array, items: { type: string } }
+                      top_reasons_negative: { type: array, items: { type: string } }
+                      missing_data: { type: array, items: { type: string } }
+                      caps_applied: { type: array, items: { type: string } }
         '400': { description: Missing user_id }
         '401': { description: Invalid API key }
         '403': { description: Missing scope score:read }

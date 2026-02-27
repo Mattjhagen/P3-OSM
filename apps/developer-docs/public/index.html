@@ -34,6 +34,7 @@
       <a href="#auth">Auth</a>
       <a href="#plans">Plans</a>
       <a href="#endpoints">Endpoints</a>
+      <a href="#scoring-model">Scoring model</a>
       <a href="#errors">Errors</a>
       <a href="#rate-limits">Rate limits</a>
       <a href="https://api.p3lending.space/docs/openapi.json" target="_blank" rel="noopener">OpenAPI (JSON)</a>
@@ -94,6 +95,19 @@ Authorization: Bearer p3_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
       <li><strong>GET /api/v1/reputation/score/history?user_id=&from=&to=</strong> — Score history (scope: <code>score:history</code>).</li>
     </ul>
     <p>OpenAPI spec: <a href="https://api.p3lending.space/docs/openapi.json">/docs/openapi.json</a>.</p>
+
+    <h2 id="scoring-model">Scoring model (Phase 1)</h2>
+    <p>Scores are now returned on a <code>0-1000</code> scale with explainability fields:</p>
+    <ul>
+      <li><code>trust_score</code>, <code>risk_score</code>, <code>capacity_score</code></li>
+      <li><code>reputation_score</code> (same value as <code>score</code> for backward compatibility)</li>
+      <li><code>top_reasons_positive</code>, <code>top_reasons_negative</code>, <code>missing_data</code>, <code>caps_applied</code></li>
+    </ul>
+    <p>Bands: <code>A (850+)</code>, <code>B (700-849)</code>, <code>C (550-699)</code>, <code>D (400-549)</code>, <code>E (&lt;400)</code>.</p>
+    <p>
+      Guardrail caps can lower the final score: no history cap (650), no KYC cap (700), new account cap (600),
+      and recent default cap (450).
+    </p>
 
     <h2 id="errors">Errors</h2>
     <p>Responses use HTTP status codes and a JSON body:</p>

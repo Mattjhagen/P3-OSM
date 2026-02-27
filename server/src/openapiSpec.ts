@@ -20,7 +20,37 @@ export const openApiSpec = {
           { name: 'user_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
         ],
         responses: {
-          '200': { description: 'Score result' },
+          '200': {
+            description: 'Score result',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        user_id: { type: 'string', format: 'uuid' },
+                        score: { type: 'integer', minimum: 0, maximum: 1000 },
+                        reputation_score: { type: 'integer', minimum: 0, maximum: 1000 },
+                        trust_score: { type: 'integer', minimum: 0, maximum: 1000 },
+                        risk_score: { type: 'integer', minimum: 0, maximum: 1000 },
+                        capacity_score: { type: 'integer', minimum: 0, maximum: 1000 },
+                        band: { type: 'string', enum: ['A', 'B', 'C', 'D', 'E'] },
+                        reasons: { type: 'array', items: { type: 'string' } },
+                        top_reasons_positive: { type: 'array', items: { type: 'string' } },
+                        top_reasons_negative: { type: 'array', items: { type: 'string' } },
+                        missing_data: { type: 'array', items: { type: 'string' } },
+                        caps_applied: { type: 'array', items: { type: 'string' } },
+                        computed_at: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
           '400': { description: 'Missing user_id' },
           '401': { description: 'Invalid API key' },
           '403': { description: 'Missing scope score:read' },
@@ -83,7 +113,9 @@ export const openApiSpec = {
           { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
         ],
         responses: {
-          '200': { description: 'List of snapshots' },
+          '200': {
+            description: 'List of snapshots with explainability metadata',
+          },
           '400': { description: 'Missing user_id' },
           '401': { description: 'Invalid API key' },
           '403': { description: 'Missing scope score:history' },

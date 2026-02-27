@@ -4,39 +4,53 @@
  */
 
 export interface ScoreInput {
-  /** User ID (resolved from wallet if needed) */
   userId: string;
-  /** On-time repayment % (0–1) */
-  repaymentOnTimePct: number;
-  /** Count of defaults/delinquencies */
-  defaultsCount: number;
-  /** Delinquency count */
-  delinquenciesCount: number;
-  /** Transaction count (loans + repayments) */
-  transactionVolumeCount: number;
-  /** Total volume USD */
-  transactionVolumeUsd: number;
-  /** Recency weighting (e.g. last 90d activity) 0–1 */
-  recencyWeight: number;
-  /** Verification steps completed count */
-  verificationStepsCompleted: number;
-  /** Account age in days */
+  kycLevel: number;
   accountAgeDays: number;
-  /** Active fraud/risk flags count */
-  riskFlagsCount: number;
-  /** Optional Gemini-enriched signal (feature-flagged) */
-  geminiVerification?: Record<string, unknown>;
+  onTimeRate180d: number;
+  lateCount30d: number;
+  repaymentCountTotal: number;
+  defaultEver: boolean;
+  defaultInLast90d: boolean;
+  activeLoanCount: number;
+  utilizationRatio: number | null;
+  capacitySignalsMissing: boolean;
 }
 
-export type ScoreBand = 'A' | 'B' | 'C' | 'D' | 'low' | 'medium' | 'high';
+export type ScoreBand = 'A' | 'B' | 'C' | 'D' | 'E';
 
 export interface ScoreResult {
-  /** Numeric score 0–100 (or 0–1000 if scaling later) */
+  trust_score: number;
+  risk_score: number;
+  capacity_score: number;
+  reputation_score: number;
+  /** Backward-compatible alias of reputation_score. */
   score: number;
-  /** Band for display/decisions */
   band: ScoreBand;
-  /** Human-readable reasons (e.g. "Strong repayment history") */
+  top_reasons_positive: string[];
+  top_reasons_negative: string[];
+  missing_data: string[];
+  caps_applied: string[];
+  /** Backward-compatible reasons list */
   reasons: string[];
-  /** Internal; only for privileged/debug */
-  featuresUsed?: string[];
+  featuresUsed: string[];
+}
+
+export interface RepSnapshotRow {
+  id?: string;
+  user_id: string;
+  org_id?: string | null;
+  trust_score: number;
+  risk_score: number;
+  capacity_score: number;
+  reputation_score: number;
+  band: ScoreBand;
+  reasons: {
+    top_reasons_positive: string[];
+    top_reasons_negative: string[];
+    missing_data: string[];
+    caps_applied: string[];
+  };
+  features: Record<string, unknown>;
+  computed_at: string;
 }

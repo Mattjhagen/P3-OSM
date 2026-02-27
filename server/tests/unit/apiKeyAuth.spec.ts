@@ -80,14 +80,18 @@ describe('apiKeyAuth', () => {
     await apiKeyAuth(req, res, next);
 
     expect(next).toHaveBeenCalled();
-    expect(req.apiKey).toEqual({
+    expect(req.apiKey).toEqual(expect.objectContaining({
       id: 'key-uuid',
       orgId: 'org-uuid',
       keyPrefix: prefix,
       scopes: ['score:read'],
+      env: 'live',
+      plan: 'sandbox',
+      planStatus: 'active',
       rpmLimit: 60,
       rpdLimit: 10000,
-    });
+      monthlyLimit: 5000,
+    }));
   });
 });
 
