@@ -3,8 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>P3 Lending Developer API</title>
-  <meta name="description" content="B2B API for reputation scores and lending data." />
+  <title>P3 Lending Developer API | B2B Reputation Score API</title>
+  <meta name="description" content="B2B API for reputation scores and lending data. Integrate P3 reputation scoring into your product with API keys, scoped access, and rate limits." />
+  <meta name="keywords" content="P3 Lending API, reputation score API, B2B API, DeFi lending API, credit score API, blockchain reputation, P3 developer, api.p3lending.space" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <link rel="canonical" href="https://developers.p3lending.space/docs.html" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://developers.p3lending.space/docs.html" />
+  <meta property="og:title" content="P3 Lending Developer API" />
+  <meta property="og:description" content="B2B API for reputation scores. Quickstart, auth, endpoints, and OpenAPI spec." />
+  <meta property="og:site_name" content="P3 Lending" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="P3 Lending Developer API" />
+  <meta name="twitter:description" content="B2B API for reputation scores and lending data." />
+
+  <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+
   <style>
     :root { --bg: #050505; --fg: #e4e4e7; --muted: #71717a; --accent: #00e599; }
     * { box-sizing: border-box; }
@@ -22,14 +38,14 @@
     .muted { color: var(--muted); font-size: 0.9rem; }
     ul { padding-left: 1.5rem; }
     table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
-    th, td { border: 1px solid #27272a; padding: 0.5rem; font-size: 0.9rem; }
+    th, td { border: 1px solid #27272a; padding: 0.5rem; font-size: 0.9em; }
     th { text-align: left; color: var(--fg); background: #0b0b0d; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <nav class="nav">
-      <a href="/">Home</a>
+      <a href="/">Dashboard</a>
       <a href="#quickstart">Quickstart</a>
       <a href="#auth">Auth</a>
       <a href="#plans">Plans</a>
@@ -46,7 +62,7 @@
     <h2 id="quickstart">Quickstart</h2>
     <ol>
       <li>Log in to <a href="https://p3lending.space">p3lending.space</a>, open <strong>Developers</strong> in the sidebar.</li>
-      <li>Create an API key (copy it once; it won’t be shown again).</li>
+      <li>Create an API key (copy it once; it won't be shown again).</li>
       <li>Call the API with <code>Authorization: Bearer &lt;your_key&gt;</code>.</li>
     </ol>
     <pre><code>curl -H "Authorization: Bearer p3_live_..." \
