@@ -150,7 +150,18 @@ export default function DeveloperDashboard() {
               No FICO. No black boxes. Just on-chain character.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            <div className="hidden sm:flex items-center gap-4 text-sm text-zinc-500">
+              <a href="https://blog.p3lending.space" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">
+                Blog
+              </a>
+              <a href="https://learn.p3lending.space" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">
+                Learn
+              </a>
+              <a href="https://developers.p3lending.space" className="text-[#00e599]">
+                Developers
+              </a>
+            </div>
             <a
               href="mailto:founders@p3lending.space?subject=Upgrade%20P3%20API"
               className="inline-flex items-center justify-center border-2 border-[#00e599] border-opacity-60 hover:border-[#00e599] hover:shadow-[0_0_20px_rgba(0,229,153,0.3)] px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-sm sm:text-base text-[#00e599] hover:bg-[#00e599]/10 transition-all"
@@ -256,11 +267,22 @@ export default function DeveloperDashboard() {
           </pre>
         </section>
 
-        {/* Manifesto footer */}
+        {/* Manifesto footer – dashboard only */}
         <footer className="mt-12 pt-8 border-t border-zinc-800">
-          <p className="text-sm text-zinc-500 italic">
+          <p className="text-sm text-zinc-500 italic mb-4">
             We score character, not history. You're building the future of trust.
           </p>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <a href="https://blog.p3lending.space" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+              Blog
+            </a>
+            <a href="https://learn.p3lending.space" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+              Learn
+            </a>
+            <a href="https://developers.p3lending.space" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+              Developers
+            </a>
+          </div>
         </footer>
           </>
         )}
@@ -315,6 +337,21 @@ export default function DeveloperDashboard() {
             </div>
           </section>
         )}
+
+        {/* Global footer – all pages */}
+        <footer className="mt-12 pt-8 border-t border-zinc-800">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <a href="https://blog.p3lending.space" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+              Blog
+            </a>
+            <a href="https://learn.p3lending.space" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+              Learn
+            </a>
+            <a href="https://developers.p3lending.space" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+              Developers
+            </a>
+          </div>
+        </footer>
       </main>
     </div>
   );
