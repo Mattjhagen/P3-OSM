@@ -135,18 +135,18 @@ export default function DeveloperDashboard() {
       {/* Main content */}
       <main className="flex-1 p-6 lg:p-8 overflow-auto">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8 lg:mb-12">
+        <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6 lg:mb-8">
           <div>
-            <div className="flex flex-wrap items-center gap-3 mb-2">
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white">
-                P3 Trust Engine – Developer Control Room
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-white cursor-default border-b-2 border-transparent hover:border-[#00e599]/50 transition-colors duration-200 w-fit">
+                P3 Trust Engine
               </h1>
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/80 border border-[#00e599]/30 text-[#00e599] text-[10px] font-bold uppercase tracking-widest">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#00e599] animate-pulse shadow-[0_0_6px_#00e599]" />
                 LIVE API
               </span>
             </div>
-            <p className="text-zinc-400 text-base sm:text-lg max-w-xl">
+            <p className="text-zinc-400 text-lg md:text-xl font-light italic">
               No FICO. No black boxes. Just on-chain character.
             </p>
           </div>
