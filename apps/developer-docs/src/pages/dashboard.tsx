@@ -1,7 +1,7 @@
 // P3 Developer Dashboard – developers.p3lending.space
-// Interactive dashboard, live stats, API usage, quick keys
+// Character-based trust. Same family as p3lending.space — black + vibrant green, manifesto tone.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 type NavSection = 'dashboard' | 'api-docs' | 'usage' | 'settings';
 
@@ -10,6 +10,13 @@ const NAV_ITEMS: { id: NavSection; label: string }[] = [
   { id: 'api-docs', label: 'API Docs' },
   { id: 'usage', label: 'Usage' },
   { id: 'settings', label: 'Settings' },
+];
+
+const LOADING_MESSAGES = [
+  'Consulting the blockchain oracles…',
+  'Brewing trust particles…',
+  'No FICO crystals were harmed…',
+  'Character data incoming…',
 ];
 
 export default function DeveloperDashboard() {
@@ -22,22 +29,36 @@ export default function DeveloperDashboard() {
   ]);
   const [activeNav, setActiveNav] = useState<NavSection>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [justUpdated, setJustUpdated] = useState(false);
+  const loadingIndexRef = useRef(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setUsage((prev) => ({
-        ...prev,
-        today: prev.today + Math.floor(Math.random() * 3),
-        month: prev.month + Math.floor(Math.random() * 5),
-      }));
-      setRecentScores((prev) => {
-        const newEntry = {
-          wallet: `0x${Math.random().toString(36).slice(2, 10)}...`,
-          score: Math.floor(Math.random() * 100),
-          time: 'Just now',
-        };
-        return [newEntry, ...prev.slice(0, 4)];
-      });
+      setIsRefreshing(true);
+      setLoadingMessage(LOADING_MESSAGES[loadingIndexRef.current % LOADING_MESSAGES.length]);
+      loadingIndexRef.current += 1;
+
+      setTimeout(() => {
+        setUsage((prev) => ({
+          ...prev,
+          today: prev.today + Math.floor(Math.random() * 3),
+          month: prev.month + Math.floor(Math.random() * 5),
+        }));
+        setRecentScores((prev) => {
+          const newEntry = {
+            wallet: `0x${Math.random().toString(36).slice(2, 10)}...`,
+            score: Math.floor(Math.random() * 100),
+            time: 'Just now',
+          };
+          return [newEntry, ...prev.slice(0, 4)];
+        });
+        setJustUpdated(true);
+        setIsRefreshing(false);
+        setLoadingMessage('');
+        setTimeout(() => setJustUpdated(false), 600);
+      }, 1200);
     }, 8000);
     return () => clearInterval(interval);
   }, []);
@@ -48,12 +69,12 @@ export default function DeveloperDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-200 flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-[#050505] text-zinc-200 flex flex-col lg:flex-row selection:bg-[#00e599] selection:text-black">
       {/* Mobile sidebar toggle */}
       <button
         type="button"
         onClick={() => setSidebarOpen((o) => !o)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-[#00e599] transition-colors"
         aria-label="Toggle menu"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,13 +89,13 @@ export default function DeveloperDashboard() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:static inset-y-0 left-0 z-40 w-64 bg-gray-900 border-r border-gray-800
+          fixed lg:static inset-y-0 left-0 z-40 w-64 bg-black/50 border-r border-zinc-800
           transform transition-transform duration-200 ease-out
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
         <nav className="p-6 pt-20 lg:pt-8 flex flex-col gap-1">
-          <a href="/" className="text-lg font-bold text-indigo-400 mb-4">
+          <a href="/" className="text-lg font-bold text-[#00e599] mb-4 hover:text-[#00e599]/80 transition-colors">
             P3 Developer
           </a>
           {NAV_ITEMS.map((item) => (
@@ -87,7 +108,7 @@ export default function DeveloperDashboard() {
               }}
               className={`
                 text-left px-4 py-3 rounded-lg font-medium transition-colors
-                ${activeNav === item.id ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}
+                ${activeNav === item.id ? 'bg-[#00e599]/10 text-[#00e599] border border-[#00e599]/30' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white border border-transparent'}
               `}
             >
               {item.label}
@@ -95,7 +116,7 @@ export default function DeveloperDashboard() {
           ))}
           <a
             href="/docs.html"
-            className="mt-4 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-gray-200 font-medium transition-colors"
+            className="mt-4 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-[#00e599] font-medium transition-colors"
           >
             Full Docs →
           </a>
@@ -114,131 +135,163 @@ export default function DeveloperDashboard() {
       {/* Main content */}
       <main className="flex-1 p-6 lg:p-8 overflow-auto">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 lg:mb-12">
-          <h1 className="text-2xl sm:text-4xl font-bold">P3 Developer Dashboard</h1>
+        <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8 lg:mb-12">
+          <div>
+            <div className="flex flex-wrap items-center gap-3 mb-2">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white">
+                P3 Trust Engine – Developer Control Room
+              </h1>
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/80 border border-[#00e599]/30 text-[#00e599] text-[10px] font-bold uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00e599] animate-pulse shadow-[0_0_6px_#00e599]" />
+                LIVE API
+              </span>
+            </div>
+            <p className="text-zinc-400 text-base sm:text-lg max-w-xl">
+              No FICO. No black boxes. Just on-chain character.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-3">
             <a
               href="mailto:founders@p3lending.space?subject=Upgrade%20P3%20API"
-              className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-sm sm:text-base transition-colors"
+              className="inline-flex items-center justify-center border-2 border-[#00e599] border-opacity-60 hover:border-[#00e599] hover:shadow-[0_0_20px_rgba(0,229,153,0.3)] px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-sm sm:text-base text-[#00e599] hover:bg-[#00e599]/10 transition-all"
             >
               Upgrade Plan
             </a>
             <a
               href="/docs.html"
-              className="inline-flex items-center justify-center border border-indigo-500 hover:bg-indigo-900 px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base transition-colors"
+              className="inline-flex items-center justify-center border border-zinc-600 hover:border-[#00e599]/50 hover:text-[#00e599] px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base transition-colors"
             >
               Docs
             </a>
           </div>
         </header>
 
+        {/* Loading message */}
+        {isRefreshing && (
+          <div className="mb-6 text-sm text-zinc-500 italic flex items-center gap-2">
+            <span className="w-3 h-3 border-2 border-[#00e599] border-t-transparent rounded-full animate-spin" />
+            {loadingMessage}
+          </div>
+        )}
+
         {/* Content by section */}
         {activeNav === 'dashboard' && (
           <>
         {/* Stats Grid – with pulse animation */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 lg:mb-12">
-          <div className="relative bg-gray-900 p-6 sm:p-8 rounded-2xl border border-gray-800 overflow-hidden group">
-            <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-indigo-500/5" />
+          <div className="relative bg-zinc-900/50 p-6 sm:p-8 rounded-2xl border border-zinc-800 overflow-hidden group hover:border-[#00e599]/30 transition-colors">
+            <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-[#00e599]/5" />
             <div className="relative">
-              <p className="text-gray-400 mb-2 text-sm sm:text-base">Calls Today</p>
-              <p className="text-3xl sm:text-5xl font-bold text-indigo-400">{usage.today}</p>
-              <p className="text-xs sm:text-sm mt-2 text-gray-500">of {usage.limit} free tier limit</p>
+              <p className="text-zinc-400 mb-2 text-sm sm:text-base">Wallets You've Scored Today</p>
+              <p className={`text-3xl sm:text-5xl font-bold text-[#00e599] transition-all ${justUpdated ? 'animate-number-pop' : ''}`}>
+                {usage.today}
+              </p>
+              <p className="text-xs sm:text-sm mt-2 text-zinc-500">of {usage.limit} free tier limit</p>
             </div>
-            <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
+            <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-[#00e599] animate-pulse shadow-[0_0_6px_#00e599]" aria-hidden />
           </div>
-          <div className="relative bg-gray-900 p-6 sm:p-8 rounded-2xl border border-gray-800 overflow-hidden group">
-            <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-green-500/5" />
+          <div className="relative bg-zinc-900/50 p-6 sm:p-8 rounded-2xl border border-zinc-800 overflow-hidden group hover:border-[#00e599]/30 transition-colors" title="You're helping protocols stop relying on credit scores — nice.">
+            <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-[#00e599]/5" />
             <div className="relative">
-              <p className="text-gray-400 mb-2 text-sm sm:text-base">Monthly Usage</p>
-              <p className="text-3xl sm:text-5xl font-bold text-green-400">{usage.month}</p>
-              <p className="text-xs sm:text-sm mt-2 text-gray-500">+17% from last month</p>
+              <p className="text-zinc-400 mb-2 text-sm sm:text-base">Trust Queries This Month</p>
+              <p className={`text-3xl sm:text-5xl font-bold text-[#00e599] transition-all ${justUpdated ? 'animate-number-pop' : ''}`}>
+                {usage.month}
+              </p>
+              <p className="text-xs sm:text-sm mt-2 text-zinc-500">Up 17% — trust is spreading</p>
             </div>
-            <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-green-400 animate-pulse" aria-hidden />
+            <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-[#00e599] animate-pulse shadow-[0_0_6px_#00e599]" aria-hidden />
           </div>
-          <div className="relative bg-gray-900 p-6 sm:p-8 rounded-2xl border border-gray-800 overflow-hidden group sm:col-span-2 lg:col-span-1">
-            <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-indigo-500/5" />
+          <div className="relative bg-zinc-900/50 p-6 sm:p-8 rounded-2xl border border-zinc-800 overflow-hidden group hover:border-[#00e599]/30 transition-colors sm:col-span-2 lg:col-span-1">
+            <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-[#00e599]/5" />
             <div className="relative">
-              <p className="text-gray-400 mb-2 text-sm sm:text-base">API Key</p>
+              <p className="text-zinc-400 mb-2 text-sm sm:text-base">Your Access Key to the Trust Layer</p>
               <div className="flex flex-wrap items-center gap-3">
-                <code className="bg-gray-800 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm truncate max-w-[180px] sm:max-w-none">
+                <code className="bg-black/50 border border-zinc-800 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm truncate max-w-[180px] sm:max-w-none text-zinc-300">
                   {apiKey.slice(0, 12)}...
                 </code>
                 <button
                   type="button"
                   onClick={copyKey}
-                  className="text-indigo-400 hover:text-indigo-300 font-medium text-sm transition-colors"
+                  className="text-[#00e599] hover:text-[#00e599]/80 font-medium text-sm transition-colors"
                 >
                   Copy
                 </button>
               </div>
             </div>
-            <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
+            <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-[#00e599] animate-pulse shadow-[0_0_6px_#00e599]" aria-hidden />
           </div>
         </div>
 
         {/* Recent Activity */}
-        <section className="bg-gray-900 p-6 sm:p-10 rounded-2xl mb-8 lg:mb-12">
-          <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6">Recent Score Requests</h2>
+        <section className="bg-zinc-900/50 p-6 sm:p-10 rounded-2xl mb-8 lg:mb-12 border border-zinc-800">
+          <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6 text-white">Lives We've Scored Lately</h2>
           <div className="space-y-3 sm:space-y-4">
             {recentScores.map((req, i) => (
               <div
                 key={`${req.wallet}-${i}`}
-                className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-gray-800 p-4 sm:p-6 rounded-lg"
+                className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-black/30 border border-zinc-800 p-4 sm:p-6 rounded-lg hover:border-[#00e599]/20 transition-colors"
               >
                 <div>
-                  <p className="font-semibold text-sm sm:text-base">{req.wallet}</p>
-                  <p className="text-gray-400 text-xs sm:text-sm">Score: {req.score}%</p>
+                  <p className="font-semibold text-sm sm:text-base text-white">{req.wallet}</p>
+                  <p className="text-zinc-400 text-xs sm:text-sm">Character score: <span className="text-[#00e599] font-mono">{req.score}</span></p>
                 </div>
-                <span className="text-gray-500 text-xs sm:text-sm">{req.time}</span>
+                <span className="text-zinc-500 text-xs sm:text-sm">{req.time}</span>
               </div>
             ))}
           </div>
         </section>
 
         {/* Quick Start */}
-        <section className="bg-gradient-to-r from-indigo-950 to-purple-950 p-6 sm:p-10 rounded-2xl text-center">
-          <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6">Ready to Go?</h2>
-          <p className="text-base sm:text-xl mb-6 sm:mb-8 opacity-90">
+        <section className="bg-gradient-to-r from-zinc-900 to-black border border-zinc-800 p-6 sm:p-10 rounded-2xl text-center">
+          <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6 text-white">Ready to Go?</h2>
+          <p className="text-base sm:text-xl mb-6 sm:mb-8 text-zinc-400">
             Paste this into your app—get trust scores in seconds.
           </p>
-          <pre className="text-left bg-gray-900/80 rounded-xl p-4 sm:p-6 overflow-x-auto text-xs sm:text-sm">
-            <code className="text-gray-300">{`fetch('https://api.p3lending.space/api/v1/reputation/score/by-wallet?address=0x123...', {
+          <pre className="text-left bg-black/50 border border-zinc-800 rounded-xl p-4 sm:p-6 overflow-x-auto text-xs sm:text-sm">
+            <code className="text-zinc-300">{`fetch('https://api.p3lending.space/api/v1/reputation/score/by-wallet?address=0x123...', {
   headers: { 'Authorization': 'Bearer YOUR_KEY' }
 })
 .then(res => res.json())
 .then(data => console.log(data));`}</code>
           </pre>
         </section>
+
+        {/* Manifesto footer */}
+        <footer className="mt-12 pt-8 border-t border-zinc-800">
+          <p className="text-sm text-zinc-500 italic">
+            We score character, not history. You're building the future of trust.
+          </p>
+        </footer>
           </>
         )}
 
         {activeNav === 'api-docs' && (
           <section className="space-y-8">
-            <h2 className="text-2xl font-bold">API Documentation</h2>
-            <p className="text-gray-400">
+            <h2 className="text-2xl font-bold text-white">API Documentation</h2>
+            <p className="text-zinc-400">
               Full API docs, endpoints, and OpenAPI spec in{' '}
-              <a href="/docs.html" className="text-indigo-400 hover:underline">
+              <a href="/docs.html" className="text-[#00e599] hover:underline">
                 Full Docs
               </a>
             </p>
-            <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
-              <h3 className="font-semibold mb-2">Base URL</h3>
-              <code className="text-indigo-400">https://api.p3lending.space</code>
+            <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800">
+              <h3 className="font-semibold mb-2 text-white">Base URL</h3>
+              <code className="text-[#00e599]">https://api.p3lending.space</code>
             </div>
           </section>
         )}
 
         {activeNav === 'usage' && (
           <section className="space-y-8">
-            <h2 className="text-2xl font-bold">Usage & Limits</h2>
+            <h2 className="text-2xl font-bold text-white">Usage & Limits</h2>
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
-                <p className="text-gray-400 text-sm">Free tier</p>
-                <p className="text-2xl font-bold text-indigo-400">{usage.limit} calls/month</p>
+              <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800">
+                <p className="text-zinc-400 text-sm">Free tier</p>
+                <p className="text-2xl font-bold text-[#00e599]">{usage.limit} trust queries/month</p>
               </div>
-              <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
-                <p className="text-gray-400 text-sm">Used this month</p>
-                <p className="text-2xl font-bold text-green-400">{usage.month}</p>
+              <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800">
+                <p className="text-zinc-400 text-sm">Used this month</p>
+                <p className="text-2xl font-bold text-[#00e599]">{usage.month}</p>
               </div>
             </div>
           </section>
@@ -246,15 +299,15 @@ export default function DeveloperDashboard() {
 
         {activeNav === 'settings' && (
           <section className="space-y-8">
-            <h2 className="text-2xl font-bold">Settings</h2>
-            <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 max-w-md">
-              <label className="block text-gray-400 text-sm mb-2">API Key</label>
+            <h2 className="text-2xl font-bold text-white">Settings</h2>
+            <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 max-w-md">
+              <label className="block text-zinc-400 text-sm mb-2">Your Access Key to the Trust Layer</label>
               <div className="flex gap-2">
-                <code className="flex-1 bg-gray-800 px-4 py-2 rounded-lg text-sm truncate">{apiKey}</code>
+                <code className="flex-1 bg-black/50 border border-zinc-800 px-4 py-2 rounded-lg text-sm truncate text-zinc-300">{apiKey}</code>
                 <button
                   type="button"
                   onClick={copyKey}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium text-sm"
+                  className="px-4 py-2 bg-[#00e599] text-black hover:bg-[#00cc88] rounded-lg font-medium text-sm transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]"
                 >
                   Copy
                 </button>
