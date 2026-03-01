@@ -25,9 +25,9 @@ export const handler = async (event: {
   const plan = event.queryStringParameters?.plan;
 
   let priceId;
-  if (plan === 'launch') priceId = 'price_YourLaunchPriceIDHere'; // ← replace with real price_ ID
-  else if (plan === 'core') priceId = 'price_YourCorePriceIDHere';
-  else if (plan === 'grow') priceId = 'price_YourGrowPriceIDHere';
+  if (plan === 'launch') priceId = 'price_1T5ykFBhAu0E0SSFa5DhG3Ri';
+  else if (plan === 'core') priceId = 'price_1T5yodBhAu0E0SSFgZS6nMCZ';
+  else if (plan === 'grow') priceId = 'price_1T5yooBhAu0E0SSFTHwRXhmv';
   else
     return {
       statusCode: 400,
