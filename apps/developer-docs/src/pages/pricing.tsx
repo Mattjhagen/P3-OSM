@@ -1,9 +1,5 @@
 // P3 Developer Pricing – developers.p3lending.space
-
-import { useState } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
-
-const stripePromise = loadStripe('pk_live_51T5yMTBhAu0E0SSFOApOKDuW0l5B4dwTAlOXlNfgZU6aiTxrUcNMa4MBrbHyZGcHsoQzJZo0ngVuRCDlUv17dcpN00BAjt1ngx');
+// Uses window.location redirect (Stripe deprecated redirectToCheckout in 2025-09)
 
 const PLANS = [
   {
@@ -40,13 +36,11 @@ export default function PricingPage() {
       const res = await fetch(`/api/create-checkout?plan=${plan}`);
       if (!res.ok) throw new Error('Checkout failed');
       const data = await res.json();
-      const sessionId = data.sessionId ?? data.id;
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error('Stripe not loaded');
-      await stripe.redirectToCheckout({ sessionId });
+      const url = data.url;
+      if (!url) throw new Error('No checkout URL returned');
+      window.location.href = url;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
       setLoading(null);
     }
   };

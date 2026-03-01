@@ -46,10 +46,19 @@ export const handler = async (event: {
       cancel_url: `${baseUrl}/pricing`,
     });
 
+    const url = session.url;
+    if (!url) {
+      return {
+        statusCode: 502,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: 'Stripe did not return a checkout URL' }),
+      };
+    }
+
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ id: session.id }),
+      body: JSON.stringify({ id: session.id, url }),
     };
   } catch (err) {
     console.error(err);
