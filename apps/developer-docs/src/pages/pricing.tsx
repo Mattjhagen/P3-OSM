@@ -1,10 +1,9 @@
 // P3 Developer Pricing – developers.p3lending.space
-// Product IDs (server reference): Launch prod_U46yt2t7W7DuBJ | Core prod_U472xVTMv2JqVE | Grow prod_U472u5hmH6X3xA
 
 import { useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 
-const stripePromise = loadStripe('pk_live_YourPublishableKeyHere');
+const stripePromise = loadStripe('pk_live_51T5yMTBhAu0E0SSFOApOKDuW0l5B4dwTAlOXlNfgZU6aiTxrUcNMa4MBrbHyZGcHsoQzJZo0ngVuRCDlUv17dcpN00BAjt1ngx');
 
 const PLANS = [
   {
@@ -40,7 +39,8 @@ export default function PricingPage() {
     try {
       const res = await fetch(`/api/create-checkout?plan=${plan}`);
       if (!res.ok) throw new Error('Checkout failed');
-      const { sessionId } = await res.json();
+      const data = await res.json();
+      const sessionId = data.sessionId ?? data.id;
       const stripe = await stripePromise;
       if (!stripe) throw new Error('Stripe not loaded');
       await stripe.redirectToCheckout({ sessionId });
