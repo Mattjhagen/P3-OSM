@@ -8,7 +8,7 @@ const frontendEnvSchema = z.object({
   VITE_BACKEND_URL: z
     .string()
     .url('VITE_BACKEND_URL must be a valid URL')
-    .default('http://localhost:3001'),
+    .default('http://localhost:5001'),
   VITE_API_KEY: z.string().optional().default(''),
   VITE_GOOGLE_CLIENT_ID: z.string().optional().default(''),
   VITE_COINGECKO_API_KEY: z.string().optional().default(''),
