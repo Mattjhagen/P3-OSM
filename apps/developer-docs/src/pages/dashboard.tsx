@@ -88,7 +88,7 @@ export default function DeveloperDashboard() {
 
   const copyKey = () => {
     navigator.clipboard.writeText(apiKey);
-    alert('API Key copied!');
+    window.location.href = 'https://p3lending.space';
   };
 
   return (
