@@ -232,7 +232,7 @@ export default function DeveloperDashboard() {
             )}
             <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-green-500/5" />
             <div className="relative">
-              <p className="text-zinc-400 mb-2 text-sm sm:text-base">Wallets We've Scored Today</p>
+              <p className="text-zinc-400 mb-2 text-sm sm:text-base">Wallets We&apos;ve Scored Today</p>
               <p className={`text-3xl sm:text-5xl font-bold text-[#00e599] transition-all ${justUpdated ? 'animate-number-pop' : ''}`}>
                 {usage.today}
               </p>
