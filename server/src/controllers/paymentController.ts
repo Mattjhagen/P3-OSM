@@ -807,10 +807,11 @@ export const PaymentController = {
                         let periodEnd: Date | null = null;
 
                         if (stripe && subscriptionId) {
-                            const sub = (await stripe.subscriptions.retrieve(subscriptionId)) as Stripe.Subscription;
+                            const sub = await stripe.subscriptions.retrieve(subscriptionId);
                             customerId = sub.customer as string;
-                            periodStart = sub.current_period_start ? new Date(sub.current_period_start * 1000) : null;
-                            periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+                            const raw = sub as unknown as { current_period_start?: number; current_period_end?: number };
+                            periodStart = raw.current_period_start ? new Date(raw.current_period_start * 1000) : null;
+                            periodEnd = raw.current_period_end ? new Date(raw.current_period_end * 1000) : null;
                         }
 
                         const monthlyLimits: Record<string, number> = {
