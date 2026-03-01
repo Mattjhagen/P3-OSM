@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 
-const CACHE_NAME = 'p3-admin-pwa-v1';
-const CORE_ASSETS = ['/', '/index.html', '/logo.svg', '/manifest.json'];
+const CACHE_NAME = 'p3-admin-pwa-v2';
+const CORE_ASSETS = ['/logo.svg', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -24,9 +24,30 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const requestUrl = new URL(event.request.url);
-  // Do not intercept third-party requests (analytics, OAuth provider assets, etc.).
-  // Keeping this service worker same-origin only avoids cross-origin side effects.
   if (requestUrl.origin !== self.location.origin) return;
+
+  // Network-first for HTML and hashed assets - prevents 404 hang after deploys.
+  // Old cached index.html can reference stale asset hashes (e.g. index-BKnzbNPH.js)
+  // that no longer exist after a new build.
+  const isHtml = event.request.destination === 'document' || requestUrl.pathname === '/' || requestUrl.pathname.endsWith('.html');
+  const isAsset = requestUrl.pathname.startsWith('/assets/');
+
+  if (isHtml || isAsset) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache-first for static assets (logo, manifest) that don't change per deploy
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );

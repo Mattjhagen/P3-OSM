@@ -16,7 +16,7 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(`OpenKYC ${path}: ${res.status} ${res.statusText}`);
   }
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 export const openkycProvider: KycProvider = {

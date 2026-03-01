@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { Linkedin, Twitter, Facebook, Github, Mail } from 'lucide-react';
 import { LegalDocType } from './LegalModal';
 
 const OFFICIAL_ONION_URL = 'http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion';
@@ -51,6 +52,23 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
              </p>
              <div className="flex gap-4">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Equal_Housing_Lender_logo.svg/1200px-Equal_Housing_Lender_logo.svg.png" alt="EHL" className="h-8 opacity-20 grayscale hover:grayscale-0 transition-all" />
+             </div>
+             <div className="flex items-center gap-3 mt-3">
+               <a href="https://www.linkedin.com/in/mattjhagen/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+                 <Linkedin className="w-5 h-5" strokeWidth={1.5} />
+               </a>
+               <a href="https://x.com/hagen_matt30623" target="_blank" rel="noopener noreferrer" aria-label="X" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+                 <Twitter className="w-5 h-5" strokeWidth={1.5} />
+               </a>
+               <a href="https://www.facebook.com/profile.php?id=61573009392683" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+                 <Facebook className="w-5 h-5" strokeWidth={1.5} />
+               </a>
+               <a href="https://github.com/Mattjhagen/P3-Lending-Protocol" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+                 <Github className="w-5 h-5" strokeWidth={1.5} />
+               </a>
+               <a href="mailto:matty@p3lending.space" aria-label="Email" className="text-zinc-500 hover:text-[#00e599] transition-colors">
+                 <Mail className="w-5 h-5" strokeWidth={1.5} />
+               </a>
              </div>
           </div>
 
@@ -123,6 +141,7 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
             <a href="https://www.startupschool.org/cofounder-matching/candidate/4vnu28RHY" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Y Combinator</a>
             <a href="https://www.facebook.com/profile.php?id=61573009392683" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Facebook</a>
             <a href="https://www.reddit.com/user/P3_Labs/" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Reddit</a>
+            <a href="https://www.producthunt.com/posts/p3-developer-dashboard/maker-invite?code=gM5kjN" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Product Hunt</a>
             <a href="mailto:matty@p3lending.space" className="hover:text-[#00e599] transition-colors">matty@p3lending.space</a>
           </div>
         </div>
