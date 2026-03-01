@@ -34,6 +34,9 @@ server/.env.local
 # Playwright output
 test-results/
 
+# Demo app (separate repo, deploys to demo.p3lending.space)
+P3_API_Demo/
+
 scripts/generate-apple-secret.cjs
 scripts/AuthKey_*.p8
 AuthKey_*.p8
