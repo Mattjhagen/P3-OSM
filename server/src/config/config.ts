@@ -96,5 +96,11 @@ export const config = {
         rateLimitRedisUrl: validatedEnv.RATE_LIMIT_REDIS_URL,
         reputationEnrichmentEnabled: validatedEnv.REPUTATION_ENRICHMENT_ENABLED,
     },
+    kyc: {
+        provider: validatedEnv.KYC_PROVIDER,
+        openkycBaseUrl: validatedEnv.OPENKYC_BASE_URL.replace(/\/+$/, ''),
+        openkycWebhookSecret: validatedEnv.OPENKYC_WEBHOOK_SECRET,
+        publicAppBaseUrl: validatedEnv.PUBLIC_APP_BASE_URL.replace(/\/+$/, ''),
+    },
     isProd: validatedEnv.NODE_ENV === 'production',
 };

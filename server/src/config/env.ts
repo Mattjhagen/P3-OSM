@@ -99,4 +99,21 @@ export const validatedEnv = cleanEnv(process.env, {
     default: false,
     desc: 'Enable optional Gemini enrichment for reputation score (feature flag)',
   }),
+  KYC_PROVIDER: str({
+    default: 'demo',
+    choices: ['openkyc', 'demo'],
+    desc: 'KYC provider for investor demo: openkyc (FaceOnLive) or demo (simulated)',
+  }),
+  OPENKYC_BASE_URL: str({
+    default: 'http://localhost:8787',
+    desc: 'OpenKYC/IDKit base URL when KYC_PROVIDER=openkyc',
+  }),
+  OPENKYC_WEBHOOK_SECRET: str({
+    default: '',
+    desc: 'Webhook secret for OpenKYC callbacks (optional)',
+  }),
+  PUBLIC_APP_BASE_URL: str({
+    default: 'http://localhost:5173',
+    desc: 'Public frontend base URL for KYC redirects',
+  }),
 });

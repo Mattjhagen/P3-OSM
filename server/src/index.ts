@@ -13,6 +13,7 @@ import waitlistRoutes from './routes/waitlistRoutes';
 import tradingRoutes from './routes/tradingRoutes';
 import withdrawalRoutes from './routes/withdrawalRoutes';
 import plaidRoutes from './routes/plaidRoutes';
+import kycRoutes from './routes/kycRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import complianceRoutes from './routes/complianceRoutes';
 import reputationRoutes from './routes/reputationRoutes';
@@ -50,6 +51,7 @@ export const createApp = () => {
     app.use('/api/trading', tradingRoutes);
     app.use('/api/withdrawals', withdrawalRoutes);
     app.use('/api/plaid', plaidRoutes);
+    app.use('/api/kyc', kycRoutes);
     app.use('/api/notifications', notificationRoutes);
     app.use('/api/compliance', complianceRoutes);
     app.use('/api/v1/reputation', reputationRoutes);

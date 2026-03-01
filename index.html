@@ -77,7 +77,7 @@
     
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-R27DN6F1MS"></script>
-    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    <!-- Plaid loaded dynamically when user links bank (ProfileSettings) - avoids blocking initial load -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
@@ -126,7 +126,7 @@
     <link rel="canonical" href="https://p3lending.space/" />
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
     
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.tailwindcss.com"></script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
       

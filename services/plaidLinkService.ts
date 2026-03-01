@@ -1,5 +1,26 @@
 import { TradingService } from './tradingService';
 
+const PLAID_SCRIPT_URL = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+
+/** Load Plaid script dynamically. Only needed when user links bank; avoids blocking initial page load. */
+const ensurePlaidLoaded = (): Promise<void> => {
+  if (typeof window === 'undefined' || (window as any).Plaid?.create) return Promise.resolve();
+  const existing = document.querySelector(`script[src="${PLAID_SCRIPT_URL}"]`);
+  if (existing) {
+    return new Promise<void>((resolve) => {
+      if ((window as any).Plaid?.create) return resolve();
+      (existing as HTMLScriptElement).addEventListener('load', () => resolve());
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = PLAID_SCRIPT_URL;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Plaid Link script.'));
+    document.head.appendChild(script);
+  });
+};
+
 interface PlaidOnSuccessMetadata {
   institution?: { institution_id: string | null; name: string } | null;
   accounts?: Array<{ id: string; name: string; mask: string; subtype: string; type: string }>;
@@ -86,6 +107,7 @@ const launchPlaidFlow = async (payload: {
   userId: string;
   receivedRedirectUri?: string;
 }) => {
+  await ensurePlaidLoaded();
   if (!window.Plaid?.create) {
     throw new Error('Plaid Link script is not loaded.');
   }

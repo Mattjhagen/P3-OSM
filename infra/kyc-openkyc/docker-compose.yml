@@ -1,0 +1,13 @@
+# Local OpenKYC / IDKit mock for KYC investor demo.
+# If FaceOnLive OpenKYC official image exists, replace mock-openkyc with it.
+# Otherwise this mock exposes the same API surface for local development.
+
+services:
+  mock-openkyc:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      - PORT=8787
+      - MOCK_APP_BASE_URL=http://localhost:5173
+    restart: unless-stopped
