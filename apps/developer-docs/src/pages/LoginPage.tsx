@@ -13,7 +13,7 @@ export default function LoginPage() {
 
   if (!supabase) {
     return (
-      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
         <p className="text-zinc-400">Auth not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.</p>
       </div>
     );
@@ -50,7 +50,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm glass-panel p-8 rounded-2xl">
         <h1 className="text-2xl font-bold text-center mb-6">Sign in to P3 Developer</h1>
         <p className="text-zinc-400 text-sm text-center mb-6">

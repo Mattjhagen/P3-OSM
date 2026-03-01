@@ -67,7 +67,8 @@ export default function PricingPage() {
       }
 
       if (!res.ok) {
-        throw new Error(data?.error || 'Checkout failed');
+        const detail = data?.detail ? `: ${data.detail}` : '';
+        throw new Error((data?.error || 'Checkout failed') + detail);
       }
 
       const url = data.url;
@@ -80,7 +81,7 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col relative overflow-x-hidden selection:bg-[#00e599] selection:text-black">
+    <div className="min-h-screen bg-black text-white flex flex-col relative overflow-x-hidden selection:bg-[#00e599] selection:text-black">
       {/* Background effects – grid + green glow */}
       <div className="absolute inset-0 bg-grid-pattern opacity-20 pointer-events-none fixed z-0" aria-hidden />
       <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-[#00e599]/5 rounded-full blur-[120px] pointer-events-none fixed z-0" aria-hidden />
