@@ -1,0 +1,20 @@
+# Render Blueprint – P3 Lending Protocol backend (api.p3lending.space)
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: p3-lending-backend
+    runtime: node
+    region: oregon
+
+    # Backend lives in server/ subdirectory
+    rootDir: server
+
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
