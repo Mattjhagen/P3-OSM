@@ -29,6 +29,20 @@
   to = "/assets/:splat"
   status = 200
 
+# Serve sitemap.xml and robots.txt as real files (SEO/crawlers)
+# Must come before SPA fallback or they get rewritten to index.html
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/sitemap.xml"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/robots.txt"
+  to = "/robots.txt"
+  status = 200
+  force = true
+
 # Handle Single Page Application (SPA) Routing (must be last)
 # Routes like /profile or /lend get index.html on refresh; static assets already matched above
 [[redirects]]
