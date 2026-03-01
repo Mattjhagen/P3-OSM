@@ -114,6 +114,19 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
           </div>
         </div>
 
+        {/* Connect */}
+        <div className="pt-6 mt-6 border-t border-zinc-800/80">
+          <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">Connect</h4>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-zinc-500">
+            <a href="https://www.linkedin.com/in/mattjhagen/" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">LinkedIn</a>
+            <a href="https://x.com/hagen_matt30623" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">X</a>
+            <a href="https://www.startupschool.org/cofounder-matching/candidate/4vnu28RHY" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Y Combinator</a>
+            <a href="https://www.facebook.com/profile.php?id=61573009392683" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Facebook</a>
+            <a href="https://www.reddit.com/user/P3_Labs/" target="_blank" rel="noopener noreferrer" className="hover:text-[#00e599] transition-colors">Reddit</a>
+            <a href="mailto:matty@p3lending.space" className="hover:text-[#00e599] transition-colors">matty@p3lending.space</a>
+          </div>
+        </div>
+
         {/* Legal & Disclosures */}
         <div className="pt-6 mt-6 border-t border-zinc-800/80">
           <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">Legal & Disclosures</h4>
