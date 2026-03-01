@@ -1370,7 +1370,7 @@ const App: React.FC = () => {
           />
         )}
 
-        <aside className={`fixed inset-y-0 left-0 z-[70] w-72 max-w-[86vw] bg-[#0a0a0a] border-r border-zinc-900 flex flex-col transform transition-transform duration-300 md:static md:z-50 md:translate-x-0 md:w-64 ${isUserNavOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`fixed inset-y-0 left-0 z-[70] w-72 max-w-[86vw] bg-[#0a0a0a]/90 backdrop-blur-md border-r border-zinc-900 flex flex-col transform transition-transform duration-300 md:static md:z-50 md:translate-x-0 md:w-64 ${isUserNavOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="p-6"><Logo /></div>
           <nav className="flex-1 px-4 space-y-2 mt-4">
             <NavItem view="borrow" label="Borrowing" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>} />
@@ -1392,7 +1392,8 @@ const App: React.FC = () => {
         </aside>
 
         <main className="min-w-0 flex-1 flex flex-col relative overflow-hidden z-10">
-          <div className="absolute inset-0 bg-grid-pattern pointer-events-none -z-10"></div>
+          <div className="absolute inset-0 bg-grid-pattern opacity-20 pointer-events-none -z-10"></div>
+          <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-[#00e599]/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black pointer-events-none -z-10"></div>
 
           <header className="min-h-14 md:h-16 border-b border-zinc-800/50 backdrop-blur-sm flex items-center justify-between px-4 md:px-8 py-2 z-10 bg-[#050505]/80">

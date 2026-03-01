@@ -1,10 +1,34 @@
 :root { --bg: #050505; --fg: #e4e4e7; --muted: #71717a; --accent: #00e599; --border: #27272a; }
 * { box-sizing: border-box; }
-body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); margin: 0; line-height: 1.6; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); margin: 0; line-height: 1.6; position: relative; overflow-x: hidden; }
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+  mask-image: radial-gradient(circle at center, black 60%, transparent 100%);
+  opacity: 0.2;
+  pointer-events: none;
+  z-index: 0;
+}
+body::after {
+  content: '';
+  position: fixed;
+  top: -10%; right: -10%;
+  width: 800px; height: 800px;
+  background: rgba(0, 229, 153, 0.05);
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+}
+.wrap, main, nav, footer { position: relative; z-index: 1; }
 .wrap { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; }
 .nav { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
 .nav a { color: var(--muted); text-decoration: none; }
 .nav a:hover { color: var(--accent); }
+.card { background: rgba(11, 11, 13, 0.8); backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
 header { margin-bottom: 1.5rem; }
 header nav { display: flex; flex-wrap: wrap; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
 header nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }

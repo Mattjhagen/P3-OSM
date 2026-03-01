@@ -69,7 +69,10 @@ export default function DeveloperDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-200 flex flex-col lg:flex-row selection:bg-[#00e599] selection:text-black">
+    <div className="min-h-screen bg-[#050505] text-zinc-200 flex flex-col lg:flex-row selection:bg-[#00e599] selection:text-black relative overflow-x-hidden">
+      {/* Background effects – grid + green glow (matches main, learn, blog) */}
+      <div className="absolute inset-0 bg-grid-pattern opacity-20 pointer-events-none fixed z-0" aria-hidden />
+      <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-[#00e599]/5 rounded-full blur-[120px] pointer-events-none fixed z-0" aria-hidden />
       {/* Mobile sidebar toggle */}
       <button
         type="button"
@@ -89,7 +92,7 @@ export default function DeveloperDashboard() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:static inset-y-0 left-0 z-40 w-64 bg-black/50 border-r border-zinc-800
+          fixed lg:static inset-y-0 left-0 z-40 w-64 bg-black/50 backdrop-blur-md border-r border-zinc-800
           transform transition-transform duration-200 ease-out
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
@@ -133,7 +136,7 @@ export default function DeveloperDashboard() {
       )}
 
       {/* Main content */}
-      <main className="flex-1 p-6 lg:p-8 overflow-auto">
+      <main className="flex-1 p-6 lg:p-8 overflow-auto relative z-10">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6 lg:mb-8">
           <div>
@@ -190,7 +193,7 @@ export default function DeveloperDashboard() {
           <>
         {/* Stats Grid – with pulse animation */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 lg:mb-12">
-          <div className="relative bg-zinc-900/50 p-6 sm:p-8 rounded-2xl border border-zinc-800 overflow-hidden group hover:border-[#00e599]/30 transition-colors">
+          <div className="relative bg-zinc-900/50 backdrop-blur-sm p-6 sm:p-8 rounded-2xl border border-zinc-800 overflow-hidden group hover:border-[#00e599]/30 transition-colors">
             <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-[#00e599]/5" />
             <div className="relative">
               <p className="text-zinc-400 mb-2 text-sm sm:text-base">Wallets You've Scored Today</p>
@@ -212,7 +215,7 @@ export default function DeveloperDashboard() {
             </div>
             <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-[#00e599] animate-pulse shadow-[0_0_6px_#00e599]" aria-hidden />
           </div>
-          <div className="relative bg-zinc-900/50 p-6 sm:p-8 rounded-2xl border border-zinc-800 overflow-hidden group hover:border-[#00e599]/30 transition-colors sm:col-span-2 lg:col-span-1">
+          <div className="relative bg-zinc-900/50 backdrop-blur-sm p-6 sm:p-8 rounded-2xl border border-zinc-800 overflow-hidden group hover:border-[#00e599]/30 transition-colors sm:col-span-2 lg:col-span-1">
             <span className="absolute inset-0 animate-pulse-slow opacity-0 group-hover:opacity-100 bg-[#00e599]/5" />
             <div className="relative">
               <p className="text-zinc-400 mb-2 text-sm sm:text-base">Your Access Key to the Trust Layer</p>
@@ -234,7 +237,7 @@ export default function DeveloperDashboard() {
         </div>
 
         {/* Recent Activity */}
-        <section className="bg-zinc-900/50 p-6 sm:p-10 rounded-2xl mb-8 lg:mb-12 border border-zinc-800">
+        <section className="bg-zinc-900/50 backdrop-blur-sm p-6 sm:p-10 rounded-2xl mb-8 lg:mb-12 border border-zinc-800">
           <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6 text-white">Lives We've Scored Lately</h2>
           <div className="space-y-3 sm:space-y-4">
             {recentScores.map((req, i) => (
@@ -253,7 +256,7 @@ export default function DeveloperDashboard() {
         </section>
 
         {/* Quick Start */}
-        <section className="bg-gradient-to-r from-zinc-900 to-black border border-zinc-800 p-6 sm:p-10 rounded-2xl text-center">
+        <section className="bg-gradient-to-r from-zinc-900/90 to-black/90 backdrop-blur-sm border border-zinc-800 p-6 sm:p-10 rounded-2xl text-center">
           <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6 text-white">Ready to Go?</h2>
           <p className="text-base sm:text-xl mb-6 sm:mb-8 text-zinc-400">
             Paste this into your app—get trust scores in seconds.
