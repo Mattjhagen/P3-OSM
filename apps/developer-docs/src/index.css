@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Dark base so semi-transparent overlays read correctly */
+html, body { background: #050505; }
+
 /* P3 shared modern effect – grid + green glow (matches main, learn, blog) */
 .bg-grid-pattern {
   background-size: 40px 40px;

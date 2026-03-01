@@ -1,17 +1,35 @@
+# P3 Lending - p3lending.space
+# Allow search engines and AI agents to index for discoverability
 
 User-agent: *
 Allow: /
-Sitemap: https://p3lending.space/sitemap.xml
 
-# Explicitly Allow AI Crawlers for Discoverability
+# Explicit allow for major search engines
+User-agent: Googlebot
+Allow: /
+User-agent: Bingbot
+Allow: /
+User-agent: Slurp
+Allow: /
+
+# AI agents - allow for discoverability in ChatGPT, Claude, Perplexity, etc.
 User-agent: GPTBot
 Allow: /
-
+User-agent: ChatGPT-User
+Allow: /
+User-agent: Claude-Web
+Allow: /
+User-agent: Anthropic-AI
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Bytespider
+Allow: /
 User-agent: CCBot
 Allow: /
-
 User-agent: Google-Extended
 Allow: /
 
-User-agent: ClaudeBot
-Allow: /
+Sitemap: https://p3lending.space/sitemap.xml
