@@ -59,9 +59,12 @@ Netlify Site (for example `p3-developer-docs`):
 
 - **Base directory:** `apps/developer-docs`
 - **Package directory:** `apps/developer-docs`
-- **Build command:** `echo "static"`
-- **Publish directory:** `public`
-- **Functions directory:** _(leave blank)_
+- **Build command:** `npm run build`
+- **Publish directory:** `dist`
+- **Functions directory:** `netlify/functions` (or leave blank to use netlify.toml default)
+- **Env:** Add in Site configuration → Environment variables:
+  - `STRIPE_SECRET_KEY` (required for checkout)
+  - `SUPABASE_URL` and `SUPABASE_ANON_KEY` (required for auth-gated checkout)
 - Then: **Clear cache and deploy**
 
 Repo config:
@@ -69,8 +72,18 @@ Repo config:
 ```toml
 # apps/developer-docs/netlify.toml
 [build]
-  publish = "public"
-  command = "echo \"static\""
+  publish = "dist"
+  command = "npm run build"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/create-checkout"
+  to = "/.netlify/functions/create-checkout"
+  status = 200
+  force = true
 ```
 
 > Important: Do **not** add SPA rewrites (`/* /index.html 200`) to these sub-sites. They must serve `sitemap.xml`, `robots.txt`, and `rss.xml` as real files, not as the SPA.

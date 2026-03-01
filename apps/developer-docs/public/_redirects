@@ -1,0 +1,2 @@
+# API routes must come before SPA fallback
+/api/create-checkout /.netlify/functions/create-checkout 200

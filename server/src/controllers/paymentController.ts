@@ -791,8 +791,83 @@ export const PaymentController = {
             const flow = String(session.metadata?.flow || '').trim();
             const isDonation = flow === 'donation';
             const isService = flow === 'service';
+            const isDeveloper = flow === 'developer';
 
-            if (isDonation) {
+            if (isDeveloper) {
+                const userId = session.metadata?.userId;
+                const planTier = String(session.metadata?.plan || 'launch').toLowerCase();
+                if (!userId) {
+                    logger.warn({ sessionId: session.id }, 'Developer checkout missing userId in metadata');
+                } else {
+                    try {
+                        const stripe = getStripeClient();
+                        const subscriptionId = typeof session.subscription === 'string' ? session.subscription : null;
+                        let customerId = session.customer as string | null;
+                        let periodStart: Date | null = null;
+                        let periodEnd: Date | null = null;
+
+                        if (stripe && subscriptionId) {
+                            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+                            customerId = sub.customer as string;
+                            periodStart = sub.current_period_start ? new Date(sub.current_period_start * 1000) : null;
+                            periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+                        }
+
+                        const monthlyLimits: Record<string, number> = {
+                            launch: 5_000,
+                            core: 20_000,
+                            grow: 1_000_000,
+                        };
+                        const monthlyLimit = monthlyLimits[planTier] ?? 5_000;
+
+                        const { data: members } = await supabase
+                            .from('org_members')
+                            .select('org_id')
+                            .eq('user_id', userId)
+                            .in('role', ['owner', 'admin'])
+                            .limit(1);
+                        let orgId = members?.[0]?.org_id;
+                        if (!orgId) {
+                            const { data: org } = await supabase
+                                .from('orgs')
+                                .insert({ name: 'My Organization', owner_user_id: userId })
+                                .select('id')
+                                .single();
+                            if (org?.id) {
+                                orgId = org.id;
+                                await supabase.from('org_members').insert({ org_id: orgId, user_id: userId, role: 'owner' });
+                            }
+                        }
+                        if (orgId) {
+                            const { error: upsertErr } = await supabase.from('org_plans').upsert(
+                                {
+                                    org_id: orgId,
+                                    plan: 'paid',
+                                    status: 'active',
+                                    stripe_customer_id: customerId,
+                                    stripe_subscription_id: subscriptionId,
+                                    current_period_start: periodStart?.toISOString() ?? null,
+                                    current_period_end: periodEnd?.toISOString() ?? null,
+                                    monthly_limit: monthlyLimit,
+                                    updated_at: new Date().toISOString(),
+                                },
+                                { onConflict: 'org_id' }
+                            );
+                            if (upsertErr) {
+                                logger.error({ error: upsertErr.message, orgId, userId }, 'Failed to upsert org_plans');
+                                throw upsertErr;
+                            }
+                            logger.info({ orgId, userId, planTier, subscriptionId }, 'Developer plan activated via webhook');
+                        }
+                    } catch (devErr: any) {
+                        logger.error(
+                            { error: devErr.message, eventId: event.id, sessionId: session.id },
+                            'Failed to process developer subscription webhook'
+                        );
+                        return res.status(500).json({ received: true, error: 'Developer plan persistence failed' });
+                    }
+                }
+            } else if (isDonation) {
                 try {
                     await persistDonationAudit(session, event.id);
                 } catch (error: any) {

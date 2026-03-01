@@ -16,9 +16,9 @@ export default {
           '50%': { boxShadow: '0 0 12px 2px rgba(0, 229, 153, 0.3)' },
         },
         'number-pop': {
-          '0%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(34, 197, 94, 0)' },
-          '50%': { transform: 'scale(1.1)', boxShadow: '0 0 16px 2px rgba(34, 197, 94, 0.5)' },
-          '100%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(34, 197, 94, 0)' },
+          '0%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(0, 229, 153, 0)' },
+          '50%': { transform: 'scale(1.1)', boxShadow: '0 0 16px 2px rgba(0, 229, 153, 0.5)' },
+          '100%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(0, 229, 153, 0)' },
         },
         'loading-fade': {
           '0%': { opacity: '0' },

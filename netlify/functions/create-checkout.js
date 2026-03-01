@@ -18,11 +18,9 @@ const CORS_HEADERS = {
   'access-control-allow-origin': '*',
 };
 
-export const handler = async (event: {
-  httpMethod?: string;
-  queryStringParameters?: Record<string, string>;
-  headers?: Record<string, string>;
-}) => {
+export const handler = createCheckoutHandler;
+
+async function createCheckoutHandler(event) {
   if (event.httpMethod !== 'GET') {
     return {
       statusCode: 405,
@@ -31,9 +29,8 @@ export const handler = async (event: {
     };
   }
 
-  // Require auth – verify Supabase JWT (Netlify normalizes headers to lowercase)
-  const headers = event.headers ?? {};
-  const authHeader = headers.authorization ?? headers.Authorization;
+  // Require auth – verify Supabase JWT
+  const authHeader = event.headers?.authorization || event.headers?.Authorization;
   const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) {
     return {
@@ -69,25 +66,29 @@ export const handler = async (event: {
   if (plan === 'launch') priceId = 'price_1T5ykFBhAu0E0SSFa5DhG3Ri';
   else if (plan === 'core') priceId = 'price_1T5yodBhAu0E0SSFgZS6nMCZ';
   else if (plan === 'grow') priceId = 'price_1T5yooBhAu0E0SSFTHwRXhmv';
-  else
+  else {
     return {
       statusCode: 400,
       headers: CORS_HEADERS,
       body: JSON.stringify({ error: 'Invalid plan' }),
     };
+  }
 
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) {
     return {
       statusCode: 503,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ error: 'STRIPE_SECRET_KEY is not configured. Add it in Netlify site environment variables.' }),
+      body: JSON.stringify({
+        error: 'STRIPE_SECRET_KEY is not configured. Add it in Netlify site environment variables.',
+      }),
     };
   }
 
   try {
     const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20' });
-    const origin = headers.origin ?? headers['x-forwarded-host'] ?? 'https://developers.p3lending.space';
+    const origin =
+      event.headers?.origin || event.headers?.['x-forwarded-host'] || 'https://developers.p3lending.space';
     const baseUrl = origin.startsWith('http') ? origin : `https://${origin}`;
 
     const session = await stripe.checkout.sessions.create({
@@ -116,16 +117,12 @@ export const handler = async (event: {
       headers: CORS_HEADERS,
       body: JSON.stringify({ id: session.id, url }),
     };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[create-checkout]', err);
+  } catch (err) {
+    console.error(err);
     return {
       statusCode: 500,
       headers: CORS_HEADERS,
-      body: JSON.stringify({
-        error: 'Failed to create session',
-        detail: msg.includes('secret') || msg.includes('key') ? undefined : msg,
-      }),
+      body: JSON.stringify({ error: 'Failed to create session' }),
     };
   }
-};
+}

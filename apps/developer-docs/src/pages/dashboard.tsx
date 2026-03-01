@@ -147,6 +147,12 @@ export default function DeveloperDashboard() {
             Full Docs →
           </a>
           <a
+            href="/demo"
+            className="mt-1 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800/80 hover:text-white font-medium transition-colors"
+          >
+            Try Demo
+          </a>
+          <a
             href="/pricing"
             className="mt-1 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-800/80 hover:text-white font-medium transition-colors"
           >
@@ -388,15 +394,16 @@ export default function DeveloperDashboard() {
         {/* Referral banner – sticky bottom */}
         <div className="fixed bottom-0 left-0 lg:left-64 right-0 z-20 flex items-center justify-between gap-4 px-4 py-3 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800">
           <p className="text-zinc-400 text-sm">
-            Refer a dev—both get $25 credit on upgrade. Share: p3lending.space/ref/
+            Try our live demo
           </p>
-          <button
-            type="button"
-            onClick={() => window.open('https://p3lending.space/ref/', '_blank')}
+          <a
+            href="https://demo.p3lending.space/"
+            target="_blank"
+            rel="noopener noreferrer"
             className="shrink-0 px-4 py-2 bg-[#00e599] hover:bg-[#00cc88] text-black rounded-lg font-bold text-sm transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]"
           >
-            Get Your Link
-          </button>
+            Open Demo
+          </a>
         </div>
 
         {/* Global footer – all pages */}

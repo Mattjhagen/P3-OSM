@@ -32,7 +32,6 @@ const PLANS = [
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const auth = useAuth();
   const navigate = useNavigate();
   const isLoggedIn = !!auth?.user;
@@ -94,6 +93,7 @@ export default function PricingPage() {
           </a>
           <div className="flex gap-4 items-center">
             <a href="/" className="text-zinc-400 hover:text-white transition-colors text-sm">Dashboard</a>
+            <a href="/demo" className="text-zinc-400 hover:text-white transition-colors text-sm">Demo</a>
             <a href="/docs.html" className="text-zinc-400 hover:text-white transition-colors text-sm">Docs</a>
             {isLoggedIn ? (
               <button
@@ -171,36 +171,19 @@ export default function PricingPage() {
           Plans auto-renew monthly. Cancel anytime. First month free if you refer a friend.
         </p>
 
-        {/* Referral banner – sticky bottom; unique link when logged in */}
+        {/* Demo banner – sticky bottom */}
         <div className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-between gap-4 px-4 py-3 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800">
           <p className="text-zinc-400 text-sm">
-            {isLoggedIn ? (
-              <>Refer a dev—both get $25 credit on upgrade. Your link: <code className="text-[#00e599] font-mono text-xs">https://p3lending.space/?ref={auth?.user?.id}</code></>
-            ) : (
-              <>Refer a dev—both get $25 credit on upgrade. <Link to="/login?returnTo=/pricing" className="text-[#00e599] hover:underline">Sign in</Link> to get your unique referral link.</>
-            )}
+            Try our live demo
           </p>
-          {isLoggedIn ? (
-            <button
-              type="button"
-              onClick={() => {
-                const link = `https://p3lending.space/?ref=${auth?.user?.id}`;
-                navigator.clipboard.writeText(link);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="shrink-0 px-4 py-2 bg-[#00e599] hover:bg-[#00cc88] text-black rounded-lg font-bold text-sm transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]"
-            >
-              {copied ? 'Copied!' : 'Copy Link'}
-            </button>
-          ) : (
-            <Link
-              to="/login?returnTo=/pricing"
-              className="shrink-0 px-4 py-2 bg-[#00e599] hover:bg-[#00cc88] text-black rounded-lg font-bold text-sm transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]"
-            >
-              Sign in for Link
-            </Link>
-          )}
+          <a
+            href="https://demo.p3lending.space/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 px-4 py-2 bg-[#00e599] hover:bg-[#00cc88] text-black rounded-lg font-bold text-sm transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]"
+          >
+            Open Demo
+          </a>
         </div>
       </main>
     </div>

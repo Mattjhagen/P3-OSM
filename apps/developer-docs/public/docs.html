@@ -101,7 +101,9 @@
   <div class="wrap">
     <nav class="nav">
       <a href="/">Dashboard</a>
+      <a href="/demo">Demo</a>
       <a href="#quickstart">Quickstart</a>
+      <a href="#try-it">Try it</a>
       <a href="#auth">Auth</a>
       <a href="#plans">Plans</a>
       <a href="#endpoints">Endpoints</a>
@@ -120,8 +122,11 @@
       <li>Create an API key (copy it once; it won't be shown again).</li>
       <li>Call the API with <code>Authorization: Bearer &lt;your_key&gt;</code>.</li>
     </ol>
-    <pre><code>curl -H "Authorization: Bearer p3_live_..." \
-  "https://api.p3lending.space/api/v1/reputation/score?user_id=UUID"</code></pre>
+    <h3 id="try-it">Try it</h3>
+    <p class="muted">Use your sandbox key with this example user ID to test the API:</p>
+    <pre><code>curl -H "Authorization: Bearer p3_test_YOUR_KEY" \
+  "https://api.p3lending.space/api/v1/reputation/score?user_id=db5b7d0f-254a-412c-86a4-b50d822f57f3"</code></pre>
+    <p class="muted">Replace <code>p3_test_YOUR_KEY</code> with your actual sandbox key. You'll get a score response or 404 if the user has no data.</p>
 
     <h2 id="auth">Auth</h2>
     <p>All <code>/api/v1/*</code> endpoints require an API key in the <code>Authorization</code> header:</p>
@@ -209,8 +214,8 @@ Authorization: Bearer p3_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
   </div>
 
   <div class="ref-banner">
-    <p>Refer a dev—both get $25 credit on upgrade. Share: p3lending.space/ref/</p>
-    <a href="https://p3lending.space/ref/" target="_blank" rel="noopener">Get Your Link</a>
+    <p>Try our live demo</p>
+    <a href="https://demo.p3lending.space/" target="_blank" rel="noopener">Open Demo</a>
   </div>
 </body>
 </html>
