@@ -288,7 +288,7 @@ export default function DeveloperDashboard() {
               </p>
             </div>
           )}
-          <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6 text-white">Lives We've Scored Lately</h2>
+          <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6 text-white">Live Request Feed</h2>
           <div className="space-y-3 sm:space-y-4">
             {recentScores.map((req, i) => (
               <div

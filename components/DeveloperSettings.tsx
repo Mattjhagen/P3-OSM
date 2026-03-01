@@ -170,7 +170,9 @@ export const DeveloperSettings: React.FC = () => {
                   </p>
                 </div>
                 <a
-                  href="mailto:founders@p3lending.space?subject=Upgrade%20P3%20Developer%20API%20Plan"
+                  href="https://developers.p3lending.space/pricing"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-xs px-3 py-2 rounded-lg bg-[#00e599] text-black font-semibold hover:opacity-90"
                 >
                   Upgrade to Paid
@@ -304,7 +306,9 @@ export const DeveloperSettings: React.FC = () => {
             Live keys require a paid plan. Select <span className="font-semibold">Test</span> or click{' '}
             <a
               className="text-[#00e599] hover:underline"
-              href="mailto:founders@p3lending.space?subject=Upgrade%20P3%20Developer%20API%20Plan"
+              href="https://developers.p3lending.space/pricing"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               Upgrade to Paid
             </a>
