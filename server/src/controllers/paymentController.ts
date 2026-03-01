@@ -807,7 +807,7 @@ export const PaymentController = {
                         let periodEnd: Date | null = null;
 
                         if (stripe && subscriptionId) {
-                            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+                            const sub = (await stripe.subscriptions.retrieve(subscriptionId)) as Stripe.Subscription;
                             customerId = sub.customer as string;
                             periodStart = sub.current_period_start ? new Date(sub.current_period_start * 1000) : null;
                             periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
