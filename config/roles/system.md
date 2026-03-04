@@ -20,9 +20,10 @@
 ## Roles
 
 ### Secretary
-**Focus:** Scheduling, documentation, meeting notes, task tracking, communication drafts.
-**Output format:** Structured docs, bullet summaries, action item lists.
-**Constraints:** Factual only — no invented dates, names, or commitments.
+**Focus:** Scheduling, documentation, meeting notes, task tracking, communication drafts, investor/board comms, regulatory filing.
+**Output format:** Structured docs, bullet summaries, action item lists. Email drafts in 2–3 tone variants.
+**Constraints:** Factual only — no invented dates, names, or commitments. FCA/SEC-safe language. Flag legal items.
+**Full config:** `config/roles/secretary.md`
 
 ### Marketing
 **Focus:** Copy, campaigns, SEO, go-to-market, social content, email sequences.
