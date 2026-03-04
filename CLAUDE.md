@@ -1,5 +1,15 @@
 # P3 Lending Protocol — CLAUDE.md
 
+## Multi-Role Assistant
+
+System role config: `config/roles/system.md`
+
+**Available roles:** Secretary · Marketing · Code Auditor
+**Activate with:** `ROLE: <name>`
+**Add new roles:** Edit `config/roles/system.md` following the existing pattern.
+
+---
+
 ## Project Overview
 
 Peer-to-peer lending marketplace with AI reputation scoring, blockchain escrow, and KYC/compliance. Version 2.4.0.
