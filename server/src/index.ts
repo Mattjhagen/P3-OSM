@@ -18,6 +18,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import complianceRoutes from './routes/complianceRoutes';
 import reputationRoutes from './routes/reputationRoutes';
 import developerRoutes from './routes/developerRoutes';
+import riskRoutes from './routes/riskRoutes';
 import { openApiSpec } from './openapiSpec';
 import { PaymentController } from './controllers/paymentController';
 import { VerificationController } from './controllers/verificationController';
@@ -56,6 +57,7 @@ export const createApp = () => {
     app.use('/api/compliance', complianceRoutes);
     app.use('/api/v1/reputation', reputationRoutes);
     app.use('/api/developer', developerRoutes);
+    app.use('/api/risk', riskRoutes);
     app.get('/docs/openapi.json', (_req: Request, res: Response) => {
         res.setHeader('Content-Type', 'application/json');
         res.json(openApiSpec);

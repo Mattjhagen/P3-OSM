@@ -316,8 +316,33 @@ export const matchBorrowers = async (offer: LoanOffer, requests: LoanRequest[]):
   }
 };
 
-// NEW: Real-time Risk Engine with Search Grounding
+// NEW: Real-time Risk Engine — calls Claude backend, falls back to Gemini
 export const analyzeRiskProfile = async (profile: UserProfile): Promise<RiskReport> => {
+  // Try Claude backend first
+  try {
+    const backendUrl =
+      (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:5001';
+    const res = await fetch(`${backendUrl}/api/risk/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAgeDays: profile.walletAgeDays,
+        txCount: profile.txCount,
+        successfulRepayments: profile.successfulRepayments,
+        currentStreak: profile.currentStreak,
+        kycStatus: profile.kycStatus,
+        income: profile.income,
+        employmentStatus: profile.employmentStatus,
+      }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) return json.data as RiskReport;
+    }
+  } catch {
+    // backend unreachable — fall through to Gemini
+  }
+
   const ai = getAI();
   if (!ai) {
     return {
