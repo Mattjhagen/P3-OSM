@@ -99,6 +99,10 @@ export const validatedEnv = cleanEnv(process.env, {
     default: false,
     desc: 'Enable optional Gemini enrichment for reputation score (feature flag)',
   }),
+  ANTHROPIC_API_KEY: str({
+    default: '',
+    desc: 'Anthropic API key for Claude-powered risk analysis',
+  }),
   KYC_PROVIDER: str({
     default: 'demo',
     choices: ['openkyc', 'demo'],

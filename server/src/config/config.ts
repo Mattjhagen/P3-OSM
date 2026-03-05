@@ -95,6 +95,7 @@ export const config = {
         apiKeyPepper: validatedEnv.API_KEY_PEPPER,
         rateLimitRedisUrl: validatedEnv.RATE_LIMIT_REDIS_URL,
         reputationEnrichmentEnabled: validatedEnv.REPUTATION_ENRICHMENT_ENABLED,
+        anthropicApiKey: validatedEnv.ANTHROPIC_API_KEY,
     },
     kyc: {
         provider: validatedEnv.KYC_PROVIDER,
