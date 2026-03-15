@@ -44,6 +44,7 @@
   force = true
 
 # Security headers for frontend (CSP, HSTS, etc.)
+# script-src/style-src must allow CDNs used by index.html: Tailwind, gtag, chat widget, Google Fonts
 [[headers]]
   for = "/*"
   [headers.values]
@@ -51,7 +52,7 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://*.stripe.com https://api.p3lending.space https://*.netlify.app wss: https:; frame-src 'self' https://*.stripe.com https://js.stripe.com https://*.stripe.net; object-src 'none'; base-uri 'self'; form-action 'self' https:"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://chat.juror8.ai https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://*.stripe.com https://api.p3lending.space https://*.netlify.app wss: https:; frame-src 'self' https://*.stripe.com https://js.stripe.com https://*.stripe.net; object-src 'none'; base-uri 'self'; form-action 'self' https:"
 
 # Handle Single Page Application (SPA) Routing (must be last)
 # Routes like /profile or /lend get index.html on refresh; static assets already matched above

@@ -370,7 +370,11 @@ export const LandingPage: React.FC<Props> = ({ onLaunch, onDevAdminLogin, onOpen
 
       {/* Background Effects */}
       <div className="absolute top-0 left-0 w-full h-full bg-grid-pattern opacity-20 pointer-events-none fixed"></div>
-      <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-[#00e599]/5 rounded-full blur-[120px] pointer-events-none fixed"></div>
+      <div
+        className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-[#00e599]/5 rounded-full blur-[120px] pointer-events-none fixed"
+        style={{ maxWidth: 'min(800px, 100vw)', maxHeight: 'min(800px, 100vh)' }}
+        aria-hidden
+      />
       
       {/* Navbar */}
       <nav className="relative z-50 flex items-center justify-between px-4 sm:px-6 py-6 max-w-7xl mx-auto w-full">
