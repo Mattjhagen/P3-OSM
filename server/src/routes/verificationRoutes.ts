@@ -5,8 +5,8 @@ import { createRateLimiter, sensitiveApiLimiter } from '../middleware/rateLimite
 
 const router = Router();
 
-// Hash Verification Endpoint
-router.post('/hash', VerificationController.verifyHash);
+// Hash Verification Endpoint (public; rate-limited to prevent abuse)
+router.post('/hash', createRateLimiter(60, 15), VerificationController.verifyHash);
 
 router.post('/kyc', requireAuth, VerificationController.submitKYC);
 router.get('/status/:userId', requireAuth, VerificationController.getStatus);

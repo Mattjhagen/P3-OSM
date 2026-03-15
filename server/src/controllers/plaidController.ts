@@ -22,17 +22,19 @@ export const PlaidController = {
   createLinkToken: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { userId, email, redirectUri, androidPackageName } = req.body || {};
-      const normalizedUserId = String(userId || '').trim();
-
-      if (!normalizedUserId) {
+      const uid = req.auth?.userId || String(userId || '').trim();
+      if (!uid) {
         return res.status(400).json({
           success: false,
           error: 'userId is required.',
         });
       }
+      if (req.auth?.userId && userId !== undefined && String(userId).trim() !== req.auth.userId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot create link token for another user.' });
+      }
 
       const token = await PlaidService.createLinkToken({
-        userId: normalizedUserId,
+        userId: uid,
         email: typeof email === 'string' ? email : undefined,
         redirectUri: typeof redirectUri === 'string' ? redirectUri.trim() : undefined,
         androidPackageName:
@@ -51,14 +53,17 @@ export const PlaidController = {
   exchangePublicToken: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { userId, publicToken, public_token, accountId } = req.body || {};
-      const normalizedUserId = String(userId || '').trim();
+      const uid = req.auth?.userId || String(userId || '').trim();
       const normalizedPublicToken = String(publicToken || public_token || '').trim();
 
-      if (!normalizedUserId) {
+      if (!uid) {
         return res.status(400).json({
           success: false,
           error: 'userId is required.',
         });
+      }
+      if (req.auth?.userId && userId !== undefined && String(userId).trim() !== req.auth.userId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot exchange token for another user.' });
       }
 
       if (!normalizedPublicToken) {
@@ -88,7 +93,7 @@ export const PlaidController = {
       );
 
       const bankLinkId = await FinancePersistenceService.createPlaidBankLink({
-        userId: normalizedUserId,
+        userId: uid,
         plaidItemId: exchange.item_id,
         plaidAccountId: selectedAccount.account_id,
         mask: selectedAccount.mask || '****',

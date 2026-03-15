@@ -64,15 +64,31 @@ export const TradingController = {
   previewOrder: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { userId, symbol, side, amountUsd, amountFiat, fiatCurrency } = req.body || {};
-      await ComplianceService.requireFeatureApproval(String(userId || ''), 'TRADE_CRYPTO');
+      const uid = req.auth?.userId || String(userId || '');
+      if (!uid) {
+        return res.status(401).json({ success: false, error: 'Unauthenticated.' });
+      }
+      if (req.auth?.userId && userId !== undefined && String(userId).trim() !== req.auth.userId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot preview order for another user.' });
+      }
+      await ComplianceService.requireFeatureApproval(uid, 'TRADE_CRYPTO');
 
+      const sym = String(symbol || '').trim().toUpperCase();
+      if (!sym) {
+        return res.status(400).json({ success: false, error: 'symbol is required.' });
+      }
+      const amtUsd = Number(amountUsd);
+      const amtFiat = Number(amountFiat || 0);
+      if (!Number.isFinite(amtUsd) && !Number.isFinite(amtFiat)) {
+        return res.status(400).json({ success: false, error: 'amountUsd or amountFiat must be a number.' });
+      }
       const preview = await TradingService.previewOrder({
-        userId: String(userId || ''),
-        symbol: String(symbol || ''),
+        userId: uid,
+        symbol: sym,
         side: side === 'SELL' ? 'SELL' : 'BUY',
-        amountUsd: Number(amountUsd || 0),
-        amountFiat: Number(amountFiat || 0),
-        fiatCurrency: typeof fiatCurrency === 'string' ? fiatCurrency : undefined,
+        amountUsd: Number.isFinite(amtUsd) ? amtUsd : 0,
+        amountFiat: Number.isFinite(amtFiat) ? amtFiat : 0,
+        fiatCurrency: typeof fiatCurrency === 'string' ? fiatCurrency.trim().toUpperCase() : undefined,
       });
 
       return res.status(200).json({
@@ -96,17 +112,32 @@ export const TradingController = {
         sellDisclosureSignature,
         settlementAccount,
       } = req.body || {};
-      await ComplianceService.requireFeatureApproval(String(userId || ''), 'TRADE_CRYPTO');
-
+      const uid = req.auth?.userId || String(userId || '');
+      if (!uid) {
+        return res.status(401).json({ success: false, error: 'Unauthenticated.' });
+      }
+      if (req.auth?.userId && userId !== undefined && String(userId).trim() !== req.auth.userId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot execute order for another user.' });
+      }
+      await ComplianceService.requireFeatureApproval(uid, 'TRADE_CRYPTO');
+      const sym = String(symbol || '').trim().toUpperCase();
+      if (!sym) {
+        return res.status(400).json({ success: false, error: 'symbol is required.' });
+      }
+      const amtUsd = Number(amountUsd);
+      const amtFiat = Number(amountFiat || 0);
+      if (!Number.isFinite(amtUsd) && !Number.isFinite(amtFiat)) {
+        return res.status(400).json({ success: false, error: 'amountUsd or amountFiat must be a number.' });
+      }
       const result = await TradingService.executeOrder({
-        userId: String(userId || ''),
-        symbol: String(symbol || ''),
+        userId: uid,
+        symbol: sym,
         side: side === 'SELL' ? 'SELL' : 'BUY',
-        amountUsd: Number(amountUsd || 0),
-        amountFiat: Number(amountFiat || 0),
-        fiatCurrency: typeof fiatCurrency === 'string' ? fiatCurrency : undefined,
-        sellDisclosureSignature: typeof sellDisclosureSignature === 'string' ? sellDisclosureSignature : undefined,
-        settlementAccount: typeof settlementAccount === 'string' ? settlementAccount : undefined,
+        amountUsd: Number.isFinite(amtUsd) ? amtUsd : 0,
+        amountFiat: Number.isFinite(amtFiat) ? amtFiat : 0,
+        fiatCurrency: typeof fiatCurrency === 'string' ? fiatCurrency.trim().toUpperCase() : undefined,
+        sellDisclosureSignature: typeof sellDisclosureSignature === 'string' ? sellDisclosureSignature.slice(0, 1024) : undefined,
+        settlementAccount: typeof settlementAccount === 'string' ? settlementAccount.trim().slice(0, 256) : undefined,
       });
 
       return res.status(200).json({

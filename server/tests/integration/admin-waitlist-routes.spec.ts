@@ -4,6 +4,7 @@ import {
   WaitlistAdminError,
   WaitlistAdminService,
 } from '../../src/services/waitlistAdminService';
+import * as AdminTelemetryService from '../../src/services/adminTelemetryService';
 
 describe('Admin waitlist routes', () => {
   afterEach(() => {
@@ -163,5 +164,41 @@ describe('Admin waitlist routes', () => {
     expect(response.status).toBe(401);
     expect(response.body.success).toBe(false);
     expect(String(response.body.error || '')).toContain('bearer');
+  });
+
+  it('blocks unauthorized users from admin telemetry events', async () => {
+    vi.spyOn(AdminTelemetryService, 'getRecentEvents').mockRejectedValueOnce(
+      new WaitlistAdminError(401, 'Missing or invalid internal admin bearer token.')
+    );
+
+    const response = await request(app)
+      .get('/api/admin/telemetry/events')
+      .query({ adminEmail: 'user@example.com', limit: 10 });
+
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+  });
+
+  it('returns telemetry events for authorized admin', async () => {
+    vi.spyOn(AdminTelemetryService, 'getRecentEvents').mockResolvedValueOnce([
+      {
+        id: 'evt_1',
+        anonymous_id: 'anon_1',
+        session_id: 'sess_1',
+        event_name: 'page_view',
+        properties: { page: '/' },
+        policy_version: '1.0',
+        created_at: '2026-03-15T12:00:00.000Z',
+      },
+    ]);
+
+    const response = await request(app)
+      .get('/api/admin/telemetry/events')
+      .query({ adminEmail: 'admin@p3lending.space', limit: 50 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].event_name).toBe('page_view');
   });
 });

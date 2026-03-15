@@ -27,7 +27,7 @@ export const NewsTicker: React.FC = () => {
         }
       } catch (e) {
         console.error("Failed to load crypto news", e);
-        // Fallback mock data if API fails
+        // Fallback placeholder (not user data); API failure leaves ticker empty in strict mode
         setNews([
            { title: "Bitcoin stabilizes as institutional interest grows in DeFi sector", link: "#" },
            { title: "P3 Lending Protocol volume surges 200% after new reputation model release", link: "#" },

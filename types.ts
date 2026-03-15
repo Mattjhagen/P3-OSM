@@ -256,3 +256,11 @@ export interface ChatMessage {
   type: ChatType;
   threadId?: string; // For grouping customer support tickets
 }
+
+/** First-party consent state (stored in localStorage only). */
+export interface ConsentState {
+  analytics: boolean;
+  personalization: boolean;
+  policyVersion: string;
+  updatedAt: string; // ISO
+}

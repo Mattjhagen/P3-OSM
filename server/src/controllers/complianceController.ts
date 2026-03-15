@@ -1,6 +1,19 @@
 import { NextFunction, Request, Response } from 'express';
 import { ComplianceService } from '../services/complianceService';
 
+const isSelfOrPrivileged = (req: Request, targetUserId: string) => {
+  const id = req.auth?.userId;
+  const roles = req.auth?.roles || [];
+  if (id === targetUserId) return true;
+  return roles.some((r) => ['admin', 'service_role', 'risk_officer'].includes(r));
+};
+
+const enforceSelfOrPrivileged = (req: Request, userId: string): boolean => {
+  if (!userId) return true;
+  if (!req.auth?.userId) return false;
+  return isSelfOrPrivileged(req, userId);
+};
+
 const parseLimit = (value: unknown, fallback = 100) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -41,7 +54,10 @@ const attachStatus = (error: any) => {
 export const ComplianceController = {
   getFeatureStatus: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = String(req.query.userId || '').trim();
+      const userId = String(req.query.userId || req.auth?.userId || '').trim();
+      if (!userId || !enforceSelfOrPrivileged(req, userId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot access another user.' });
+      }
       const featureKey = req.query.feature;
       const status = await ComplianceService.getFeatureStatus(userId, featureKey);
       return res.status(200).json({ success: true, data: status });
@@ -61,9 +77,13 @@ export const ComplianceController = {
         walletAddress,
         source,
       } = req.body || {};
+      const uid = String(userId || req.auth?.userId || '').trim();
+      if (!uid || !enforceSelfOrPrivileged(req, uid)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot apply for another user.' });
+      }
 
       const result = await ComplianceService.applyForFeature({
-        userId: String(userId || '').trim(),
+        userId: uid,
         featureKey: feature,
         accepted: Boolean(accepted),
         userEmail: typeof userEmail === 'string' ? userEmail : undefined,
@@ -83,7 +103,10 @@ export const ComplianceController = {
 
   listDisclosures: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = String(req.query.userId || '').trim();
+      const userId = String(req.query.userId || req.auth?.userId || '').trim();
+      if (!userId || !enforceSelfOrPrivileged(req, userId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot access another user.' });
+      }
       const featureKey = req.query.feature;
       const limit = parseLimit(req.query.limit, 100);
 
@@ -102,7 +125,10 @@ export const ComplianceController = {
   downloadDisclosure: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const disclosureId = String(req.params.id || '').trim();
-      const userId = String(req.query.userId || '').trim();
+      const userId = String(req.query.userId || req.auth?.userId || '').trim();
+      if (!userId || !enforceSelfOrPrivileged(req, userId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot access another user.' });
+      }
 
       const disclosure = await ComplianceService.getSignedDisclosureDownload({
         disclosureId,
@@ -120,7 +146,10 @@ export const ComplianceController = {
 
   listStatements: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = String(req.query.userId || '').trim();
+      const userId = String(req.query.userId || req.auth?.userId || '').trim();
+      if (!userId || !enforceSelfOrPrivileged(req, userId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot access another user.' });
+      }
       const statementType =
         req.query.type === 'YEARLY_TAX' ? 'YEARLY_TAX' : req.query.type === 'MONTHLY' ? 'MONTHLY' : undefined;
       const limit = parseLimit(req.query.limit, 100);
@@ -140,7 +169,10 @@ export const ComplianceController = {
   downloadStatement: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const statementId = String(req.params.id || '').trim();
-      const userId = String(req.query.userId || '').trim();
+      const userId = String(req.query.userId || req.auth?.userId || '').trim();
+      if (!userId || !enforceSelfOrPrivileged(req, userId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot access another user.' });
+      }
 
       const statement = await ComplianceService.getStatementDownload({
         statementId,

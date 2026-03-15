@@ -5,7 +5,10 @@ import { createRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
+router.post('/auth/token', createRateLimiter(30, 1), AdminController.authToken);
 router.get('/waitlist', createRateLimiter(120, 15), AdminController.getWaitlist);
+router.get('/telemetry/events', createRateLimiter(120, 15), AdminController.getTelemetryEvents);
+router.get('/telemetry/features', createRateLimiter(120, 15), AdminController.getTelemetryFeatures);
 router.post('/waitlist/sync', createRateLimiter(30, 15), AdminController.syncWaitlist);
 router.post('/waitlist/invite', createRateLimiter(30, 15), AdminController.inviteWaitlist);
 router.post(

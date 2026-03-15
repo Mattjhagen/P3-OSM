@@ -54,6 +54,7 @@ describe('Payment routes (donations)', () => {
   it('returns service unavailable for Stripe service checkout when Stripe is not configured', async () => {
     const response = await request(app)
       .post('/api/payments/services/create-checkout-session')
+      .set('x-test-user-id', 'user-1')
       .send({ serviceType: 'risk_assessment', amountUsd: 20 });
 
     expect(response.status).toBe(503);

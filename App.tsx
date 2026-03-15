@@ -9,7 +9,7 @@ import { Button } from './components/Button';
 import { Logo } from './components/Logo';
 import { analyzeReputation, analyzeRiskProfile } from './services/geminiService';
 import { shortenAddress } from './services/walletService';
-import { PersistenceService } from './services/persistence';
+import { PersistenceService, requestAdminAuthToken, clearAdminAuthToken } from './services/persistence';
 import { supabase } from './supabaseClient';
 import { SecurityService } from './services/security';
 import { ContractService } from './services/contractService'; // Import ContractService
@@ -24,6 +24,7 @@ import { LandingPage } from './components/LandingPage';
 import { ReferralModal } from './components/ReferralModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminLoginModal } from './components/AdminLoginModal';
+import { ConsentBanner } from './components/ConsentBanner';
 import { Footer } from './components/Footer';
 import { KnowledgeBase } from './components/KnowledgeBase';
 import { DeveloperSettings } from './components/DeveloperSettings';
@@ -281,6 +282,7 @@ const App: React.FC = () => {
   };
 
   const clearAuthState = (recordLogoutEvent = false) => {
+    clearAdminAuthToken();
     setIsAuthenticated(false);
     setShowLanding(true);
     setUser(null);
@@ -813,7 +815,33 @@ const App: React.FC = () => {
   const handleRepayLoan = async (req: LoanRequest) => { if (!user) return; const platformFee = req.amount * 0.02; const charityDonation = platformFee * 0.5; const updatedReq = { ...req, status: 'REPAID' as const }; await PersistenceService.saveRequest(updatedReq); await refreshGlobalData(); if (req.charityId) { setCharities(prev => prev.map(c => c.id === req.charityId ? { ...c, totalRaised: c.totalRaised + charityDonation } : c)); } const updatedUser = { ...user, successfulRepayments: user.successfulRepayments + 1, currentStreak: user.currentStreak + 1 }; setUser(updatedUser); await PersistenceService.saveUser(updatedUser); };
   const handleSponsorRequest = async (req: LoanRequest) => { if (!user) return; if (!wallet.isConnected) { setShowWalletModal(true); return; } const updatedReq = { ...req, status: 'ACTIVE' as const, mentorId: user.id }; await PersistenceService.saveRequest(updatedReq); await refreshGlobalData(); const updatedUser = { ...user, mentorshipsCount: (user.mentorshipsCount || 0) + 1, totalSponsored: (user.totalSponsored || 0) + req.amount }; setUser(updatedUser); await PersistenceService.saveUser(updatedUser); };
 
-  const handleAdminPasswordLogin = async (password: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); if (password === matchedEmp.passwordHash || matchedEmp.passwordHash === 'temp123' || password === 'admin123') { if (SecurityService.isPasswordExpired(matchedEmp.passwordLastSet)) { alert("Password expired. Please update."); } setAdminUser(matchedEmp); setIsQuickAdminSession(false); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); } else { alert("Invalid Password"); } } catch (e) { console.error(e); alert("Login failed."); } };
+  const handleAdminPasswordLogin = async (password: string) => {
+    try {
+      const employees = await PersistenceService.getEmployees();
+      const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase());
+      if (!matchedEmp) throw new Error("User not found.");
+      if (password === matchedEmp.passwordHash || matchedEmp.passwordHash === 'temp123' || password === 'admin123') {
+        if (SecurityService.isPasswordExpired(matchedEmp.passwordLastSet)) {
+          alert("Password expired. Please update.");
+        }
+        try {
+          await requestAdminAuthToken(pendingAdminEmail, password);
+        } catch (tokenErr) {
+          console.warn('Admin token not obtained; waitlist may not load.', tokenErr);
+        }
+        setAdminUser(matchedEmp);
+        setIsQuickAdminSession(false);
+        setIsAuthenticated(true);
+        setShowLanding(false);
+        setShowAdminLogin(false);
+      } else {
+        alert("Invalid Password");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Login failed.");
+    }
+  };
   const handleAdminPasswordReset = async (newPassword: string) => { try { const employees = await PersistenceService.getEmployees(); const matchedEmp = employees.find(e => e.email.toLowerCase() === pendingAdminEmail.toLowerCase()); if (!matchedEmp) throw new Error("User not found."); const updatedEmp: EmployeeProfile = { ...matchedEmp, passwordHash: newPassword, passwordLastSet: Date.now() }; await PersistenceService.updateEmployee(updatedEmp); setAdminUser(updatedEmp); setIsQuickAdminSession(false); setIsAuthenticated(true); setShowLanding(false); setShowAdminLogin(false); alert("Password successfully reset."); } catch (e) { console.error(e); alert("Failed."); } };
   
   const handleProfileUpdate = async (updatedUser: UserProfile) => {
@@ -1152,7 +1180,7 @@ const App: React.FC = () => {
           onOpenDocs={() => setActiveView('knowledge_base')} 
           onOpenLegal={(type) => setActiveLegalDoc(type)} 
         />
-        {/* Helper link to open deck from landing page logic is handled inside LandingPage now */}
+        <ConsentBanner />
       </>
     );
   }
@@ -1548,6 +1576,7 @@ const App: React.FC = () => {
              {activeView !== 'trade' && <Footer onOpenLegal={(type) => setActiveLegalDoc(type)} />}
           </div>
         </main>
+        <ConsentBanner />
       </div>
     );
   }

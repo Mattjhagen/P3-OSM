@@ -20,11 +20,50 @@ describe('resolveAuthDestination', () => {
     ).toBe('/dashboard');
   });
 
-  it('prefers explicit next path', () => {
+  it('prefers explicit next path when safe', () => {
     expect(
       resolveAuthDestination({
         next: '/dashboard',
         onboardingCompleted: false,
+      })
+    ).toBe('/dashboard');
+    expect(
+      resolveAuthDestination({
+        next: '/profile',
+        onboardingCompleted: true,
+      })
+    ).toBe('/profile');
+  });
+
+  it('rejects open-redirect next and falls back to onboarding/dashboard', () => {
+    expect(
+      resolveAuthDestination({
+        next: 'https://evil.com',
+        onboardingCompleted: false,
+      })
+    ).toBe('/onboarding');
+    expect(
+      resolveAuthDestination({
+        next: 'https://evil.com',
+        onboardingCompleted: true,
+      })
+    ).toBe('/dashboard');
+    expect(
+      resolveAuthDestination({
+        next: '//evil.com/path',
+        onboardingCompleted: true,
+      })
+    ).toBe('/dashboard');
+    expect(
+      resolveAuthDestination({
+        next: '/path//double',
+        onboardingCompleted: true,
+      })
+    ).toBe('/dashboard');
+    expect(
+      resolveAuthDestination({
+        next: 'javascript:alert(1)',
+        onboardingCompleted: true,
       })
     ).toBe('/dashboard');
   });

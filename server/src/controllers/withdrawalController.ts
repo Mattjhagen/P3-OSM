@@ -28,13 +28,38 @@ export const WithdrawalController = {
   requestWithdrawal: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { userId, method, amountUsd, destination } = req.body || {};
-      await ComplianceService.requireFeatureApproval(String(userId || ''), 'WITHDRAW_FUNDS');
+      const uid = req.auth?.userId || String(userId || '');
+      if (!uid) {
+        return res.status(401).json({ success: false, error: 'Unauthenticated.' });
+      }
+      if (req.auth?.userId && userId !== undefined && String(userId).trim() !== req.auth.userId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: cannot request withdrawal for another user.' });
+      }
+      const withdrawalMethod = method === 'BTC' ? 'BTC' : method === 'STRIPE' ? 'STRIPE' : null;
+      if (!withdrawalMethod) {
+        return res.status(400).json({ success: false, error: 'method must be BTC or STRIPE.' });
+      }
+      const amount = Number(amountUsd);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ success: false, error: 'amountUsd must be a positive number.' });
+      }
+      if (amount > 100_000) {
+        return res.status(400).json({ success: false, error: 'amountUsd exceeds maximum allowed.' });
+      }
+      const dest = String(destination || '').trim();
+      if (!dest) {
+        return res.status(400).json({ success: false, error: 'destination is required.' });
+      }
+      if (dest.length > 500) {
+        return res.status(400).json({ success: false, error: 'destination too long.' });
+      }
+      await ComplianceService.requireFeatureApproval(uid, 'WITHDRAW_FUNDS');
 
       const result = await WithdrawalService.requestWithdrawal({
-        userId: String(userId || ''),
-        method: method === 'BTC' ? 'BTC' : 'STRIPE',
-        amountUsd: Number(amountUsd || 0),
-        destination: String(destination || '').trim(),
+        userId: uid,
+        method: withdrawalMethod,
+        amountUsd: Math.round(amount * 100) / 100,
+        destination: dest,
       });
 
       return res.status(200).json({

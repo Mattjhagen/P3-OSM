@@ -1,9 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
+import { issueAdminToken } from '../services/adminAuthService';
 import { AdminService } from '../services/adminService';
 import {
     WaitlistAdminError,
     WaitlistAdminService,
 } from '../services/waitlistAdminService';
+import * as AdminTelemetryService from '../services/adminTelemetryService';
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const asString = (value: unknown) => String(value || '').trim();
@@ -24,6 +26,37 @@ const resolveWaitlistErrorMessage = (error: unknown) => {
 };
 
 export const AdminController = {
+    /**
+     * POST /api/admin/auth/token — issue JWT for password-login admin (used by proxy).
+     */
+    authToken: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const email = asString((req.body as any)?.email);
+            const password = asString((req.body as any)?.password);
+            if (!email || !password) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'email and password are required.',
+                });
+            }
+            const result = await issueAdminToken(email, password);
+            return res.status(200).json({
+                success: true,
+                token: result.token,
+                expiresIn: result.expiresIn,
+            });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Login failed.';
+            if (msg.includes('not configured')) {
+                return res.status(503).json({ success: false, error: msg });
+            }
+            if (msg.includes('not found') || msg.includes('Invalid password')) {
+                return res.status(401).json({ success: false, error: 'Invalid email or password.' });
+            }
+            next(err);
+        }
+    },
+
     /**
      * GET /api/admin/waitlist
      */
@@ -279,6 +312,58 @@ export const AdminController = {
             return res.status(201).json({ success: true, data: snapshot });
         } catch (error) {
             next(error);
+        }
+    },
+
+    /**
+     * GET /api/admin/telemetry/events
+     */
+    getTelemetryEvents: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const adminEmail =
+                asString(req.query.adminEmail) ||
+                asString(req.header('x-admin-email')) ||
+                asString((req as any).auth?.email);
+            const limit = Number(req.query.limit) || 50;
+            const events = await AdminTelemetryService.getRecentEvents(
+                adminEmail,
+                req.header('authorization') || '',
+                limit
+            );
+            return res.status(200).json({ success: true, data: events });
+        } catch (error) {
+            const status = resolveWaitlistErrorStatus(error);
+            if (status >= 500) return next(error);
+            return res.status(status).json({
+                success: false,
+                error: resolveWaitlistErrorMessage(error),
+            });
+        }
+    },
+
+    /**
+     * GET /api/admin/telemetry/features
+     */
+    getTelemetryFeatures: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const adminEmail =
+                asString(req.query.adminEmail) ||
+                asString(req.header('x-admin-email')) ||
+                asString((req as any).auth?.email);
+            const limit = Number(req.query.limit) || 50;
+            const features = await AdminTelemetryService.getRecentFeatures(
+                adminEmail,
+                req.header('authorization') || '',
+                limit
+            );
+            return res.status(200).json({ success: true, data: features });
+        } catch (error) {
+            const status = resolveWaitlistErrorStatus(error);
+            if (status >= 500) return next(error);
+            return res.status(status).json({
+                success: false,
+                error: resolveWaitlistErrorMessage(error),
+            });
         }
     },
 

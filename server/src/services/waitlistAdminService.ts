@@ -168,6 +168,11 @@ const assertAuthorizedAdmin = async (
   }
 };
 
+/** Exported for use by other admin services (e.g. telemetry). */
+export async function assertAdmin(adminEmail: string, authorizationHeader?: string): Promise<void> {
+  await assertAuthorizedAdmin(adminEmail, authorizationHeader);
+}
+
 const getRowsByIds = async (ids: string[]) => {
   if (ids.length === 0) return [];
 

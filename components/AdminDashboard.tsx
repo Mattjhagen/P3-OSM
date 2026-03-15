@@ -36,7 +36,7 @@ interface Props {
 
 export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExitToUser }) => {
   const [activeTab, setActiveTab] = useState<
-    'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE'
+    'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE' | 'TELEMETRY'
   >('OVERVIEW');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -109,6 +109,10 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     standalone: false,
   });
   const [isPushUpdating, setIsPushUpdating] = useState(false);
+
+  const [telemetryEvents, setTelemetryEvents] = useState<Array<{ id: string; anonymous_id: string; session_id: string; event_name: string; properties: Record<string, unknown>; policy_version?: string; created_at: string }>>([]);
+  const [telemetryFeatures, setTelemetryFeatures] = useState<Array<{ anonymous_id: string; session_id: string; event_count: number; last_event_at?: string; scoring_inputs: Record<string, unknown>; updated_at: string }>>([]);
+  const [isTelemetryLoading, setIsTelemetryLoading] = useState(false);
 
   const loadOpsSnapshot = useCallback(async () => {
     setIsOpsLoading(true);
@@ -254,6 +258,24 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     }, 15000);
     return () => clearInterval(interval);
   }, [activeTab, loadRemoteUserLogs, refreshPushStatus]);
+
+  useEffect(() => {
+    if (activeTab !== 'TELEMETRY') return;
+    setIsTelemetryLoading(true);
+    Promise.all([
+      PersistenceService.getAdminTelemetryEvents(currentAdmin.email, 50),
+      PersistenceService.getAdminTelemetryFeatures(currentAdmin.email, 50),
+    ])
+      .then(([events, features]) => {
+        setTelemetryEvents(events);
+        setTelemetryFeatures(features);
+      })
+      .catch(() => {
+        setTelemetryEvents([]);
+        setTelemetryFeatures([]);
+      })
+      .finally(() => setIsTelemetryLoading(false));
+  }, [activeTab, currentAdmin.email]);
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -572,7 +594,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     key === 'BETA_FEATURE_FLAGS' || key === 'SELL_CRYPTO_ACCOUNTS';
 
   const handleTabChange = (
-    tab: 'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE'
+    tab: 'OVERVIEW' | 'OPERATIONS' | 'USERS' | 'WAITLIST' | 'KYC' | 'DISPUTES' | 'TEAM' | 'KNOWLEDGE' | 'TELEMETRY'
   ) => {
     setActiveTab(tab);
     setIsSidebarOpen(false);
@@ -933,6 +955,12 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
               <span>🛡️</span> Team & Roles
             </button>
           )}
+          <button 
+            onClick={() => handleTabChange('TELEMETRY')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'TELEMETRY' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+          >
+            <span>📡</span> Telemetry & Consent
+          </button>
         </nav>
 
         <div className="p-4 border-t border-zinc-900">
@@ -974,6 +1002,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
             {activeTab === 'DISPUTES' && 'Arbitration Center'}
             {activeTab === 'KNOWLEDGE' && 'Employee Knowledge Base'}
             {activeTab === 'TEAM' && 'Employee Onboarding'}
+            {activeTab === 'TELEMETRY' && 'Telemetry & Consent'}
             </h1>
           </div>
           <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
@@ -1905,6 +1934,68 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
                     ))}
                  </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'TELEMETRY' && (
+            <div className="space-y-6 animate-fade-in">
+              <p className="text-sm text-zinc-500">
+                Consent is first-party only (localStorage). Events below are from users who granted analytics consent. Policy version is stored with each event.
+              </p>
+              {isTelemetryLoading ? (
+                <p className="text-zinc-500">Loading telemetry…</p>
+              ) : (
+                <>
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                    <h3 className="p-4 border-b border-zinc-800 font-bold text-white">Recent events</h3>
+                    <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                      <table className="w-full text-left text-sm text-zinc-400">
+                        <thead className="bg-black text-white text-xs uppercase sticky top-0">
+                          <tr><th className="p-3">Time</th><th className="p-3">Event</th><th className="p-3">Anonymous ID</th><th className="p-3">Consent (policy)</th></tr>
+                        </thead>
+                        <tbody>
+                          {telemetryEvents.length === 0 ? (
+                            <tr><td colSpan={4} className="p-4 text-zinc-500">No events yet.</td></tr>
+                          ) : (
+                            telemetryEvents.map((e) => (
+                              <tr key={e.id} className="border-t border-zinc-800">
+                                <td className="p-3 font-mono text-xs">{new Date(e.created_at).toLocaleString()}</td>
+                                <td className="p-3">{e.event_name}</td>
+                                <td className="p-3 font-mono text-xs truncate max-w-[120px]">{e.anonymous_id}</td>
+                                <td className="p-3">{e.policy_version || '—'}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                    <h3 className="p-4 border-b border-zinc-800 font-bold text-white">Derived features (scoring inputs)</h3>
+                    <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                      <table className="w-full text-left text-sm text-zinc-400">
+                        <thead className="bg-black text-white text-xs uppercase sticky top-0">
+                          <tr><th className="p-3">Anonymous ID</th><th className="p-3">Event count</th><th className="p-3">Last event</th><th className="p-3">Score summary</th></tr>
+                        </thead>
+                        <tbody>
+                          {telemetryFeatures.length === 0 ? (
+                            <tr><td colSpan={4} className="p-4 text-zinc-500">No derived features yet.</td></tr>
+                          ) : (
+                            telemetryFeatures.map((f, i) => (
+                              <tr key={f.anonymous_id + i} className="border-t border-zinc-800">
+                                <td className="p-3 font-mono text-xs truncate max-w-[140px]">{f.anonymous_id}</td>
+                                <td className="p-3">{f.event_count}</td>
+                                <td className="p-3 font-mono text-xs">{f.last_event_at ? new Date(f.last_event_at).toLocaleString() : '—'}</td>
+                                <td className="p-3 font-mono text-xs max-w-[200px] truncate" title={JSON.stringify(f.scoring_inputs)}>{JSON.stringify(f.scoring_inputs).slice(0, 80)}…</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

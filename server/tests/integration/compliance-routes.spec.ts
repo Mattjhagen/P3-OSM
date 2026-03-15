@@ -27,6 +27,7 @@ describe('Compliance routes', () => {
 
     const response = await request(app)
       .get('/api/compliance/features/status')
+      .set('x-test-user-id', 'user-1')
       .query({ userId: 'user-1', feature: 'ADD_FUNDS' });
 
     expect(response.status).toBe(200);
@@ -55,6 +56,7 @@ describe('Compliance routes', () => {
 
     const response = await request(app)
       .get('/api/compliance/statements/st-1/download')
+      .set('x-test-user-id', 'user-1')
       .query({ userId: 'user-1' });
 
     expect(response.status).toBe(200);

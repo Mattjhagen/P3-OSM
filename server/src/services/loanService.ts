@@ -223,6 +223,7 @@ export const LoanService = {
             throw new Error('Loan not found.');
         }
 
+        // Ownership: only the borrower or lender for this loan may record a repayment.
         if (loan.borrower_id !== payload.userId && loan.lender_id !== payload.userId) {
             throw new Error('You are not authorized to repay this loan.');
         }

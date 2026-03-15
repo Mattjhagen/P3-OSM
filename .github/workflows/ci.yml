@@ -28,6 +28,19 @@ jobs:
       - name: Install contract dependencies
         run: npm --prefix contracts ci
 
+      - name: Audit dependencies (fail on high/critical)
+        run: |
+          npm audit --audit-level=high
+          npm --prefix server audit --audit-level=high
+          npm --prefix contracts audit --audit-level=high
+
+      # Enforce by setting continue-on-error: false after curating .gitleaksignore for test fixtures and example tokens
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
       - name: Frontend typecheck/lint
         run: npm run lint
 

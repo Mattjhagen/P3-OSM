@@ -75,6 +75,59 @@ const getJwtIssuer = (token) => {
   return trim(payload?.iss || '');
 };
 
+const P3_ADMIN_ISSUER = 'p3-admin';
+
+const verifyP3AdminJwt = (token, secret) => {
+  if (!secret || !token) return null;
+  const parts = String(token).split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const crypto = require('crypto');
+    const [headerB64, payloadB64, sigB64] = parts;
+    const payload = decodeJwtPayload(token);
+    if (!payload || payload.iss !== P3_ADMIN_ISSUER) return null;
+    const exp = payload.exp;
+    if (typeof exp !== 'number' || exp < Math.floor(Date.now() / 1000)) return null;
+    const signatureInput = `${headerB64}.${payloadB64}`;
+    const expectedSig = crypto.createHmac('sha256', secret).update(signatureInput).digest('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (sigB64 !== expectedSig) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+};
+
+const isAdminFromEmployeesTable = async (userEmail) => {
+  const email = normalizeEmail(userEmail);
+  const { url, serviceRoleKey } = getSupabaseConfig();
+  if (!url || !serviceRoleKey || !email) return false;
+  const base = url.replace(/\/+$/, '');
+  const params = new URLSearchParams({
+    select: 'id,email,role,is_active',
+    email: `eq.${email}`,
+    is_active: 'eq.true',
+    role: 'in.(ADMIN,RISK_OFFICER,SUPPORT)',
+    limit: '1',
+  });
+  const res = await fetch(`${base}/rest/v1/employees?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      Accept: 'application/json',
+    },
+  });
+  if (!res.ok) return false;
+  let rows = [];
+  try {
+    rows = await res.json();
+  } catch {
+    rows = [];
+  }
+  return Array.isArray(rows) && rows.length > 0;
+};
+
 const looksLikeSupabaseIssuer = (issuer) => {
   const { url } = getSupabaseConfig();
   if (!issuer || !url) return false;
@@ -279,19 +332,39 @@ export const handler = async (event, context) => {
     }
 
     const issuer = getJwtIssuer(accessToken);
-    const treatAsSupabase = looksLikeSupabaseIssuer(issuer);
-    if (!treatAsSupabase && !isNetlifyIdentityFallbackEnabled()) {
-      return toJsonResponse(401, {
-        success: false,
-        error: 'Supabase session token required.',
-      });
+    const adminJwtSecret = trim(process.env.ADMIN_JWT_SECRET || '');
+    const p3AdminPayload = issuer === P3_ADMIN_ISSUER && adminJwtSecret
+      ? verifyP3AdminJwt(accessToken, adminJwtSecret)
+      : null;
+
+    if (p3AdminPayload) {
+      const subEmail = normalizeEmail(p3AdminPayload.sub);
+      const isAdmin = await isAdminFromEmployeesTable(subEmail);
+      if (isAdmin) {
+        authProvider = 'p3_admin';
+        user = { id: subEmail, email: subEmail, app_metadata: {} };
+      } else {
+        return toJsonResponse(403, {
+          success: false,
+          error: 'Not authorized.',
+        });
+      }
     }
 
-    authProvider = treatAsSupabase ? 'supabase' : 'netlify_identity';
+    if (!user) {
+      const treatAsSupabase = looksLikeSupabaseIssuer(issuer);
+      if (!treatAsSupabase && !isNetlifyIdentityFallbackEnabled()) {
+        return toJsonResponse(401, {
+          success: false,
+          error: 'Supabase session token required.',
+        });
+      }
 
-    const authResult = treatAsSupabase
-      ? await getSupabaseUser(accessToken)
-      : await getNetlifyIdentityUser(accessToken);
+      authProvider = treatAsSupabase ? 'supabase' : 'netlify_identity';
+
+      const authResult = treatAsSupabase
+        ? await getSupabaseUser(accessToken)
+        : await getNetlifyIdentityUser(accessToken);
 
     console.info('[admin_waitlist_proxy] token_auth_result', {
       reqId,
@@ -301,24 +374,25 @@ export const handler = async (event, context) => {
       path,
     });
 
-    if (!authResult.ok) {
-      console.warn('[admin_waitlist_proxy] unauthorized', {
-        reqId,
-        reason: 'invalid_token',
-        hasAuthHeader,
-        hasCookie,
-        contextUserPresent,
-        tokenLength,
-        authProvider,
-        path,
-      });
-      return toJsonResponse(401, {
-        success: false,
-        error: 'Invalid/expired admin session token.',
-      });
-    }
+      if (!authResult.ok) {
+        console.warn('[admin_waitlist_proxy] unauthorized', {
+          reqId,
+          reason: 'invalid_token',
+          hasAuthHeader,
+          hasCookie,
+          contextUserPresent,
+          tokenLength,
+          authProvider,
+          path,
+        });
+        return toJsonResponse(401, {
+          success: false,
+          error: 'Invalid/expired admin session token.',
+        });
+      }
 
-    user = authResult.user;
+      user = authResult.user;
+    }
   }
 
   if (!user) {
@@ -340,7 +414,7 @@ export const handler = async (event, context) => {
 
   const userId = trim(user?.id);
   const userEmail = normalizeEmail(user?.email);
-  const isAdmin = hasAdminClaim(user) || (await isAdminFromAllowlist(userEmail));
+  const isAdmin = authProvider === 'p3_admin' || hasAdminClaim(user) || (await isAdminFromAllowlist(userEmail));
   if (!isAdmin) {
     console.warn('[admin_waitlist_proxy] forbidden', {
       reqId,

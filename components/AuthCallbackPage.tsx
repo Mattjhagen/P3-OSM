@@ -6,6 +6,16 @@ import { IdentityLinkingService } from '../services/identityLinkingService';
 
 const normalizePath = (value: string) => value.replace(/\/+$/, '') || '/';
 
+/** Allow only same-origin paths to prevent open redirect. Rejects protocol-relative, absolute URLs, and paths with "//" or ":". */
+const isSafeRedirectPath = (value: string | null): value is string => {
+  if (!value || typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (trimmed === '') return false;
+  if (!trimmed.startsWith('/')) return false;
+  if (trimmed.includes('//') || trimmed.includes(':')) return false;
+  return true;
+};
+
 const isOnboardingComplete = (data: Record<string, unknown>) => {
   if (data.onboarding_completed === true || data.onboardingCompleted === true) return true;
   const kycStatus = String(data.kycStatus || '').toUpperCase();
@@ -28,7 +38,7 @@ export const resolveAuthDestination = (options: {
   next: string | null;
   onboardingCompleted: boolean;
 }) => {
-  if (options.next) {
+  if (options.next && isSafeRedirectPath(options.next)) {
     return normalizePath(options.next);
   }
   return options.onboardingCompleted ? '/dashboard' : '/onboarding';

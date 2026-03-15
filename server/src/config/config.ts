@@ -1,8 +1,20 @@
 import { validatedEnv } from './env';
 
+const corsOriginsList = (): string[] | undefined => {
+  if (validatedEnv.NODE_ENV !== 'production') return undefined;
+  const base = validatedEnv.FRONTEND_URL?.replace(/\/+$/, '') || '';
+  const extra = (validatedEnv.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const list = base ? [base, ...extra] : [...extra];
+  return list.length > 0 ? list : undefined;
+};
+
 export const config = {
     port: validatedEnv.PORT,
     frontendUrl: validatedEnv.FRONTEND_URL,
+    corsAllowedOrigins: corsOriginsList(),
     supabase: {
         url: validatedEnv.SUPABASE_URL,
         anonKey: validatedEnv.SUPABASE_ANON_KEY || validatedEnv.SUPABASE_SERVICE_ROLE_KEY,
@@ -19,6 +31,7 @@ export const config = {
     },
     admin: {
         internalBearer: validatedEnv.ADMIN_INTERNAL_BEARER,
+        jwtSecret: validatedEnv.ADMIN_JWT_SECRET,
     },
     netlify: {
         apiToken: validatedEnv.NETLIFY_API_TOKEN,

@@ -17,6 +17,10 @@ export const validatedEnv = cleanEnv(process.env, {
   NODE_ENV: str({ default: 'development', choices: ['development', 'test', 'production'] }),
   PORT: port({ default: 5001 }),
   FRONTEND_URL: url({ default: 'http://localhost:5173', desc: 'Public frontend base URL for Stripe redirect callbacks' }),
+  CORS_ALLOWED_ORIGINS: str({
+    default: '',
+    desc: 'Comma-separated additional CORS origins (production); FRONTEND_URL is always allowed when NODE_ENV=production',
+  }),
   SUPABASE_URL: url({ desc: 'Supabase project URL for backend service operations' }),
   SUPABASE_ANON_KEY: str({
     default: '',
@@ -59,6 +63,10 @@ export const validatedEnv = cleanEnv(process.env, {
   ADMIN_INTERNAL_BEARER: str({
     default: '',
     desc: 'Optional internal bearer token for privileged admin waitlist endpoints',
+  }),
+  ADMIN_JWT_SECRET: str({
+    default: '',
+    desc: 'Secret to sign admin JWT for password-login admin console (proxy accepts this JWT)',
   }),
   NETLIFY_API_TOKEN: str({ default: '', desc: 'Netlify personal access token for admin API sync jobs' }),
   NETLIFY_SITE_ID: str({ default: '', desc: 'Netlify site id used to locate waitlist forms/submissions' }),

@@ -19,18 +19,32 @@ import complianceRoutes from './routes/complianceRoutes';
 import reputationRoutes from './routes/reputationRoutes';
 import developerRoutes from './routes/developerRoutes';
 import riskRoutes from './routes/riskRoutes';
+import eventsRoutes from './routes/eventsRoutes';
 import { openApiSpec } from './openapiSpec';
 import { PaymentController } from './controllers/paymentController';
 import { VerificationController } from './controllers/verificationController';
 import { TradingController } from './controllers/tradingController';
 import { publicApiLimiter } from './middleware/rateLimiter';
+import { securityHeaders } from './middleware/securityHeaders';
 import { ComplianceService } from './services/complianceService';
 
 export const createApp = () => {
     const app = express();
 
-    // Middleware
-    app.use(cors());
+    app.use(securityHeaders);
+
+    // Middleware: in production restrict CORS to FRONTEND_URL and CORS_ALLOWED_ORIGINS
+    const corsOptions: cors.CorsOptions = config.corsAllowedOrigins?.length
+        ? {
+              origin: (origin, cb) => {
+                  if (!origin) return cb(null, true); // same-origin or non-browser
+                  const allowed = new Set(config.corsAllowedOrigins);
+                  return cb(null, allowed.has(origin));
+              },
+              optionsSuccessStatus: 200,
+          }
+        : {};
+    app.use(cors(corsOptions));
 
     // Stripe webhook must receive raw body for signature verification.
     app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
@@ -58,6 +72,7 @@ export const createApp = () => {
     app.use('/api/v1/reputation', reputationRoutes);
     app.use('/api/developer', developerRoutes);
     app.use('/api/risk', riskRoutes);
+    app.use('/api/events', eventsRoutes);
     app.get('/docs/openapi.json', (_req: Request, res: Response) => {
         res.setHeader('Content-Type', 'application/json');
         res.json(openApiSpec);

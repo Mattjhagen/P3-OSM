@@ -403,6 +403,8 @@ export interface SupportMessageResponse {
   actionProposal?: SupportActionProposal;
 }
 
+const P3_ADMIN_TOKEN_KEY = 'p3_admin_token';
+
 const getAdminAccessToken = async (): Promise<string | null> => {
   try {
     const { data, error } = await supabase.auth.getSession();
@@ -421,7 +423,35 @@ const getAdminAccessToken = async (): Promise<string | null> => {
     // continue to null (Supabase is canonical auth source)
   }
 
+  if (typeof window !== 'undefined') {
+    const stored = window.sessionStorage.getItem(P3_ADMIN_TOKEN_KEY);
+    if (stored && stored.trim()) return stored.trim();
+  }
   return null;
+};
+
+/** Call backend to exchange email+password for admin JWT; store in sessionStorage. Use after password-login admin flow. */
+export const requestAdminAuthToken = async (
+  email: string,
+  password: string
+): Promise<{ token: string; expiresIn: number }> => {
+  const base = getBackendBaseUrl();
+  const res = await fetch(`${base}/api/admin/auth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error || 'Admin token request failed.');
+  const token = String(json?.token || '').trim();
+  if (!token) throw new Error('No token returned.');
+  if (typeof window !== 'undefined') window.sessionStorage.setItem(P3_ADMIN_TOKEN_KEY, token);
+  return { token, expiresIn: Number(json?.expiresIn) || 3600 };
+};
+
+/** Clear stored admin JWT (call on admin logout). */
+export const clearAdminAuthToken = (): void => {
+  if (typeof window !== 'undefined') window.sessionStorage.removeItem(P3_ADMIN_TOKEN_KEY);
 };
 
 const requestAdminWaitlistApi = async <T>(payload: {
@@ -708,6 +738,32 @@ export const PersistenceService = {
     });
 
     return (rows || []).map((row) => toWaitlistEntry(row));
+  },
+
+  getAdminTelemetryEvents: async (
+    adminEmail: string,
+    limit = 50
+  ): Promise<Array<{ id: string; anonymous_id: string; session_id: string; event_name: string; properties: Record<string, unknown>; policy_version?: string; created_at: string }>> => {
+    const data = await requestAdminWaitlistApi<unknown>({
+      path: '/api/admin/telemetry/events',
+      query: { limit },
+      method: 'GET',
+      adminEmail,
+    });
+    return Array.isArray(data) ? data as any[] : [];
+  },
+
+  getAdminTelemetryFeatures: async (
+    adminEmail: string,
+    limit = 50
+  ): Promise<Array<{ anonymous_id: string; session_id: string; event_count: number; last_event_at?: string; scoring_inputs: Record<string, unknown>; updated_at: string }>> => {
+    const data = await requestAdminWaitlistApi<unknown>({
+      path: '/api/admin/telemetry/features',
+      query: { limit },
+      method: 'GET',
+      adminEmail,
+    });
+    return Array.isArray(data) ? data as any[] : [];
   },
 
   syncAdminWaitlist: async (

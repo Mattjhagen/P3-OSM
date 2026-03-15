@@ -46,6 +46,7 @@ describe('Trading + withdrawal routes', () => {
 
     const response = await request(app)
       .post('/api/trading/orders/execute')
+      .set('x-test-user-id', 'user-1')
       .send({ userId: 'user-1', symbol: 'BTC', side: 'BUY', amountUsd: 500 });
 
     expect(response.status).toBe(402);
@@ -59,6 +60,7 @@ describe('Trading + withdrawal routes', () => {
 
     const response = await request(app)
       .post('/api/withdrawals')
+      .set('x-test-user-id', 'user-1')
       .send({
         userId: 'user-1',
         method: 'BTC',

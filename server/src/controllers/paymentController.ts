@@ -320,7 +320,7 @@ export const PaymentController = {
     createCheckoutSession: async (req: Request, res: Response, next: NextFunction) => {
         try {
             const amount = normalizeAmount(req.body?.amount);
-            const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+            const userId = req.auth?.userId ?? '';
             const userEmail =
                 typeof req.body?.userEmail === 'string' ? req.body.userEmail.trim() : undefined;
             const stripe = getStripeClient();
@@ -334,7 +334,7 @@ export const PaymentController = {
             }
 
             if (!amount || !userId) {
-                return res.status(400).json({ success: false, error: 'Missing amount or userId' });
+                return res.status(400).json({ success: false, error: 'Missing amount or authentication.' });
             }
 
             if (amount > 100000) {
@@ -631,9 +631,12 @@ export const PaymentController = {
             const frontendBaseUrl = resolveFrontendBaseUrl(req);
             const serviceEntry = resolveServiceEntry(req.body?.serviceType);
             const requestedAmountUsd = normalizeAmount(req.body?.amountUsd);
-            const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+            const userId = req.auth?.userId ?? '';
             const userEmail = typeof req.body?.userEmail === 'string' ? req.body.userEmail.trim() : '';
             const source = typeof req.body?.source === 'string' ? req.body.source.trim() : 'service_checkout';
+            if (!userId) {
+                return res.status(401).json({ success: false, error: 'Authentication required.' });
+            }
 
             if (!serviceEntry) {
                 return res.status(400).json({
