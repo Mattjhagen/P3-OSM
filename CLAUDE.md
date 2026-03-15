@@ -15,7 +15,7 @@ System role config: `config/roles/system.md`
 Peer-to-peer lending marketplace with AI reputation scoring, blockchain escrow, and KYC/compliance. Version 2.4.0.
 
 - **Clearnet:** https://p3lending.space
-- **Tor:** http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion
+- **Tor:** http://pwtlqtbc36cjjges2cojkg572gvhyr5ygtlrfijcoiqa2s7ftygpckqd.onion/
 - **API:** https://api.p3lending.space
 
 ---

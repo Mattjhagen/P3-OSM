@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Linkedin, Twitter, Facebook, Github, Mail } from 'lucide-react';
 import { LegalDocType } from './LegalModal';
 
-const OFFICIAL_ONION_URL = 'http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion';
+const OFFICIAL_ONION_URL = 'http://pwtlqtbc36cjjges2cojkg572gvhyr5ygtlrfijcoiqa2s7ftygpckqd.onion/';
 const OFFICIAL_CLEARNET_URL = 'https://p3lending.space';
 const APPLE_APP_STORE_URL = 'https://testflight.apple.com/join/gMrr2QcP';
 

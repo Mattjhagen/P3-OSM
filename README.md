@@ -291,7 +291,7 @@ async def stripe_webhook(request: Request):
 https://p3lending.space
 
 **Tor Onion:**  
-http://lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion
+http://pwtlqtbc36cjjges2cojkg572gvhyr5ygtlrfijcoiqa2s7ftygpckqd.onion/
 
 **DNS Verification:**  
-TXT record: `p3-onion=lwsieqoy6x2tv3mrqlfu6pkjqtyirn2j4oq3hz6y4yy7iz7v4ctqu6qd.onion`
+TXT record: `p3-onion=pwtlqtbc36cjjges2cojkg572gvhyr5ygtlrfijcoiqa2s7ftygpckqd.onion`
