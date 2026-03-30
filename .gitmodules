@@ -1,0 +1,3 @@
+[submodule "libs/idswyft"]
+	path = libs/idswyft
+	url = https://github.com/Mattjhagen/idswyft.git
