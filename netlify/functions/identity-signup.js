@@ -107,6 +107,7 @@ export const handler = async (event) => {
 
   try {
     const insertedRows = await insertWaitlistRow({ url, key, row });
+    console.info(`[identity-signup] Successfully added ${email} to waitlist.`, { inserted: insertedRows.length });
     return toJsonResponse(200, {
       success: true,
       email,
@@ -115,9 +116,15 @@ export const handler = async (event) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown identity-signup error';
-    return toJsonResponse(500, {
+    console.error(`[identity-signup] Error for ${email}:`, message);
+    
+    // We return 200 even on error to avoid blocking the Netlify Identity signup/invite flow
+    // The user will still be created in Netlify, even if the waitlist sync fails.
+    return toJsonResponse(200, {
       success: false,
       error: message,
+      skipped: true,
+      reason: 'Supabase waitlist sync failed, but allowing signup to proceed.',
     });
   }
 };
