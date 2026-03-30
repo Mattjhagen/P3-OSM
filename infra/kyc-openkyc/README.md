@@ -20,4 +20,4 @@ open http://localhost:8787/health
 
 1. Set `KYC_PROVIDER=openkyc` and `OPENKYC_BASE_URL=http://localhost:8787` in backend `.env`
 2. Run backend and frontend
-3. Visit `/kyc-demo` to start verification
+3. Start verification in the profile dashboard

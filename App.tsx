@@ -41,7 +41,7 @@ import { RiskPage } from './components/RiskPage';
 import { MarketplacePage } from './components/MarketplacePage';
 import { BetaPage } from './components/BetaPage';
 import { InvestorsPage } from './components/InvestorsPage';
-import { KycDemoPage } from './components/KycDemoPage';
+import { DataFlowSecurity } from './components/DataFlowSecurity';
 import { KycMockUiPage } from './components/KycMockUiPage';
 import { AnalyticsService } from './services/analyticsService';
 import { PaymentService } from './services/paymentService';
@@ -118,7 +118,7 @@ const App: React.FC = () => {
   const isInvestorsRoute =
     typeof window !== 'undefined' &&
     ['/invesors', '/investors'].includes(window.location.pathname.replace(/\/+$/, ''));
-  const isKycDemoRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/kyc-demo';
+  const isDataFlowSecurityRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/data-flow-security';
   const isKycMockUiRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/kyc-mock-ui';
   const [appReady, setAppReady] = useState(true);
   const [showLanding, setShowLanding] = useState(true);
@@ -1151,7 +1151,7 @@ const App: React.FC = () => {
   if (isMarketplaceRoute) return <MarketplacePage />;
   if (isBetaRoute) return <BetaPage />;
   if (isInvestorsRoute) return <InvestorsPage />;
-  if (isKycDemoRoute) return <KycDemoPage />;
+  if (isDataFlowSecurityRoute) return <DataFlowSecurity />;
   if (isKycMockUiRoute) return <KycMockUiPage />;
 
   if (!appReady) return <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center text-white font-mono animate-pulse">Loading P3 Protocol...</div>;
