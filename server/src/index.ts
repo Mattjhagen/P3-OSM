@@ -12,7 +12,7 @@ import paymentRoutes from './routes/paymentRoutes';
 import waitlistRoutes from './routes/waitlistRoutes';
 import tradingRoutes from './routes/tradingRoutes';
 import withdrawalRoutes from './routes/withdrawalRoutes';
-import plaidRoutes from './routes/plaidRoutes';
+import idswyftRoutes from './routes/idswyftRoutes';
 import kycRoutes from './routes/kycRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import complianceRoutes from './routes/complianceRoutes';
@@ -65,7 +65,7 @@ export const createApp = () => {
     app.use('/api/waitlist', waitlistRoutes);
     app.use('/api/trading', tradingRoutes);
     app.use('/api/withdrawals', withdrawalRoutes);
-    app.use('/api/plaid', plaidRoutes);
+    app.use('/api/idswyft', idswyftRoutes);
     app.use('/api/kyc', kycRoutes);
     app.use('/api/notifications', notificationRoutes);
     app.use('/api/compliance', complianceRoutes);
@@ -82,7 +82,6 @@ export const createApp = () => {
     const getProviderStatus = () => ({
         stripePaymentsConfigured: Boolean(config.stripe.secretKey),
         stripePayoutsEnabled: Boolean(config.stripe.secretKey && config.stripe.payoutsEnabled),
-        plaidConfigured: Boolean(config.plaid.clientId && config.plaid.secret),
         btcWithdrawalsEnabled: Boolean(
             config.withdrawals.btcEnabled &&
                 config.withdrawals.btcProviderUrl &&

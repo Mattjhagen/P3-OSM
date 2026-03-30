@@ -51,10 +51,11 @@ Legend: **Auth** = requireAuth (Bearer) or API key; **Role** = requireRoles or r
 | POST | /api/trading/orders/preview | Yes | — | userId = auth | Yes (symbol, amounts) | sensitiveApiLimiter |
 | POST | /api/trading/orders/execute | Yes | — | userId = auth | Yes (symbol, amounts) | 30/15m |
 | POST | /api/withdrawals | Yes | — | userId = auth | Yes (method, amountUsd, destination) | 20/15m |
-| POST | /api/plaid/link-token | Yes | — | userId = auth | Yes | 40/15m |
-| POST | /api/plaid/exchange-public-token | Yes | — | userId = auth | Yes | 30/15m |
-| POST | /api/plaid/exchange_public_token | Yes | — | userId = auth | Yes | 30/15m |
-| POST | /api/plaid/identity-check | Yes | — | — | Yes | 20/15m |
+| POST | /api/idswyft/initialize | Yes | — | userId = auth | Yes | 30/15m |
+| POST | /api/idswyft/upload/front | Yes | — | userId = auth | Yes (file) | 20/15m |
+| POST | /api/idswyft/upload/back | Yes | — | userId = auth | Yes (file) | 20/15m |
+| POST | /api/idswyft/live-capture | Yes | — | userId = auth | Yes (file) | 20/15m |
+| GET | /api/idswyft/status/:sessionId | Yes | — | userId = auth | — | 60/15m |
 | POST | /api/kyc/start | No | — | — | — | 30/15m |
 | GET | /api/kyc/status/:sessionId | No | — | — | — | 30/15m |
 | POST | /api/kyc/webhook | No (webhook secret) | — | — | — | — |
@@ -99,7 +100,7 @@ Legend: **Auth** = requireAuth (Bearer) or API key; **Role** = requireRoles or r
 | POST /api/trading/orders/preview | Yes + ownership | symbol, amountUsd/amountFiat |
 | POST /api/trading/orders/execute | Yes + ownership | symbol, amountUsd/amountFiat, etc. |
 | POST /api/withdrawals | Yes + ownership | method, amountUsd, destination |
-| POST /api/plaid/* | Yes + ownership | userId, publicToken, etc. |
+| POST /api/idswyft/* | Yes + ownership | userId, documents, etc. |
 | POST /api/notifications/admin | Yes | category, subject, message |
 | POST /api/compliance/features/apply | Yes + self/privileged | userId, feature, accepted, etc. |
 | POST /api/compliance/statements/run/* | Yes + admin/service_role | — |

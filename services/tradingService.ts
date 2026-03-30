@@ -237,46 +237,4 @@ export const TradingService = {
     return (await parseApiResponse(response)) as WithdrawalDto;
   },
 
-  createPlaidLinkToken: async (payload: {
-    userId: string;
-    email?: string;
-    redirectUri?: string;
-    androidPackageName?: string;
-  }) => {
-    let response: Response;
-    try {
-      response = await fetch(`${getBackendBaseUrl()}/api/plaid/link-token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-    } catch (error) {
-      throw new Error(normalizeFetchError(error));
-    }
-
-    return parseApiResponse(response);
-  },
-
-  exchangePlaidPublicToken: async (payload: {
-    userId: string;
-    publicToken: string;
-    accountId?: string;
-  }) => {
-    let response: Response;
-    try {
-      response = await fetch(`${getBackendBaseUrl()}/api/plaid/exchange-public-token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-    } catch (error) {
-      throw new Error(normalizeFetchError(error));
-    }
-
-    return parseApiResponse(response);
-  },
 };

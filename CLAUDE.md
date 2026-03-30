@@ -30,7 +30,9 @@ Peer-to-peer lending marketplace with AI reputation scoring, blockchain escrow, 
 | Database | Supabase (PostgreSQL + Auth + RLS + Realtime) |
 | Blockchain | Ethers.js 6, Hardhat, Solidity 0.8.24, OpenZeppelin |
 | Payments | Stripe (Payments, Identity, Payouts) |
+| Payments | Stripe (Payments, Identity, Payouts) |
 | AI | Google GenAI (Gemini) — reputation scoring |
+| KYC | Idswyft — open-source identity verification |
 | Web3 Auth | SIWE (Sign-In with Ethereum), Coinbase Wallet SDK, WalletConnect |
 | Testing | Vitest (unit), Playwright (E2E), Hardhat (contracts) |
 | Deployment | Netlify (frontend + functions), Render (backend) |
@@ -138,7 +140,9 @@ Browser (React PWA)
     ├── Render API (Express, port 5001)
     │       └── Supabase (PostgreSQL + Auth + RLS + Realtime)
     │
-    ├── Stripe (Payments, KYC Identity)
+    ├── Stripe (Payments)
+    │
+    ├── Idswyft (Identity KYC)
     │
     └── Ethereum (P3LoanEscrow, ReputationAnchorRegistry)
 ```
@@ -174,7 +178,8 @@ SUPABASE_SERVICE_ROLE_KEY
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 SMTP_HOST / SMTP_USER / SMTP_PASS
-PLAID_CLIENT_ID / PLAID_SECRET
+IDSWYFT_API_KEY
+IDSWYFT_SANDBOX
 ETHEREUM_RPC_URL
 GEMINI_API_KEY
 ```
@@ -188,7 +193,7 @@ GEMINI_API_KEY
 | Supabase | Database, Auth, Realtime, RLS |
 | Stripe | Payments, Identity KYC, Payouts |
 | Google GenAI (Gemini) | Reputation scoring, compliance analysis |
-| Plaid | Bank account linking, ACH |
+| Idswyft | Open-source Identity verification |
 | CoinGecko | Crypto market data |
 | Bitstamp | Real-time trading (optional) |
 | Slack | Admin notifications, slash commands |

@@ -145,5 +145,84 @@ export const VerificationServiceClient = {
 
     return (await parseApiResponse(response)) as StripeKycSessionStatusDto[];
   },
+  idswyftInitialize: async (payload: { userId: string; addons?: any }) => {
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/idswyft/initialize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      throw new Error(normalizeFetchError(error));
+    }
+    return await parseApiResponse(response);
+  },
+  idswyftUploadFront: async (payload: { verificationId: string; documentType: string; file: File }) => {
+    const formData = new FormData();
+    formData.append('verificationId', payload.verificationId);
+    formData.append('documentType', payload.documentType);
+    formData.append('file', payload.file);
+
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/idswyft/upload/front`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch (error) {
+      throw new Error(normalizeFetchError(error));
+    }
+    return await parseApiResponse(response);
+  },
+  idswyftUploadBack: async (payload: { verificationId: string; documentType: string; file: File }) => {
+    const formData = new FormData();
+    formData.append('verificationId', payload.verificationId);
+    formData.append('documentType', payload.documentType);
+    formData.append('file', payload.file);
+
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/idswyft/upload/back`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch (error) {
+      throw new Error(normalizeFetchError(error));
+    }
+    return await parseApiResponse(response);
+  },
+  idswyftUploadLive: async (payload: { verificationId: string; selfie: Blob; livenessMetadata?: any }) => {
+    const formData = new FormData();
+    formData.append('verificationId', payload.verificationId);
+    formData.append('file', payload.selfie);
+    if (payload.livenessMetadata) {
+      formData.append('livenessMetadata', JSON.stringify(payload.livenessMetadata));
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/idswyft/upload/live`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch (error) {
+      throw new Error(normalizeFetchError(error));
+    }
+    return await parseApiResponse(response);
+  },
+  idswyftGetStatus: async (verificationId: string) => {
+    let response: Response;
+    try {
+      response = await fetch(`${getBackendBaseUrl()}/api/idswyft/${verificationId}/status`, {
+        method: 'GET',
+      });
+    } catch (error) {
+      throw new Error(normalizeFetchError(error));
+    }
+    return await parseApiResponse(response);
+  },
 };
 

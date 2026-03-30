@@ -12,7 +12,7 @@
 | **Authorization** | Compliance routes had no auth; any client could pass any `userId` and read/apply features, disclosures, statements | Added `requireAuth` to compliance router; enforced `enforceSelfOrPrivileged(req, userId)` in controller for all userId-scoped handlers |
 | **Authorization** | Statement run (monthly/yearly) was not admin-only | Added `requireRoles('admin', 'service_role')` to POST `/statements/run/monthly` and `/yearly` |
 | **Authorization** | Deposit and service checkout accepted body `userId` without binding to auth | Deposit and service checkout routes now use `requireAuth`; controller uses `req.auth.userId` only |
-| **Authorization** | Withdrawal, trading (preview/execute), Plaid (link-token, exchange) accepted body `userId` without ownership check | Added `requireAuth` to withdrawal router and to trading/Plaid routes; controllers enforce `userId === req.auth.userId` or use `req.auth.userId` |
+| **Authorization** | Withdrawal and trading (preview/execute) accepted body `userId` without ownership check | Added `requireAuth` to withdrawal router and to trading routes; controllers enforce `userId === req.auth.userId` or use `req.auth.userId` |
 | **Request validation** | Withdrawal: method, amountUsd, destination not strictly validated | Added validation: method in BTC/STRIPE, amountUsd positive and ≤ 100k, destination required and max 500 chars |
 | **Request validation** | Trading: symbol and amounts not strictly validated | Added: symbol required and non-empty; amountUsd or amountFiat must be a number; string lengths capped for signature/account |
 | **Rate limits** | POST /api/verification/hash had no rate limit | Added `createRateLimiter(60, 15)` |
@@ -35,8 +35,8 @@
 | `server/src/controllers/withdrawalController.ts` | Ownership check (body userId must match auth); validation: method, amountUsd, destination |
 | `server/src/routes/tradingRoutes.ts` | `requireAuth` on orders/preview and orders/execute |
 | `server/src/controllers/tradingController.ts` | Ownership check for preview/execute; validation: symbol required, amountUsd/amountFiat, string caps |
-| `server/src/routes/plaidRoutes.ts` | `router.use(requireAuth)` |
-| `server/src/controllers/plaidController.ts` | Ownership check for createLinkToken and exchangePublicToken; use `uid` from auth or validated body |
+| `server/src/routes/idswyftRoutes.ts` | **New.** Identity verification routes. |
+| `server/src/controllers/idswyftController.ts` | **New.** Handles Idswyft verification logic. |
 | `server/src/routes/verificationRoutes.ts` | Rate limit on POST /hash: `createRateLimiter(60, 15)` |
 | `server/src/routes/developerRoutes.ts` | Rate limit on POST /keys: `createRateLimiter(20, 15)` |
 | `server/src/middleware/securityHeaders.ts` | **New.** Sets X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection |
@@ -55,7 +55,7 @@
 
 ## 4. Residual risks (non-blocking)
 
-- **Frontend env:** `adminOpsService` and similar may reference `VITE_*` keys that should never hold server secrets (e.g. `VITE_PLAID_SECRET`, `VITE_BTC_WITHDRAW_PROVIDER_TOKEN`). Mitigation: do not set server secrets as `VITE_*` in any environment; document in deployment checklist.
+- **Frontend env:** `adminOpsService` and similar may reference `VITE_*` keys that should never hold server secrets (e.g. `VITE_IDSWYFT_API_KEY`, `VITE_BTC_WITHDRAW_PROVIDER_TOKEN`). Mitigation: do not set server secrets as `VITE_*` in any environment; document in deployment checklist.
 - **Secret scan:** Gitleaks remains `continue-on-error: true` to avoid failures on test fixtures and example tokens. To enforce: add `.gitleaksignore` for known safe patterns, then set `continue-on-error: false`.
 - **Compliance run statement routes:** Now require `admin` or `service_role`. Ensure production admin users have the correct role in Supabase `app_metadata`.
 

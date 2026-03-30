@@ -85,9 +85,8 @@ export const AdminDashboard: React.FC<Props> = ({ currentAdmin, onLogout, onExit
     BTC_WITHDRAWALS_ENABLED: 'false',
     BTC_WITHDRAW_PROVIDER_URL: '',
     BTC_WITHDRAW_PROVIDER_TOKEN: '',
-    PLAID_CLIENT_ID: '',
-    PLAID_SECRET: '',
-    PLAID_ENV: 'sandbox',
+    IDSWYFT_API_KEY: '',
+    IDSWYFT_SANDBOX: 'true',
     BETA_FEATURE_FLAGS: '{}',
     SELL_CRYPTO_ACCOUNTS: '{}',
   });

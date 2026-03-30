@@ -162,32 +162,23 @@ const createIntegrationDefinitions = (): IntegrationDefinition[] => {
       envValue: viteEnv.VITE_BTC_WITHDRAW_PROVIDER_TOKEN || '',
     },
     {
-      key: 'PLAID_CLIENT_ID',
-      label: 'Plaid Client ID',
-      description: 'Plaid client identifier for bank linking and KYC/AML checks.',
+      key: 'IDSWYFT_API_KEY',
+      label: 'Idswyft API Key',
+      description: 'API key for identity verification via Idswyft.',
       required: true,
       isSecret: true,
       inputType: 'password',
-      envValue: viteEnv.VITE_PLAID_CLIENT_ID || '',
+      envValue: viteEnv.VITE_IDSWYFT_API_KEY || '',
     },
     {
-      key: 'PLAID_SECRET',
-      label: 'Plaid Secret',
-      description: 'Plaid API secret used by backend bank workflows.',
-      required: true,
-      isSecret: true,
-      inputType: 'password',
-      envValue: viteEnv.VITE_PLAID_SECRET || '',
-    },
-    {
-      key: 'PLAID_ENV',
-      label: 'Plaid Environment',
-      description: 'Plaid environment (sandbox/development/production).',
+      key: 'IDSWYFT_SANDBOX',
+      label: 'Idswyft Sandbox',
+      description: 'Set to true to use Idswyft sandbox mode.',
       required: true,
       isSecret: false,
       inputType: 'text',
-      envValue: viteEnv.VITE_PLAID_ENV || '',
-      fallbackValue: 'sandbox',
+      envValue: viteEnv.VITE_IDSWYFT_SANDBOX || '',
+      fallbackValue: 'true',
     },
     {
       key: 'BETA_FEATURE_FLAGS',
@@ -359,16 +350,13 @@ const addKeyStateAlerts = (
     }
   }
 
-  if (
-    (status.key === 'PLAID_CLIENT_ID' || status.key === 'PLAID_SECRET') &&
-    status.source === 'missing'
-  ) {
+  if (status.key === 'IDSWYFT_API_KEY' && status.source === 'missing') {
     alerts.push({
       id: `${status.key}-missing`,
       severity: 'critical',
       title: `${status.label} is missing`,
-      detail: 'Plaid bank-link and KYC/AML workflows are blocked until this value is configured.',
-      action: 'Set Plaid credentials in Operations.',
+      detail: 'Idswyft identity verification is blocked until this value is configured.',
+      action: 'Set Idswyft API key in Operations.',
       integrationKey: status.key,
     });
   }
@@ -458,15 +446,6 @@ export const AdminOpsService = {
             title: 'Backend reports BTC withdrawals disabled',
             detail: 'BTC withdrawal provider is not fully configured.',
             action: 'Set BTC withdrawal provider URL/token and enable BTC withdrawals.',
-          });
-        }
-        if (providers.plaidConfigured === false) {
-          alerts.push({
-            id: 'backend-plaid-missing',
-            severity: 'critical',
-            title: 'Backend reports Plaid is not configured',
-            detail: 'Bank linking and Plaid KYC/AML flows are currently blocked.',
-            action: 'Set PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV on backend environment.',
           });
         }
       } catch (error) {

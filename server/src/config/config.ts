@@ -85,20 +85,9 @@ export const config = {
         btcProviderUrl: validatedEnv.BTC_WITHDRAW_PROVIDER_URL,
         btcProviderToken: validatedEnv.BTC_WITHDRAW_PROVIDER_TOKEN,
     },
-    plaid: {
-        clientId: validatedEnv.PLAID_CLIENT_ID,
-        secret: validatedEnv.PLAID_SECRET,
-        env: validatedEnv.PLAID_ENV,
-        countryCodes: validatedEnv.PLAID_COUNTRY_CODES
-            .split(',')
-            .map((item) => item.trim().toUpperCase())
-            .filter(Boolean),
-        products: validatedEnv.PLAID_PRODUCTS
-            .split(',')
-            .map((item) => item.trim().toLowerCase())
-            .filter(Boolean),
-        redirectUri: validatedEnv.PLAID_REDIRECT_URI,
-        webhookUrl: validatedEnv.PLAID_WEBHOOK_URL,
+    idswyft: {
+        apiKey: validatedEnv.IDSWYFT_API_KEY,
+        sandbox: validatedEnv.IDSWYFT_SANDBOX,
     },
     ethereum: {
         rpcUrl: validatedEnv.ETH_RPC_URL,

@@ -207,44 +207,6 @@ export const FinancePersistenceService = {
       }
       throw new Error(`Failed to persist withdrawal request: ${error.message}`);
     }
-
-    return data?.id || null;
-  },
-
-  async createPlaidBankLink(payload: {
-    userId: string;
-    plaidItemId: string;
-    plaidAccountId: string;
-    mask: string;
-    institutionName: string;
-    processorToken: string;
-    metadata?: Record<string, unknown>;
-  }): Promise<string | null> {
-    const row = {
-      user_id: payload.userId,
-      plaid_item_id: payload.plaidItemId,
-      plaid_account_id: payload.plaidAccountId,
-      account_mask: payload.mask,
-      institution_name: payload.institutionName,
-      processor_token: payload.processorToken,
-      metadata: payload.metadata || {},
-      status: 'active',
-    };
-
-    const { data, error } = await supabase
-      .from('plaid_bank_links')
-      .upsert(row, { onConflict: 'user_id,plaid_account_id' })
-      .select('id')
-      .maybeSingle();
-
-    if (error) {
-      if (isMissingTableError(error.message, 'plaid_bank_links')) {
-        await insertAuditFallback('plaid_link_fallback', payload.userId, row);
-        return null;
-      }
-      throw new Error(`Failed to persist Plaid bank link: ${error.message}`);
-    }
-
     return data?.id || null;
   },
 };

@@ -60,7 +60,7 @@ Rules:
 - If suggesting config updates, only use keys:
   GEMINI_API_KEY, COINGECKO_API_KEY, STRIPE_DONATE_URL, BACKEND_URL, OPENAI_API_KEY, OPENAI_MODEL,
   STRIPE_PAYOUTS_ENABLED, BTC_WITHDRAWALS_ENABLED, BTC_WITHDRAW_PROVIDER_URL, BTC_WITHDRAW_PROVIDER_TOKEN,
-  PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV, BETA_FEATURE_FLAGS, SELL_CRYPTO_ACCOUNTS
+  IDSWYFT_API_KEY, IDSWYFT_SANDBOX, BETA_FEATURE_FLAGS, SELL_CRYPTO_ACCOUNTS
 - For update_runtime_config include: key, value, mode(set|rotate), reason.
 - For create_ticket include: title, description, priority(LOW|MEDIUM|HIGH).
 - For manual_step include: instruction, reason.
@@ -134,9 +134,8 @@ const toSafeAnalysis = (raw: any): OpsAIAnalysis => {
         'BTC_WITHDRAWALS_ENABLED',
         'BTC_WITHDRAW_PROVIDER_URL',
         'BTC_WITHDRAW_PROVIDER_TOKEN',
-        'PLAID_CLIENT_ID',
-        'PLAID_SECRET',
-        'PLAID_ENV',
+        'IDSWYFT_API_KEY',
+        'IDSWYFT_SANDBOX',
         'BETA_FEATURE_FLAGS',
         'SELL_CRYPTO_ACCOUNTS',
       ];

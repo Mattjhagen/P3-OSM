@@ -1,4 +1,4 @@
--- Finance + trading persistence primitives for real pricing, fees, withdrawals, and Plaid links
+-- Finance + trading persistence primitives for real pricing, fees, and withdrawals
 
 create extension if not exists "pgcrypto";
 
@@ -99,41 +99,7 @@ create index if not exists idx_withdrawal_requests_user_created_at
 create index if not exists idx_withdrawal_requests_status_created_at
   on public.withdrawal_requests(status, created_at desc);
 
-create table if not exists public.plaid_bank_links (
-    id uuid primary key default gen_random_uuid(),
-    user_id text not null,
-    plaid_item_id text not null,
-    plaid_account_id text not null,
-    account_mask text not null,
-    institution_name text not null,
-    processor_token text not null,
-    status text not null default 'active',
-    metadata jsonb not null default '{}'::jsonb,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now(),
-    unique(user_id, plaid_account_id)
-);
-
-create index if not exists idx_plaid_bank_links_user_created_at
-  on public.plaid_bank_links(user_id, created_at desc);
-
-drop trigger if exists update_crypto_orders_updated_at on public.crypto_orders;
-create trigger update_crypto_orders_updated_at
-before update on public.crypto_orders
-for each row execute procedure public.update_updated_at_column();
-
-drop trigger if exists update_withdrawal_requests_updated_at on public.withdrawal_requests;
-create trigger update_withdrawal_requests_updated_at
-before update on public.withdrawal_requests
-for each row execute procedure public.update_updated_at_column();
-
-drop trigger if exists update_plaid_bank_links_updated_at on public.plaid_bank_links;
-create trigger update_plaid_bank_links_updated_at
-before update on public.plaid_bank_links
-for each row execute procedure public.update_updated_at_column();
-
 alter table public.ledger_transactions disable row level security;
 alter table public.platform_fee_accruals disable row level security;
 alter table public.crypto_orders disable row level security;
 alter table public.withdrawal_requests disable row level security;
-alter table public.plaid_bank_links disable row level security;

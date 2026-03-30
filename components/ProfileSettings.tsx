@@ -4,7 +4,6 @@ import { UserProfile } from '../types';
 import { Button } from './Button';
 import { ComplianceService, DisclosureSummaryDto, StatementSummaryDto } from '../services/complianceService';
 import { FeatureFlagService } from '../services/featureFlagService';
-import { PlaidLinkService } from '../services/plaidLinkService';
 import {
   IdentityLinkingService,
   OAuthLinkProvider,
@@ -38,8 +37,6 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
   const [withdrawDestination, setWithdrawDestination] = useState('');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
-  const [isLinkingBank, setIsLinkingBank] = useState(false);
-  const [bankLinkStatus, setBankLinkStatus] = useState('');
   const [linkedProviders, setLinkedProviders] = useState<SupportedIdentityProvider[]>([]);
   const [identityLinkError, setIdentityLinkError] = useState('');
   const [identityLinkSuccess, setIdentityLinkSuccess] = useState('');
@@ -169,36 +166,6 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
     setIdentityLinkError(result.message || 'Unable to link this sign-in method.');
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const resumePlaidOAuthIfNeeded = async () => {
-      if (!PlaidLinkService.hasPendingOAuthRedirect()) return;
-      setIsLinkingBank(true);
-      setBankLinkStatus('');
-
-      try {
-        const result = await PlaidLinkService.resumeOAuthRedirect({ userId: user.id });
-        if (cancelled || !result) return;
-        const institution = String(result?.institutionName || 'institution');
-        const mask = String(result?.mask || '****');
-        setBankLinkStatus(`Bank account linked (${institution} • ${mask}).`);
-      } catch (error: any) {
-        if (!cancelled) {
-          setBankLinkStatus(error?.message || 'Plaid OAuth resume failed.');
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLinkingBank(false);
-        }
-      }
-    };
-
-    resumePlaidOAuthIfNeeded();
-    return () => {
-      cancelled = true;
-    };
-  }, [user.id]);
 
   const handleChange = (field: keyof UserProfile, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -332,23 +299,6 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
     }
   };
 
-  const handleLinkBankWithPlaid = async () => {
-    setBankLinkStatus('');
-    setIsLinkingBank(true);
-    try {
-      const result = await PlaidLinkService.openLink({
-        userId: user.id,
-        email: user.email || '',
-      });
-      const institution = String(result?.institutionName || 'institution');
-      const mask = String(result?.mask || '****');
-      setBankLinkStatus(`Bank account linked (${institution} • ${mask}).`);
-    } catch (error: any) {
-      setBankLinkStatus(error?.message || 'Plaid bank linking did not complete.');
-    } finally {
-      setIsLinkingBank(false);
-    }
-  };
 
   const isProviderLinked = (provider: SupportedIdentityProvider) => linkedProviders.includes(provider);
 
@@ -751,30 +701,6 @@ export const ProfileSettings: React.FC<Props> = ({ user, onSave, onDeposit, onWi
              <p className="text-[10px] text-zinc-500 mt-2">
                Withdrawal fee: $3 + 3% of amount. BTC withdrawals execute only when BTC provider is configured. Stripe withdrawals require Stripe Connect payouts.
              </p>
-           </div>
-
-           <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800">
-             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-               <div>
-                 <label className="block text-xs text-zinc-500 uppercase tracking-wider font-bold mb-1">
-                   Link Bank Account (Plaid)
-                 </label>
-                 <p className="text-[10px] text-zinc-500">
-                   OAuth institutions redirect through <code>/oauth.html</code> and return to P3 automatically.
-                 </p>
-               </div>
-               <Button
-                 type="button"
-                 variant="outline"
-                 onClick={handleLinkBankWithPlaid}
-                 isLoading={isLinkingBank}
-               >
-                 Link Bank
-               </Button>
-             </div>
-             {bankLinkStatus && (
-               <p className="text-[11px] text-zinc-300 mt-3">{bankLinkStatus}</p>
-             )}
            </div>
         </div>
 

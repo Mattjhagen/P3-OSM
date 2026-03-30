@@ -28,7 +28,7 @@
 | Developer      | Keys, plan, usage, audit  | requireAuth on all developer routes; reputation uses apiKeyAuth. |
 | Backend        | Health, validation, CORS, rate limits | /health, /api/health; controller validation; CORS allowlist in prod; rate limiters on key routes. |
 
-**Not verified live:** Stripe/Plaid flows (no test mode run in this audit); KYC webhook with real provider.
+**Not verified live:** Stripe/Idswyft flows (no test mode run in this audit); KYC webhook with real provider.
 
 ---
 
@@ -98,7 +98,7 @@ Prefix | Method | Path / pattern | Auth | Rate limit | Audience
 | /api/trading | GET | /prices | — | publicApiLimiter (also at app level for /api/prices) | Public |
 | /api/trading | POST | /orders/preview, /orders/execute | — | sensitiveApiLimiter, 30/15m | User (controller may check auth) |
 | /api/withdrawals | POST | / | — | 20/15m | User (controller auth) |
-| /api/plaid | POST | /link-token, /exchange-*, /identity-check | — | 40/30/20 per 15m | User (controller auth) |
+| /api/idswyft | POST | /initialize, /upload-*, /live-capture, GET /status/:sessionId | — | limiter | User (controller auth) |
 | /api/kyc | POST | /start, /webhook; GET /status/:sessionId | — | limiter 30/15m, webhook none | Public / webhook |
 | /api/notifications | POST | /admin | requireAuth | 30/15m | User |
 | /api/compliance | GET/POST | /features/*, /disclosures/*, /statements/* | — | sensitiveApiLimiter or createRateLimiter | User (controller auth) |
@@ -113,7 +113,7 @@ Prefix | Method | Path / pattern | Auth | Rate limit | Audience
 
 ## 7. Environment checklist
 
-**Backend (Render)** — Required: `NODE_ENV`, `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_URL` (production). Optional but recommended for production: `CORS_ALLOWED_ORIGINS` (comma-separated). Payments/KYC: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`; Stripe Identity: `STRIPE_IDENTITY_*`. Admin: `ADMIN_JWT_SECRET`, `ADMIN_INTERNAL_BEARER`. Developer API: `API_KEY_PEPPER`. Optional: `RATE_LIMIT_REDIS_URL`, `ANTHROPIC_API_KEY`, `PLAID_*`, `SMTP_*`, `NETLIFY_*`, `OPENKYC_*`, `BTC_*`, etc. (see `server/src/config/env.ts`).
+**Backend (Render)** — Required: `NODE_ENV`, `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_URL` (production). Optional but recommended for production: `CORS_ALLOWED_ORIGINS` (comma-separated). Payments/KYC: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`; Stripe Identity: `STRIPE_IDENTITY_*`. Admin: `ADMIN_JWT_SECRET`, `ADMIN_INTERNAL_BEARER`. Developer API: `API_KEY_PEPPER`. Optional: `RATE_LIMIT_REDIS_URL`, `ANTHROPIC_API_KEY`, `IDSWYFT_*`, `SMTP_*`, `NETLIFY_*`, `OPENKYC_*`, `BTC_*`, etc. (see `server/src/config/env.ts`).
 
 **Frontend (Netlify)** — Required: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`. Optional: `VITE_STRIPE_PUBLISHABLE_KEY`, `VITE_GEMINI_API_KEY`, `VITE_WALLETCONNECT_PROJECT_ID`, `VITE_INFURA_API_KEY`, `VITE_BETA_FEATURE_FLAGS`. Only safe-to-expose keys must be `VITE_*`.
 

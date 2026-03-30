@@ -48,8 +48,7 @@ Integrate the Uniswap Smart Router directly into the frontend.
 ### Option C: Centralized (Custodial)
 If you want to hold user funds (like custodial exchanges), you need:
 1.  **Custody Provider:** Fireblocks or Coinbase Prime.
-2.  **Banking Rails:** Plaid + Stripe to connect bank accounts.
-3.  **Legal:** Money Transmitter Licenses (MTL) in 50 states (Extremely expensive).
+2.  **Identity Verification:** Idswyft for identity checks.
 
 **Recommendation:** Stick to **Option A (DeFi Aggregator)**. It is non-custodial and requires fewer licenses.
 
