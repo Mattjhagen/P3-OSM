@@ -1,0 +1,15 @@
+# Tor Configuration for P3 Lending Protocol
+# Path: ./torrc
+# Usage: "/Applications/Tor Browser.app/Contents/MacOS/Tor/tor" -f ./torrc
+
+# This directory will store your onion address hostname and keys.
+# Maintain backups of this folder if you want to keep your onion address!
+HiddenServiceDir /Users/matt/P3-Lending-Protocol/tor_service
+DataDirectory /Users/matt/P3-Lending-Protocol/.tor_data
+
+# Map the Onion Address (Port 80/443) to local Vite frontend (Port 5173)
+HiddenServicePort 80 127.0.0.1:5173
+HiddenServicePort 443 127.0.0.1:5173
+
+# Logging for easier troubleshooting
+Log notice file /Users/matt/P3-Lending-Protocol/.logs/tor.log

@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Linkedin, Twitter, Facebook, Github, Mail } from 'lucide-react';
 import { LegalDocType } from './LegalModal';
 
-const OFFICIAL_ONION_URL = 'http://pwtlqtbc36cjjges2cojkg572gvhyr5ygtlrfijcoiqa2s7ftygpckqd.onion/';
+const OFFICIAL_ONION_URL = 'http://n7otjbplpmxaa2t2kqfbzjvp5splxyiybkcq3k5rlmhds3qnt4qjwgyd.onion/';
 const OFFICIAL_CLEARNET_URL = 'https://p3lending.space';
 const APPLE_APP_STORE_URL = 'https://testflight.apple.com/join/gMrr2QcP';
 
@@ -210,15 +210,16 @@ export const Footer: React.FC<Props> = ({ onOpenLegal }) => {
              <span>NMLS ID: 123456 (Pending)</span>
              <span>v2.4.0-beta</span>
              <a
-               href="https://app.netlify.com/projects/p3-lending-protocol/deploys"
+               href="https://www.netlify.com"
                target="_blank"
                rel="noopener noreferrer"
-               className="inline-flex items-center"
+               className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
              >
+               <span className="text-[9px] uppercase tracking-tighter opacity-50">Deployed by</span>
                <img
-                 src="https://api.netlify.com/api/v1/badges/ebfbace1-b5fa-40d8-baa9-f631ff3dcf89/deploy-status"
-                 alt="Netlify deploy status"
-                 className="h-5 w-auto"
+                 src="https://www.netlify.com/img/global/badges/netlify-color-accent.svg"
+                 alt="Deploys by Netlify"
+                 className="h-4 w-auto"
                />
              </a>
            </div>

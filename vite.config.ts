@@ -41,6 +41,9 @@ export default defineConfig(({ mode }) => {
   console.log(`---------------------------------\n`);
 
   return {
+    server: {
+      allowedHosts: ['p3lending.space']
+    },
     plugins: [
       react(),
       nodePolyfills({

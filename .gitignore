@@ -40,3 +40,18 @@ P3_API_Demo/
 scripts/generate-apple-secret.cjs
 scripts/AuthKey_*.p8
 AuthKey_*.p8
+
+# Tor & Infrastructure
+.tor_data/
+tor_service/
+cloudflared
+cloudflared.tgz
+.tor_data/cached-certs
+.tor_data/cached-microdesc-consensus
+.tor_data/cached-microdescs
+.tor_data/cached-microdescs.new
+.tor_data/lock
+.tor_data/state
+tor_service/hostname
+tor_service/hs_ed25519_public_key
+tor_service/hs_ed25519_secret_key

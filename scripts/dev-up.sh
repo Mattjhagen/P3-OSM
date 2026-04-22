@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$ROOT_DIR/.logs"
 mkdir -p "$LOG_DIR"
 
-BACKEND_PORT="${BACKEND_PORT:-5000}"
+BACKEND_PORT="${BACKEND_PORT:-5001}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 STRIPE_FORWARD_URL="http://localhost:${BACKEND_PORT}/webhooks/stripe"
 
